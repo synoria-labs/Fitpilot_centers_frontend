@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Read(//c/Users/ale_o/FitPilot/backend/**)",
+      "Read(//c/Users/ale_o/FitPilot/**)",
+      "Bash(find:*)",
+      "Bash(black:*)",
+      "Bash(flake8:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

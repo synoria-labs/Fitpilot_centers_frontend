@@ -1,0 +1,877 @@
+2025-12-01 09:24:13 - __main__ - INFO - ==================================================
+2025-12-01 09:24:13 - __main__ - INFO - Starting FitPilot v1.0.0
+2025-12-01 09:24:13 - __main__ - INFO - Environment: development
+2025-12-01 09:24:13 - __main__ - INFO - ==================================================
+2025-12-01 09:24:14 - __main__ - INFO - Initializing services...
+2025-12-01 09:24:14 - __main__ - INFO - Starting AsyncioExecutor...
+2025-12-01 09:24:14 - app.threads.asyncio_executor - INFO - AsyncioExecutor initialized
+2025-12-01 09:24:14 - app.threads.asyncio_executor - INFO - Global AsyncioExecutor created
+2025-12-01 09:24:14 - app.threads.asyncio_executor - INFO - AsyncioExecutor event loop created (thread: Dummy-1)
+2025-12-01 09:24:14 - __main__ - INFO - AsyncioExecutor started successfully
+2025-12-01 09:24:14 - app.threads.asyncio_executor - INFO - AsyncioExecutor started processing tasks
+2025-12-01 09:24:14 - __main__ - INFO - Services initialized successfully
+2025-12-01 09:24:14 - __main__ - INFO - Creating views...
+2025-12-01 09:24:14 - app.views.main_window - INFO - Tab changed to: Socios (index: 0)
+2025-12-01 09:24:15 - __main__ - INFO - Views created successfully
+2025-12-01 09:24:15 - __main__ - INFO - Setting up controllers...
+2025-12-01 09:24:15 - app.controllers.main_controller - INFO - Main controller initialized
+2025-12-01 09:24:15 - __main__ - INFO - Controllers setup successfully
+2025-12-01 09:24:15 - app.auth.persistent_storage - INFO - Refresh token loaded for user: aleramos
+2025-12-01 09:24:15 - app.controllers.main_controller - INFO - Attempting to restore session for user: aleramos
+2025-12-01 09:24:15 - app.graphql.client - INFO - Refresh token restored to shared cookie jar
+2025-12-01 09:24:15 - httpx - INFO - HTTP Request: POST http://localhost:8000/graphql "HTTP/1.1 404 Not Found"
+2025-12-01 09:24:15 - app.graphql.client - ERROR - HTTP 404: {"detail":"Not Found"}
+2025-12-01 09:24:25 - app.controllers.main_controller - ERROR - Token refresh timeout during session restore
+2025-12-01 09:24:39 - httpx - INFO - HTTP Request: POST http://localhost:8000/graphql "HTTP/1.1 404 Not Found"
+2025-12-01 09:24:39 - app.graphql.client - ERROR - HTTP 404: {"detail":"Not Found"}
+2025-12-01 09:25:09 - app.controllers.auth_controller - ERROR - Login failed: Login timeout
+2025-12-01 10:11:24 - httpx - INFO - HTTP Request: POST http://localhost:8000/graphql "HTTP/1.1 404 Not Found"
+2025-12-01 10:11:24 - app.graphql.client - ERROR - HTTP 404: {"detail":"Not Found"}
+2025-12-01 10:11:54 - app.controllers.auth_controller - ERROR - Login failed: Login timeout
+2025-12-01 10:13:52 - httpx - INFO - HTTP Request: POST http://localhost:8000/graphql "HTTP/1.1 404 Not Found"
+2025-12-01 10:13:52 - app.graphql.client - ERROR - HTTP 404: {"detail":"Not Found"}
+2025-12-01 10:14:22 - app.controllers.auth_controller - ERROR - Login failed: Login timeout
+2025-12-01 13:43:00 - httpx - INFO - HTTP Request: POST http://localhost:8000/graphql "HTTP/1.1 404 Not Found"
+2025-12-01 13:43:00 - app.graphql.client - ERROR - HTTP 404: {"detail":"Not Found"}
+2025-12-01 13:43:30 - app.controllers.auth_controller - ERROR - Login failed: Login timeout
+2025-12-01 13:43:40 - __main__ - ERROR - Uncaught exception
+Traceback (most recent call last):
+  File "C:\Users\ale_o\FitPilot\frontend\app\views\main_window.py", line 383, in check_connection
+    @Slot()
+    
+KeyboardInterrupt
+2025-12-01 13:43:46 - __main__ - INFO - Cleaning up resources...
+2025-12-01 13:43:46 - app.controllers.main_controller - INFO - Cleaning up resources
+2025-12-01 13:43:51 - __main__ - INFO - GraphQL client closed
+2025-12-01 13:43:51 - __main__ - INFO - Shutting down AsyncioExecutor...
+2025-12-01 13:43:51 - app.threads.asyncio_executor - INFO - AsyncioExecutor shutdown requested (wait_for_tasks=True)
+2025-12-01 13:43:51 - app.threads.asyncio_executor - INFO - AsyncioExecutor received shutdown sentinel
+2025-12-01 13:43:51 - app.threads.asyncio_executor - INFO - AsyncioExecutor event loop closed
+2025-12-01 13:43:51 - app.threads.asyncio_executor - INFO - AsyncioExecutor thread finished
+2025-12-01 13:43:51 - app.threads.asyncio_executor - INFO - Global AsyncioExecutor shut down
+2025-12-01 13:43:51 - __main__ - INFO - AsyncioExecutor shut down
+2025-12-01 13:43:51 - __main__ - INFO - Application closed
+2025-12-01 13:44:10 - __main__ - INFO - ==================================================
+2025-12-01 13:44:10 - __main__ - INFO - Starting FitPilot v1.0.0
+2025-12-01 13:44:10 - __main__ - INFO - Environment: development
+2025-12-01 13:44:10 - __main__ - INFO - ==================================================
+2025-12-01 13:44:11 - __main__ - INFO - Initializing services...
+2025-12-01 13:44:11 - __main__ - INFO - Starting AsyncioExecutor...
+2025-12-01 13:44:11 - app.threads.asyncio_executor - INFO - AsyncioExecutor initialized
+2025-12-01 13:44:11 - app.threads.asyncio_executor - INFO - Global AsyncioExecutor created
+2025-12-01 13:44:11 - app.threads.asyncio_executor - INFO - AsyncioExecutor event loop created (thread: Dummy-1)
+2025-12-01 13:44:11 - __main__ - INFO - AsyncioExecutor started successfully
+2025-12-01 13:44:11 - app.threads.asyncio_executor - INFO - AsyncioExecutor started processing tasks
+2025-12-01 13:44:11 - __main__ - INFO - Services initialized successfully
+2025-12-01 13:44:11 - __main__ - INFO - Creating views...
+2025-12-01 13:44:11 - app.views.main_window - INFO - Tab changed to: Socios (index: 0)
+2025-12-01 13:44:12 - __main__ - INFO - Views created successfully
+2025-12-01 13:44:12 - __main__ - INFO - Setting up controllers...
+2025-12-01 13:44:12 - app.controllers.main_controller - INFO - Main controller initialized
+2025-12-01 13:44:12 - __main__ - INFO - Controllers setup successfully
+2025-12-01 13:44:12 - app.auth.persistent_storage - INFO - Refresh token loaded for user: aleramos
+2025-12-01 13:44:12 - app.controllers.main_controller - INFO - Attempting to restore session for user: aleramos
+2025-12-01 13:44:12 - app.graphql.client - INFO - Refresh token restored to shared cookie jar
+2025-12-01 13:44:13 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 13:44:13 - app.auth.session_store - INFO - Session cached for user: aleramos (tokens stored as fallback)
+2025-12-01 13:44:13 - app.auth.auth_service - INFO - Token refreshed successfully via manual mutation
+2025-12-01 13:44:22 - app.controllers.main_controller - ERROR - Token refresh timeout during session restore
+2025-12-01 13:44:22 - app.controllers.main_controller - INFO - User logged in: aleramos
+2025-12-01 13:44:22 - app.controllers.main_controller - INFO - TabLoader created for tab: members
+2025-12-01 13:44:22 - app.controllers.main_controller - INFO - Worker reference stored with key: tab_loader_members
+2025-12-01 13:44:22 - app.controllers.main_controller - INFO - Signals connected for tab: members
+2025-12-01 13:44:22 - app.controllers.main_controller - INFO - Loading tab: members
+2025-12-01 13:44:22 - app.threads.workers - INFO - TabLoader: run() started
+2025-12-01 13:44:22 - app.threads.workers - INFO - TabLoader: started signal emitted
+2025-12-01 13:44:22 - app.threads.workers - INFO - TabLoader: calling do_work()
+2025-12-01 13:44:22 - app.threads.workers - INFO - TabLoader: cargando tab: members
+2025-12-01 13:44:22 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 13:44:22 - app.services.sessions_service - INFO - Fetched 81 user sessions
+2025-12-01 13:44:22 - app.threads.workers - INFO - TabLoader: do_work() returned: <class 'dict'>
+2025-12-01 13:44:22 - app.threads.workers - INFO - TabLoader: Emitting result signal with payload: <class 'dict'>
+2025-12-01 13:44:22 - app.threads.workers - INFO - TabLoader: result signal emitted successfully
+2025-12-01 13:44:22 - app.threads.workers - INFO - TabLoader: emitting finished signal
+2025-12-01 13:44:22 - app.threads.workers - INFO - TabLoader: run() completed
+2025-12-01 13:44:23 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 81 items | preview: [{'id': 444, 'session_id': 'session-id7e5eaebe200f4ce8835191bfbb1ca0b4', 'device_name': 'Other - Other ', 'ip_address'..., {'id': 443, 'session_id': 'session-idd4e6a2ab7b8147a895d7245c07189e05', 'device_name': 'Other - Other ', 'ip_address'..., {'id': 442, 'session_id': 'session-idf478763b8b3046118346d53ddf37cf7b', 'device_name': 'Other - Other ', 'ip_address'..., ...]
+2025-12-01 13:44:23 - app.controllers.main_controller - INFO - Handler called for tab members with payload type: <class 'dict'>
+2025-12-01 13:44:23 - app.controllers.main_controller - INFO - on_tab_loaded called for tab: members
+2025-12-01 13:44:23 - app.views.tabs.members_tab - INFO - Initializing MembersTab
+2025-12-01 13:44:24 - app.views.tabs.members_tab - INFO - Requesting initial members load
+2025-12-01 13:44:24 - app.controllers.members_controller - INFO - Loading members search=None limit=100 offset=0
+2025-12-01 13:44:24 - app.views.main_window - INFO - Tab loaded: Socios
+2025-12-01 13:44:24 - app.controllers.main_controller - INFO - Tab 'members' successfully added to loaded_tabs
+2025-12-01 13:44:24 - app.controllers.main_controller - INFO - Finished handler called, removing worker: tab_loader_members
+2025-12-01 13:44:24 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 13:44:24 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 100 items | preview: [Member(id=64, full_name='Betzabeth León García', email='betzyleon9@gmail.com', phone_number='+528713981672', wa_id=No..., Member(id=241, full_name='María Fernanda Soto Recendiz', email='fernandarecendiz36918@gmail.com', phone_number='+5287..., Member(id=143, full_name='Janeth Hernández Vazquez', email='sdirectj6@gmail.com', phone_number='+528711383117', wa_id..., ...]
+2025-12-01 13:44:24 - app.controllers.members_controller - INFO - Members controller received result of type <class 'list'>
+2025-12-01 13:44:29 - app.controllers.members_controller - INFO - Loading members search=este limit=100 offset=0
+2025-12-01 13:44:29 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 13:44:29 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 5 items | preview: [Member(id=195, full_name='Estefania Reyes Santellano', email='estefaniasantellano@icloud.com', phone_number='+5287118..., Member(id=18, full_name='Estefani Calderon Romero', email='scalderonromero@icloud.com', phone_number='+528714506291',..., Member(id=78, full_name='Estefani Nuñez Palafox', email='fanni_palafox20@hotmail.com', phone_number='+528712739553', ..., ...]
+2025-12-01 13:44:29 - app.controllers.members_controller - INFO - Members controller received result of type <class 'list'>
+2025-12-01 13:44:29 - app.controllers.members_controller - INFO - Loading members search=estef limit=100 offset=0
+2025-12-01 13:44:29 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 13:44:29 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 5 items | preview: [Member(id=195, full_name='Estefania Reyes Santellano', email='estefaniasantellano@icloud.com', phone_number='+5287118..., Member(id=18, full_name='Estefani Calderon Romero', email='scalderonromero@icloud.com', phone_number='+528714506291',..., Member(id=78, full_name='Estefani Nuñez Palafox', email='fanni_palafox20@hotmail.com', phone_number='+528712739553', ..., ...]
+2025-12-01 13:44:29 - app.controllers.members_controller - INFO - Members controller received result of type <class 'list'>
+2025-12-01 13:44:30 - app.controllers.members_controller - INFO - Loading members search=estefani limit=100 offset=0
+2025-12-01 13:44:30 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 13:44:30 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 5 items | preview: [Member(id=195, full_name='Estefania Reyes Santellano', email='estefaniasantellano@icloud.com', phone_number='+5287118..., Member(id=18, full_name='Estefani Calderon Romero', email='scalderonromero@icloud.com', phone_number='+528714506291',..., Member(id=78, full_name='Estefani Nuñez Palafox', email='fanni_palafox20@hotmail.com', phone_number='+528712739553', ..., ...]
+2025-12-01 13:44:30 - app.controllers.members_controller - INFO - Members controller received result of type <class 'list'>
+2025-12-01 13:44:33 - app.views.dialogs.renew_subscription_dialog - INFO - QDateEditWithToday initialized with calendar popup enabled
+2025-12-01 13:44:33 - app.controllers.base_subscription_controller - INFO - Loading membership plans via shared service
+2025-12-01 13:44:33 - app.services.subscription_service - INFO - Loading membership plans from server...
+2025-12-01 13:44:33 - app.services.members_service - INFO - Executing membership plans GraphQL query...
+2025-12-01 13:44:33 - app.controllers.base_subscription_controller - INFO - Loading class templates via shared service
+2025-12-01 13:44:33 - app.services.subscription_service - INFO - Loading class templates from server...
+2025-12-01 13:44:33 - app.controllers.renew_subscription_controller - INFO - Loading renewal data for member_id=18, name=Estefani Calderon Romero
+2025-12-01 13:44:33 - app.controllers.renew_subscription_controller - INFO - Emitting member data
+2025-12-01 13:44:33 - app.views.dialogs.renew_subscription_dialog - INFO - Dialog received member data: member={}, active_mem keys=['class_name', 'class_template_id', 'end_date', 'payment_amount', 'plan_name', 'status']
+2025-12-01 13:44:33 - app.views.dialogs.renew_subscription_dialog - INFO - Setting member name to: Miembro #18
+2025-12-01 13:44:33 - app.controllers.renew_subscription_controller - INFO - Loading data intelligently with cache optimization
+2025-12-01 13:44:33 - app.controllers.renew_subscription_controller - INFO - No valid cache, loading fresh data
+2025-12-01 13:44:33 - app.controllers.base_subscription_controller - INFO - Loading membership plans via shared service
+2025-12-01 13:44:33 - app.services.subscription_service - INFO - Membership plans operation already in progress
+2025-12-01 13:44:33 - app.controllers.base_subscription_controller - INFO - Loading class templates via shared service
+2025-12-01 13:44:33 - app.services.subscription_service - INFO - Class templates operation already in progress
+2025-12-01 13:44:33 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 13:44:33 - app.services.members_service - INFO - Membership plans query result: {'membershipPlans': [{'id': 5, 'name': 'Plan Diario', 'description': 'Pase diario en horario seleccionado', 'price': 50.0, 'durationValue': 1, 'durationUnit': 'day', 'classLimit': 14, 'fixedTimeSlot': True, 'maxSessionsPerDay': 1, 'maxSessionsPerWeek': 1, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}, {'id': 4, 'name': 'Plan Semanal', 'description': 'Pase de Lunes a Viernes con horario fijo', 'price': 200.0, 'durationValue': 7, 'durationUnit': 'day', 'classLimit': 14, 'fixedTimeSlot': True, 'maxSessionsPerDay': 1, 'maxSessionsPerWeek': 5, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}, {'id': 3, 'name': 'Plan Spinning Mensual.', 'description': 'Horario fijo de spinning.', 'price': 600.0, 'durationValue': 1, 'durationUnit': 'month', 'classLimit': 14, 'fixedTimeSlot': False, 'maxSessionsPerDay': 2, 'maxSessionsPerWeek': 20, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}, {'id': 2, 'name': 'Plan Anual con acceso ilimitado a las clases.', 'description': 'Acceso ilimitado a todas las clases', 'price': 5800.0, 'durationValue': 12, 'durationUnit': 'month', 'classLimit': 14, 'fixedTimeSlot': False, 'maxSessionsPerDay': None, 'maxSessionsPerWeek': None, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}, {'id': 1, 'name': 'Plan Premium Transformación Total.', 'description': 'Acceso ilimitado a las clases, asesoria nutricional y aparatología estetica.', 'price': 8999.0, 'durationValue': 3, 'durationUnit': 'month', 'classLimit': 14, 'fixedTimeSlot': False, 'maxSessionsPerDay': None, 'maxSessionsPerWeek': None, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}]}
+2025-12-01 13:44:33 - app.services.members_service - INFO - Extracted plans: 5 items
+2025-12-01 13:44:33 - app.services.members_service - INFO - First plan sample: {'id': 5, 'name': 'Plan Diario', 'description': 'Pase diario en horario seleccionado', 'price': 50.0, 'durationValue': 1, 'durationUnit': 'day', 'classLimit': 14, 'fixedTimeSlot': True, 'maxSessionsPerDay': 1, 'maxSessionsPerWeek': 1, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}
+2025-12-01 13:44:33 - app.services.members_service - INFO - Successfully parsed 5 plans
+2025-12-01 13:44:33 - app.services.standing_bookings_service - INFO - Fetching class templates from GraphQL...
+2025-12-01 13:44:33 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 5 items | preview: [MembershipPlan(id=5, name='Plan Diario', price=50.0, duration_value=1, description='Pase diario en horario selecciona..., MembershipPlan(id=4, name='Plan Semanal', price=200.0, duration_value=7, description='Pase de Lunes a Viernes con hor..., MembershipPlan(id=3, name='Plan Spinning Mensual.', price=600.0, duration_value=1, description='Horario fijo de spinn..., ...]
+2025-12-01 13:44:33 - app.services.subscription_service - INFO - Loaded 5 membership plans
+2025-12-01 13:44:34 - app.controllers.renew_subscription_controller - INFO - Loading member data in background
+2025-12-01 13:44:34 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 13:44:34 - app.services.standing_bookings_service - INFO - Received 30 templates from GraphQL
+2025-12-01 13:44:34 - app.services.members_service - INFO - Executing member by ID GraphQL query for member_id=18
+2025-12-01 13:44:34 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 30 items | preview: [ClassTemplate(id=1, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=1, start_time_..., ClassTemplate(id=6, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=1, start_time_..., ClassTemplate(id=8, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=1, start_time_..., ...]
+2025-12-01 13:44:34 - app.services.subscription_service - INFO - Loaded 30 class templates
+2025-12-01 13:44:34 - app.services.subscription_service - INFO - Created 6 timeslot groups from 30 templates
+2025-12-01 13:44:34 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 13:44:34 - app.services.members_service - INFO - Member data loaded successfully for ID 18
+2025-12-01 13:44:34 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'dict'> | value: {'id': 18, 'full_name': 'Estefani Calderon Romero', 'email': 'scalderonromero@icloud.com', 'phone_number': '+52871450...
+2025-12-01 13:44:34 - app.controllers.renew_subscription_controller - INFO - Member data loaded for renewal
+2025-12-01 13:44:34 - app.controllers.renew_subscription_controller - INFO - Processed member data: full_name=Estefani Calderon Romero
+2025-12-01 13:44:34 - app.controllers.renew_subscription_controller - INFO - Active standing booking data: {}
+2025-12-01 13:44:34 - app.views.dialogs.renew_subscription_dialog - INFO - Dialog received member data: member={'full_name': 'Estefani Calderon Romero', 'id': 18}, active_mem keys=['class_name', 'class_template_id', 'end_date', 'payment_amount', 'plan_name', 'price', 'remaining_days', 'start_date', 'status', 'subscription_id']
+2025-12-01 13:44:34 - app.views.dialogs.renew_subscription_dialog - INFO - Setting member name to: Estefani Calderon Romero
+2025-12-01 13:44:37 - app.services.subscription_service - INFO - Loading seats for template 1 on 2025-12-01
+2025-12-01 13:44:38 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 13:44:38 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 14 items | preview: [Seat(id=1, label='Bicicleta 1', venue_id=1, is_active=True, seat_type_name=None, is_available=True), Seat(id=10, label='Bicicleta 10', venue_id=1, is_active=True, seat_type_name=None, is_available=True), Seat(id=11, label='Bicicleta 11', venue_id=1, is_active=True, seat_type_name=None, is_available=True), ...]
+2025-12-01 13:44:38 - app.services.subscription_service - INFO - Loaded 14 available seats
+2025-12-01 18:18:50 - app.views.dialogs.renew_subscription_dialog - INFO - ============================================================
+2025-12-01 18:18:50 - app.views.dialogs.renew_subscription_dialog - INFO - 🔍 _collect_form() EJECUTÁNDOSE - VERSIÓN CON FIXES
+2025-12-01 18:18:50 - app.views.dialogs.renew_subscription_dialog - INFO - ============================================================
+2025-12-01 18:18:50 - app.views.dialogs.renew_subscription_dialog - INFO - 🔍 selected_item = TimeslotGroup(key='9d4b0f03', class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None, start_time_local='08:00:00', template_ids=[1, 2, 3, 4, 5], templates=[ClassTemplate(id=1, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=1, start_time_local='08:00:00', instructor_id=343, name='Spinning 8:00 am', is_active=True, class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None), ClassTemplate(id=2, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=2, start_time_local='08:00:00', instructor_id=343, name='Spinning 8:00 am', is_active=True, class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None), ClassTemplate(id=3, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=3, start_time_local='08:00:00', instructor_id=343, name='Spinning 8:00 am', is_active=True, class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None), ClassTemplate(id=4, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=4, start_time_local='08:00:00', instructor_id=343, name='Spinning 8:00 am', is_active=True, class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None), ClassTemplate(id=5, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=5, start_time_local='08:00:00', instructor_id=343, name='Spinning 8:00 am', is_active=True, class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None)]) (type: TimeslotGroup)
+2025-12-01 18:18:50 - app.views.dialogs.renew_subscription_dialog - INFO - Resolved template_id: 1
+2025-12-01 18:18:50 - app.views.dialogs.renew_subscription_dialog - INFO - Selected seat with id: 1
+2025-12-01 18:18:50 - app.views.dialogs.renew_subscription_dialog - INFO - Collected form data from renewal dialog:
+2025-12-01 18:18:50 - app.views.dialogs.renew_subscription_dialog - INFO -   member_id: 18 (type: int)
+2025-12-01 18:18:50 - app.views.dialogs.renew_subscription_dialog - INFO -   plan_id: 4 (type: int)
+2025-12-01 18:18:50 - app.views.dialogs.renew_subscription_dialog - INFO -   start_at: 2025-12-01T00:00:00-06:00 (type: datetime)
+2025-12-01 18:18:50 - app.views.dialogs.renew_subscription_dialog - INFO -   payment_method: cash (type: str)
+2025-12-01 18:18:50 - app.views.dialogs.renew_subscription_dialog - INFO -   amount: 200.0 (type: float)
+2025-12-01 18:18:50 - app.views.dialogs.renew_subscription_dialog - INFO -   template_id: 1 (type: int)
+2025-12-01 18:18:50 - app.views.dialogs.renew_subscription_dialog - INFO -   seat_id: 1 (type: int)
+2025-12-01 18:18:50 - app.views.dialogs.renew_subscription_dialog - INFO - Fecha en rango normal: 0 días de diferencia
+2025-12-01 18:18:50 - app.controllers.renew_subscription_controller - INFO - Validating renewal fields. Form data keys: ['member_id', 'plan_id', 'start_at', 'payment_method', 'amount', 'template_id', 'seat_id']
+2025-12-01 18:18:50 - app.controllers.renew_subscription_controller - INFO -   member_id: 18 (type: int)
+2025-12-01 18:18:50 - app.controllers.renew_subscription_controller - INFO -   plan_id: 4 (type: int)
+2025-12-01 18:18:50 - app.controllers.renew_subscription_controller - INFO -   start_at: 2025-12-01T00:00:00-06:00 (type: datetime)
+2025-12-01 18:18:50 - app.controllers.renew_subscription_controller - INFO -   payment_method: cash (type: str)
+2025-12-01 18:18:50 - app.controllers.renew_subscription_controller - INFO -   amount: 200.0 (type: float)
+2025-12-01 18:18:50 - app.controllers.renew_subscription_controller - INFO -   template_id: 1 (type: int)
+2025-12-01 18:18:50 - app.controllers.renew_subscription_controller - INFO -   seat_id: 1 (type: int)
+2025-12-01 18:18:50 - app.controllers.renew_subscription_controller - INFO - Renewal validation passed successfully
+2025-12-01 18:18:50 - app.controllers.renew_subscription_controller - INFO - Renewing subscription with form data keys: ['member_id', 'plan_id', 'start_at', 'payment_method', 'amount', 'template_id', 'seat_id']
+2025-12-01 18:18:50 - app.controllers.renew_subscription_controller - INFO -   member_id: 18 (type: int)
+2025-12-01 18:18:50 - app.controllers.renew_subscription_controller - INFO -   plan_id: 4 (type: int)
+2025-12-01 18:18:50 - app.controllers.renew_subscription_controller - INFO -   start_at: 2025-12-01T00:00:00-06:00 (type: datetime)
+2025-12-01 18:18:50 - app.controllers.renew_subscription_controller - INFO -   payment_method: cash (type: str)
+2025-12-01 18:18:50 - app.controllers.renew_subscription_controller - INFO -   amount: 200.0 (type: float)
+2025-12-01 18:18:50 - app.controllers.renew_subscription_controller - INFO -   template_id: 1 (type: int)
+2025-12-01 18:18:50 - app.controllers.renew_subscription_controller - INFO -   seat_id: 1 (type: int)
+2025-12-01 18:18:50 - app.controllers.renew_subscription_controller - INFO - Mapped 'amount' (200.0) to 'payment_amount'
+2025-12-01 18:18:50 - app.controllers.renew_subscription_controller - INFO - Using template_id from form: 1
+2025-12-01 18:18:50 - app.controllers.renew_subscription_controller - INFO - Using seat_id from form: 1
+2025-12-01 18:18:50 - app.controllers.renew_subscription_controller - INFO - Form data transformation completed. Original keys: ['member_id', 'plan_id', 'start_at', 'payment_method', 'amount', 'template_id', 'seat_id']
+2025-12-01 18:18:50 - app.controllers.renew_subscription_controller - INFO - Service params keys: ['member_id', 'plan_id', 'start_at', 'payment_method', 'payment_amount', 'template_id', 'seat_id', 'payment_status', 'payment_comment', 'payment_provider', 'provider_payment_id', 'external_reference']
+2025-12-01 18:18:50 - app.controllers.renew_subscription_controller - INFO - Transformed service parameters: ['member_id', 'plan_id', 'start_at', 'payment_method', 'payment_amount', 'template_id', 'seat_id', 'payment_status', 'payment_comment', 'payment_provider', 'provider_payment_id', 'external_reference']
+2025-12-01 18:18:50 - app.controllers.renew_subscription_controller - INFO - Creating renewal operation with MembersService.renew_subscription
+2025-12-01 18:18:51 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 500 Internal Server Error"
+2025-12-01 18:18:51 - app.graphql.client - ERROR - HTTP 500: Internal Server Error
+2025-12-01 18:18:51 - app.services.members_service - ERROR - GraphQL mutation failed - no result returned for member 18
+2025-12-01 18:18:51 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'dict'> | value: {'subscription': None, 'payment': None, 'message': 'Error de comunicación con el servidor'}
+2025-12-01 18:18:51 - app.controllers.renew_subscription_controller - INFO - Subscription renewed successfully via backend. Result keys: ['subscription', 'payment', 'message']
+2025-12-01 18:18:51 - app.views.dialogs.renew_subscription_dialog - INFO - Emitting subscription_renewed signal for member 18
+2025-12-01 18:18:51 - app.views.tabs.members_tab - INFO - Subscription renewed for member 18, refreshing UI
+2025-12-01 18:18:51 - app.views.tabs.members_tab - INFO - Re-running search with query: estefani
+2025-12-01 18:18:51 - app.controllers.members_controller - INFO - Loading members search=estefani limit=100 offset=0
+2025-12-01 18:18:51 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 18:18:51 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 5 items | preview: [Member(id=195, full_name='Estefania Reyes Santellano', email='estefaniasantellano@icloud.com', phone_number='+5287118..., Member(id=18, full_name='Estefani Calderon Romero', email='scalderonromero@icloud.com', phone_number='+528714506291',..., Member(id=78, full_name='Estefani Nuñez Palafox', email='fanni_palafox20@hotmail.com', phone_number='+528712739553', ..., ...]
+2025-12-01 18:18:51 - app.controllers.members_controller - INFO - Members controller received result of type <class 'list'>
+2025-12-01 18:18:54 - app.controllers.members_controller - INFO - Loading members search=None limit=100 offset=0
+2025-12-01 18:18:54 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 18:18:54 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 100 items | preview: [Member(id=64, full_name='Betzabeth León García', email='betzyleon9@gmail.com', phone_number='+528713981672', wa_id=No..., Member(id=241, full_name='María Fernanda Soto Recendiz', email='fernandarecendiz36918@gmail.com', phone_number='+5287..., Member(id=143, full_name='Janeth Hernández Vazquez', email='sdirectj6@gmail.com', phone_number='+528711383117', wa_id..., ...]
+2025-12-01 18:18:54 - app.controllers.members_controller - INFO - Members controller received result of type <class 'list'>
+2025-12-01 18:18:56 - app.controllers.members_controller - INFO - Loading members search=Marilu limit=100 offset=0
+2025-12-01 18:18:56 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 18:18:56 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 1 items | preview: [Member(id=16, full_name='Maria Luisa Rivas', email='marilu_24_ramb@hotmail.com', phone_number='+528713954654', wa_id=...]
+2025-12-01 18:18:56 - app.controllers.members_controller - INFO - Members controller received result of type <class 'list'>
+2025-12-01 18:18:59 - app.views.dialogs.renew_subscription_dialog - INFO - QDateEditWithToday initialized with calendar popup enabled
+2025-12-01 18:18:59 - app.controllers.base_subscription_controller - INFO - Loading membership plans via shared service
+2025-12-01 18:18:59 - app.services.subscription_service - INFO - Loading membership plans from server...
+2025-12-01 18:18:59 - app.controllers.base_subscription_controller - INFO - Loading class templates via shared service
+2025-12-01 18:18:59 - app.services.members_service - INFO - Executing membership plans GraphQL query...
+2025-12-01 18:18:59 - app.services.subscription_service - INFO - Loading class templates from server...
+2025-12-01 18:18:59 - app.controllers.renew_subscription_controller - INFO - Loading renewal data for member_id=16, name=Maria Luisa Rivas
+2025-12-01 18:18:59 - app.controllers.renew_subscription_controller - INFO - Emitting member data
+2025-12-01 18:18:59 - app.views.dialogs.renew_subscription_dialog - INFO - Dialog received member data: member={}, active_mem keys=['class_name', 'class_template_id', 'end_date', 'payment_amount', 'plan_name', 'status']
+2025-12-01 18:18:59 - app.views.dialogs.renew_subscription_dialog - INFO - Setting member name to: Miembro #16
+2025-12-01 18:18:59 - app.controllers.renew_subscription_controller - INFO - Loading data intelligently with cache optimization
+2025-12-01 18:18:59 - app.controllers.renew_subscription_controller - INFO - No valid cache, loading fresh data
+2025-12-01 18:18:59 - app.controllers.base_subscription_controller - INFO - Loading membership plans via shared service
+2025-12-01 18:18:59 - app.services.subscription_service - INFO - Membership plans operation already in progress
+2025-12-01 18:18:59 - app.controllers.base_subscription_controller - INFO - Loading class templates via shared service
+2025-12-01 18:18:59 - app.services.subscription_service - INFO - Class templates operation already in progress
+2025-12-01 18:18:59 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 18:18:59 - app.services.members_service - INFO - Membership plans query result: {'membershipPlans': [{'id': 5, 'name': 'Plan Diario', 'description': 'Pase diario en horario seleccionado', 'price': 50.0, 'durationValue': 1, 'durationUnit': 'day', 'classLimit': 14, 'fixedTimeSlot': True, 'maxSessionsPerDay': 1, 'maxSessionsPerWeek': 1, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}, {'id': 4, 'name': 'Plan Semanal', 'description': 'Pase de Lunes a Viernes con horario fijo', 'price': 200.0, 'durationValue': 7, 'durationUnit': 'day', 'classLimit': 14, 'fixedTimeSlot': True, 'maxSessionsPerDay': 1, 'maxSessionsPerWeek': 5, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}, {'id': 3, 'name': 'Plan Spinning Mensual.', 'description': 'Horario fijo de spinning.', 'price': 600.0, 'durationValue': 1, 'durationUnit': 'month', 'classLimit': 14, 'fixedTimeSlot': False, 'maxSessionsPerDay': 2, 'maxSessionsPerWeek': 20, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}, {'id': 2, 'name': 'Plan Anual con acceso ilimitado a las clases.', 'description': 'Acceso ilimitado a todas las clases', 'price': 5800.0, 'durationValue': 12, 'durationUnit': 'month', 'classLimit': 14, 'fixedTimeSlot': False, 'maxSessionsPerDay': None, 'maxSessionsPerWeek': None, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}, {'id': 1, 'name': 'Plan Premium Transformación Total.', 'description': 'Acceso ilimitado a las clases, asesoria nutricional y aparatología estetica.', 'price': 8999.0, 'durationValue': 3, 'durationUnit': 'month', 'classLimit': 14, 'fixedTimeSlot': False, 'maxSessionsPerDay': None, 'maxSessionsPerWeek': None, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}]}
+2025-12-01 18:18:59 - app.services.members_service - INFO - Extracted plans: 5 items
+2025-12-01 18:18:59 - app.services.members_service - INFO - First plan sample: {'id': 5, 'name': 'Plan Diario', 'description': 'Pase diario en horario seleccionado', 'price': 50.0, 'durationValue': 1, 'durationUnit': 'day', 'classLimit': 14, 'fixedTimeSlot': True, 'maxSessionsPerDay': 1, 'maxSessionsPerWeek': 1, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}
+2025-12-01 18:18:59 - app.services.members_service - INFO - Successfully parsed 5 plans
+2025-12-01 18:18:59 - app.services.standing_bookings_service - INFO - Fetching class templates from GraphQL...
+2025-12-01 18:18:59 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 5 items | preview: [MembershipPlan(id=5, name='Plan Diario', price=50.0, duration_value=1, description='Pase diario en horario selecciona..., MembershipPlan(id=4, name='Plan Semanal', price=200.0, duration_value=7, description='Pase de Lunes a Viernes con hor..., MembershipPlan(id=3, name='Plan Spinning Mensual.', price=600.0, duration_value=1, description='Horario fijo de spinn..., ...]
+2025-12-01 18:18:59 - app.services.subscription_service - INFO - Loaded 5 membership plans
+2025-12-01 18:18:59 - app.controllers.renew_subscription_controller - INFO - Loading member data in background
+2025-12-01 18:18:59 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 18:18:59 - app.services.standing_bookings_service - INFO - Received 30 templates from GraphQL
+2025-12-01 18:18:59 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 30 items | preview: [ClassTemplate(id=1, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=1, start_time_..., ClassTemplate(id=6, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=1, start_time_..., ClassTemplate(id=8, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=1, start_time_..., ...]
+2025-12-01 18:18:59 - app.services.members_service - INFO - Executing member by ID GraphQL query for member_id=16
+2025-12-01 18:18:59 - app.services.subscription_service - INFO - Loaded 30 class templates
+2025-12-01 18:18:59 - app.services.subscription_service - INFO - Created 6 timeslot groups from 30 templates
+2025-12-01 18:19:00 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 18:19:00 - app.services.members_service - INFO - Member data loaded successfully for ID 16
+2025-12-01 18:19:00 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'dict'> | value: {'id': 16, 'full_name': 'Maria Luisa Rivas', 'email': 'marilu_24_ramb@hotmail.com', 'phone_number': '+528713954654', ...
+2025-12-01 18:19:00 - app.controllers.renew_subscription_controller - INFO - Member data loaded for renewal
+2025-12-01 18:19:00 - app.controllers.renew_subscription_controller - INFO - Processed member data: full_name=Maria Luisa Rivas
+2025-12-01 18:19:00 - app.controllers.renew_subscription_controller - INFO - Active standing booking data: {}
+2025-12-01 18:19:00 - app.views.dialogs.renew_subscription_dialog - INFO - Dialog received member data: member={'full_name': 'Maria Luisa Rivas', 'id': 16}, active_mem keys=['class_name', 'class_template_id', 'end_date', 'payment_amount', 'plan_name', 'price', 'remaining_days', 'start_date', 'status', 'subscription_id']
+2025-12-01 18:19:00 - app.views.dialogs.renew_subscription_dialog - INFO - Setting member name to: Maria Luisa Rivas
+2025-12-01 18:19:06 - app.services.subscription_service - INFO - Loading seats for template 1 on 2025-12-01
+2025-12-01 18:19:06 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 18:19:06 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 14 items | preview: [Seat(id=1, label='Bicicleta 1', venue_id=1, is_active=True, seat_type_name=None, is_available=True), Seat(id=10, label='Bicicleta 10', venue_id=1, is_active=True, seat_type_name=None, is_available=True), Seat(id=11, label='Bicicleta 11', venue_id=1, is_active=True, seat_type_name=None, is_available=True), ...]
+2025-12-01 18:19:06 - app.services.subscription_service - INFO - Loaded 14 available seats
+2025-12-01 18:19:10 - app.views.dialogs.renew_subscription_dialog - INFO - ============================================================
+2025-12-01 18:19:10 - app.views.dialogs.renew_subscription_dialog - INFO - 🔍 _collect_form() EJECUTÁNDOSE - VERSIÓN CON FIXES
+2025-12-01 18:19:10 - app.views.dialogs.renew_subscription_dialog - INFO - ============================================================
+2025-12-01 18:19:10 - app.views.dialogs.renew_subscription_dialog - INFO - 🔍 selected_item = TimeslotGroup(key='9d4b0f03', class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None, start_time_local='08:00:00', template_ids=[1, 2, 3, 4, 5], templates=[ClassTemplate(id=1, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=1, start_time_local='08:00:00', instructor_id=343, name='Spinning 8:00 am', is_active=True, class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None), ClassTemplate(id=2, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=2, start_time_local='08:00:00', instructor_id=343, name='Spinning 8:00 am', is_active=True, class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None), ClassTemplate(id=3, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=3, start_time_local='08:00:00', instructor_id=343, name='Spinning 8:00 am', is_active=True, class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None), ClassTemplate(id=4, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=4, start_time_local='08:00:00', instructor_id=343, name='Spinning 8:00 am', is_active=True, class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None), ClassTemplate(id=5, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=5, start_time_local='08:00:00', instructor_id=343, name='Spinning 8:00 am', is_active=True, class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None)]) (type: TimeslotGroup)
+2025-12-01 18:19:10 - app.views.dialogs.renew_subscription_dialog - INFO - Resolved template_id: 1
+2025-12-01 18:19:10 - app.views.dialogs.renew_subscription_dialog - INFO - Selected seat with id: 2
+2025-12-01 18:19:10 - app.views.dialogs.renew_subscription_dialog - INFO - Collected form data from renewal dialog:
+2025-12-01 18:19:10 - app.views.dialogs.renew_subscription_dialog - INFO -   member_id: 16 (type: int)
+2025-12-01 18:19:10 - app.views.dialogs.renew_subscription_dialog - INFO -   plan_id: 4 (type: int)
+2025-12-01 18:19:10 - app.views.dialogs.renew_subscription_dialog - INFO -   start_at: 2025-12-01T00:00:00-06:00 (type: datetime)
+2025-12-01 18:19:10 - app.views.dialogs.renew_subscription_dialog - INFO -   payment_method: cash (type: str)
+2025-12-01 18:19:10 - app.views.dialogs.renew_subscription_dialog - INFO -   amount: 200.0 (type: float)
+2025-12-01 18:19:10 - app.views.dialogs.renew_subscription_dialog - INFO -   template_id: 1 (type: int)
+2025-12-01 18:19:10 - app.views.dialogs.renew_subscription_dialog - INFO -   seat_id: 2 (type: int)
+2025-12-01 18:19:10 - app.views.dialogs.renew_subscription_dialog - INFO - Fecha en rango normal: 0 días de diferencia
+2025-12-01 18:19:10 - app.controllers.renew_subscription_controller - INFO - Validating renewal fields. Form data keys: ['member_id', 'plan_id', 'start_at', 'payment_method', 'amount', 'template_id', 'seat_id']
+2025-12-01 18:19:10 - app.controllers.renew_subscription_controller - INFO -   member_id: 16 (type: int)
+2025-12-01 18:19:10 - app.controllers.renew_subscription_controller - INFO -   plan_id: 4 (type: int)
+2025-12-01 18:19:10 - app.controllers.renew_subscription_controller - INFO -   start_at: 2025-12-01T00:00:00-06:00 (type: datetime)
+2025-12-01 18:19:10 - app.controllers.renew_subscription_controller - INFO -   payment_method: cash (type: str)
+2025-12-01 18:19:10 - app.controllers.renew_subscription_controller - INFO -   amount: 200.0 (type: float)
+2025-12-01 18:19:10 - app.controllers.renew_subscription_controller - INFO -   template_id: 1 (type: int)
+2025-12-01 18:19:10 - app.controllers.renew_subscription_controller - INFO -   seat_id: 2 (type: int)
+2025-12-01 18:19:10 - app.controllers.renew_subscription_controller - INFO - Renewal validation passed successfully
+2025-12-01 18:19:10 - app.controllers.renew_subscription_controller - INFO - Renewing subscription with form data keys: ['member_id', 'plan_id', 'start_at', 'payment_method', 'amount', 'template_id', 'seat_id']
+2025-12-01 18:19:10 - app.controllers.renew_subscription_controller - INFO -   member_id: 16 (type: int)
+2025-12-01 18:19:10 - app.controllers.renew_subscription_controller - INFO -   plan_id: 4 (type: int)
+2025-12-01 18:19:10 - app.controllers.renew_subscription_controller - INFO -   start_at: 2025-12-01T00:00:00-06:00 (type: datetime)
+2025-12-01 18:19:10 - app.controllers.renew_subscription_controller - INFO -   payment_method: cash (type: str)
+2025-12-01 18:19:10 - app.controllers.renew_subscription_controller - INFO -   amount: 200.0 (type: float)
+2025-12-01 18:19:10 - app.controllers.renew_subscription_controller - INFO -   template_id: 1 (type: int)
+2025-12-01 18:19:10 - app.controllers.renew_subscription_controller - INFO -   seat_id: 2 (type: int)
+2025-12-01 18:19:10 - app.controllers.renew_subscription_controller - INFO - Mapped 'amount' (200.0) to 'payment_amount'
+2025-12-01 18:19:10 - app.controllers.renew_subscription_controller - INFO - Using template_id from form: 1
+2025-12-01 18:19:10 - app.controllers.renew_subscription_controller - INFO - Using seat_id from form: 2
+2025-12-01 18:19:10 - app.controllers.renew_subscription_controller - INFO - Form data transformation completed. Original keys: ['member_id', 'plan_id', 'start_at', 'payment_method', 'amount', 'template_id', 'seat_id']
+2025-12-01 18:19:10 - app.controllers.renew_subscription_controller - INFO - Service params keys: ['member_id', 'plan_id', 'start_at', 'payment_method', 'payment_amount', 'template_id', 'seat_id', 'payment_status', 'payment_comment', 'payment_provider', 'provider_payment_id', 'external_reference']
+2025-12-01 18:19:10 - app.controllers.renew_subscription_controller - INFO - Transformed service parameters: ['member_id', 'plan_id', 'start_at', 'payment_method', 'payment_amount', 'template_id', 'seat_id', 'payment_status', 'payment_comment', 'payment_provider', 'provider_payment_id', 'external_reference']
+2025-12-01 18:19:10 - app.controllers.renew_subscription_controller - INFO - Creating renewal operation with MembersService.renew_subscription
+2025-12-01 18:19:10 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 18:19:10 - app.services.members_service - INFO - Parsed message text from JSON envelope
+2025-12-01 18:19:10 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'dict'> | value: {'subscription': MembershipSubscription(id=2680, person_id=16, plan_id=4, start_at=datetime.datetime(2025, 12, 1, 6, ...
+2025-12-01 18:19:10 - app.controllers.renew_subscription_controller - INFO - Subscription renewed successfully via backend. Result keys: ['subscription', 'payment', 'standing_booking_id', 'materialization_stats', 'message']
+2025-12-01 18:19:10 - app.controllers.renew_subscription_controller - INFO - New subscription created with ID: 2680
+2025-12-01 18:19:10 - app.views.dialogs.renew_subscription_dialog - INFO - Emitting subscription_renewed signal for member 16
+2025-12-01 18:19:10 - app.views.tabs.members_tab - INFO - Subscription renewed for member 16, refreshing UI
+2025-12-01 18:19:10 - app.views.tabs.members_tab - INFO - Re-running search with query: Marilu
+2025-12-01 18:19:10 - app.controllers.members_controller - INFO - Loading members search=Marilu limit=100 offset=0
+2025-12-01 18:19:10 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 18:19:10 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 1 items | preview: [Member(id=16, full_name='Maria Luisa Rivas', email='marilu_24_ramb@hotmail.com', phone_number='+528713954654', wa_id=...]
+2025-12-01 18:19:10 - app.controllers.members_controller - INFO - Members controller received result of type <class 'list'>
+2025-12-01 18:19:14 - app.controllers.members_controller - INFO - Loading members search=Maril limit=100 offset=0
+2025-12-01 18:19:14 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 18:19:14 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 1 items | preview: [Member(id=16, full_name='Maria Luisa Rivas', email='marilu_24_ramb@hotmail.com', phone_number='+528713954654', wa_id=...]
+2025-12-01 18:19:14 - app.controllers.members_controller - INFO - Members controller received result of type <class 'list'>
+2025-12-01 18:19:24 - app.controllers.members_controller - INFO - Loading members search=Maria el limit=100 offset=0
+2025-12-01 18:19:24 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 18:19:24 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 2 items | preview: [Member(id=41, full_name='Maria Elena Martínez Mendez', email='elena_mtz9@hotmail.com', phone_number='+528712345130', ..., Member(id=86, full_name='Maria Elena Chavarria Hernández', email=None, phone_number='+528711310770', wa_id=None, regi...]
+2025-12-01 18:19:24 - app.controllers.members_controller - INFO - Members controller received result of type <class 'list'>
+2025-12-01 18:19:29 - app.views.dialogs.renew_subscription_dialog - INFO - QDateEditWithToday initialized with calendar popup enabled
+2025-12-01 18:19:29 - app.controllers.base_subscription_controller - INFO - Loading membership plans via shared service
+2025-12-01 18:19:29 - app.services.subscription_service - INFO - Loading membership plans from server...
+2025-12-01 18:19:29 - app.controllers.base_subscription_controller - INFO - Loading class templates via shared service
+2025-12-01 18:19:29 - app.services.members_service - INFO - Executing membership plans GraphQL query...
+2025-12-01 18:19:29 - app.services.subscription_service - INFO - Loading class templates from server...
+2025-12-01 18:19:29 - app.controllers.renew_subscription_controller - INFO - Loading renewal data for member_id=41, name=Maria Elena Martínez Mendez
+2025-12-01 18:19:29 - app.controllers.renew_subscription_controller - INFO - Emitting member data
+2025-12-01 18:19:29 - app.views.dialogs.renew_subscription_dialog - INFO - Dialog received member data: member={}, active_mem keys=['class_name', 'class_template_id', 'end_date', 'payment_amount', 'plan_name', 'status']
+2025-12-01 18:19:29 - app.views.dialogs.renew_subscription_dialog - INFO - Setting member name to: Miembro #41
+2025-12-01 18:19:29 - app.controllers.renew_subscription_controller - INFO - Loading data intelligently with cache optimization
+2025-12-01 18:19:29 - app.controllers.renew_subscription_controller - INFO - No valid cache, loading fresh data
+2025-12-01 18:19:29 - app.controllers.base_subscription_controller - INFO - Loading membership plans via shared service
+2025-12-01 18:19:29 - app.services.subscription_service - INFO - Membership plans operation already in progress
+2025-12-01 18:19:29 - app.controllers.base_subscription_controller - INFO - Loading class templates via shared service
+2025-12-01 18:19:29 - app.services.subscription_service - INFO - Class templates operation already in progress
+2025-12-01 18:19:29 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 18:19:29 - app.services.members_service - INFO - Membership plans query result: {'membershipPlans': [{'id': 5, 'name': 'Plan Diario', 'description': 'Pase diario en horario seleccionado', 'price': 50.0, 'durationValue': 1, 'durationUnit': 'day', 'classLimit': 14, 'fixedTimeSlot': True, 'maxSessionsPerDay': 1, 'maxSessionsPerWeek': 1, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}, {'id': 4, 'name': 'Plan Semanal', 'description': 'Pase de Lunes a Viernes con horario fijo', 'price': 200.0, 'durationValue': 7, 'durationUnit': 'day', 'classLimit': 14, 'fixedTimeSlot': True, 'maxSessionsPerDay': 1, 'maxSessionsPerWeek': 5, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}, {'id': 3, 'name': 'Plan Spinning Mensual.', 'description': 'Horario fijo de spinning.', 'price': 600.0, 'durationValue': 1, 'durationUnit': 'month', 'classLimit': 14, 'fixedTimeSlot': False, 'maxSessionsPerDay': 2, 'maxSessionsPerWeek': 20, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}, {'id': 2, 'name': 'Plan Anual con acceso ilimitado a las clases.', 'description': 'Acceso ilimitado a todas las clases', 'price': 5800.0, 'durationValue': 12, 'durationUnit': 'month', 'classLimit': 14, 'fixedTimeSlot': False, 'maxSessionsPerDay': None, 'maxSessionsPerWeek': None, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}, {'id': 1, 'name': 'Plan Premium Transformación Total.', 'description': 'Acceso ilimitado a las clases, asesoria nutricional y aparatología estetica.', 'price': 8999.0, 'durationValue': 3, 'durationUnit': 'month', 'classLimit': 14, 'fixedTimeSlot': False, 'maxSessionsPerDay': None, 'maxSessionsPerWeek': None, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}]}
+2025-12-01 18:19:29 - app.services.members_service - INFO - Extracted plans: 5 items
+2025-12-01 18:19:29 - app.services.members_service - INFO - First plan sample: {'id': 5, 'name': 'Plan Diario', 'description': 'Pase diario en horario seleccionado', 'price': 50.0, 'durationValue': 1, 'durationUnit': 'day', 'classLimit': 14, 'fixedTimeSlot': True, 'maxSessionsPerDay': 1, 'maxSessionsPerWeek': 1, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}
+2025-12-01 18:19:29 - app.services.members_service - INFO - Successfully parsed 5 plans
+2025-12-01 18:19:29 - app.services.standing_bookings_service - INFO - Fetching class templates from GraphQL...
+2025-12-01 18:19:29 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 5 items | preview: [MembershipPlan(id=5, name='Plan Diario', price=50.0, duration_value=1, description='Pase diario en horario selecciona..., MembershipPlan(id=4, name='Plan Semanal', price=200.0, duration_value=7, description='Pase de Lunes a Viernes con hor..., MembershipPlan(id=3, name='Plan Spinning Mensual.', price=600.0, duration_value=1, description='Horario fijo de spinn..., ...]
+2025-12-01 18:19:29 - app.services.subscription_service - INFO - Loaded 5 membership plans
+2025-12-01 18:19:29 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 18:19:29 - app.services.standing_bookings_service - INFO - Received 30 templates from GraphQL
+2025-12-01 18:19:29 - app.controllers.renew_subscription_controller - INFO - Loading member data in background
+2025-12-01 18:19:29 - app.services.members_service - INFO - Executing member by ID GraphQL query for member_id=41
+2025-12-01 18:19:29 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 30 items | preview: [ClassTemplate(id=1, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=1, start_time_..., ClassTemplate(id=6, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=1, start_time_..., ClassTemplate(id=8, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=1, start_time_..., ...]
+2025-12-01 18:19:29 - app.services.subscription_service - INFO - Loaded 30 class templates
+2025-12-01 18:19:29 - app.services.subscription_service - INFO - Created 6 timeslot groups from 30 templates
+2025-12-01 18:19:29 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 18:19:29 - app.services.members_service - INFO - Member data loaded successfully for ID 41
+2025-12-01 18:19:29 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'dict'> | value: {'id': 41, 'full_name': 'Maria Elena Martínez Mendez', 'email': 'elena_mtz9@hotmail.com', 'phone_number': '+528712345...
+2025-12-01 18:19:29 - app.controllers.renew_subscription_controller - INFO - Member data loaded for renewal
+2025-12-01 18:19:29 - app.controllers.renew_subscription_controller - INFO - Processed member data: full_name=Maria Elena Martínez Mendez
+2025-12-01 18:19:29 - app.controllers.renew_subscription_controller - INFO - Active standing booking data: {}
+2025-12-01 18:19:29 - app.views.dialogs.renew_subscription_dialog - INFO - Dialog received member data: member={'full_name': 'Maria Elena Martínez Mendez', 'id': 41}, active_mem keys=['class_name', 'class_template_id', 'end_date', 'payment_amount', 'plan_name', 'price', 'remaining_days', 'start_date', 'status', 'subscription_id']
+2025-12-01 18:19:29 - app.views.dialogs.renew_subscription_dialog - INFO - Setting member name to: Maria Elena Martínez Mendez
+2025-12-01 18:19:37 - app.services.subscription_service - INFO - Loading seats for template 1 on 2025-12-01
+2025-12-01 18:19:37 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 18:19:37 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 14 items | preview: [Seat(id=1, label='Bicicleta 1', venue_id=1, is_active=True, seat_type_name=None, is_available=True), Seat(id=10, label='Bicicleta 10', venue_id=1, is_active=True, seat_type_name=None, is_available=True), Seat(id=11, label='Bicicleta 11', venue_id=1, is_active=True, seat_type_name=None, is_available=True), ...]
+2025-12-01 18:19:37 - app.services.subscription_service - INFO - Loaded 14 available seats
+2025-12-01 18:19:41 - app.views.dialogs.renew_subscription_dialog - INFO - ============================================================
+2025-12-01 18:19:41 - app.views.dialogs.renew_subscription_dialog - INFO - 🔍 _collect_form() EJECUTÁNDOSE - VERSIÓN CON FIXES
+2025-12-01 18:19:41 - app.views.dialogs.renew_subscription_dialog - INFO - ============================================================
+2025-12-01 18:19:41 - app.views.dialogs.renew_subscription_dialog - INFO - 🔍 selected_item = TimeslotGroup(key='9d4b0f03', class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None, start_time_local='08:00:00', template_ids=[1, 2, 3, 4, 5], templates=[ClassTemplate(id=1, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=1, start_time_local='08:00:00', instructor_id=343, name='Spinning 8:00 am', is_active=True, class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None), ClassTemplate(id=2, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=2, start_time_local='08:00:00', instructor_id=343, name='Spinning 8:00 am', is_active=True, class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None), ClassTemplate(id=3, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=3, start_time_local='08:00:00', instructor_id=343, name='Spinning 8:00 am', is_active=True, class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None), ClassTemplate(id=4, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=4, start_time_local='08:00:00', instructor_id=343, name='Spinning 8:00 am', is_active=True, class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None), ClassTemplate(id=5, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=5, start_time_local='08:00:00', instructor_id=343, name='Spinning 8:00 am', is_active=True, class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None)]) (type: TimeslotGroup)
+2025-12-01 18:19:41 - app.views.dialogs.renew_subscription_dialog - INFO - Resolved template_id: 1
+2025-12-01 18:19:41 - app.views.dialogs.renew_subscription_dialog - INFO - Selected seat with id: 3
+2025-12-01 18:19:41 - app.views.dialogs.renew_subscription_dialog - INFO - Collected form data from renewal dialog:
+2025-12-01 18:19:41 - app.views.dialogs.renew_subscription_dialog - INFO -   member_id: 41 (type: int)
+2025-12-01 18:19:41 - app.views.dialogs.renew_subscription_dialog - INFO -   plan_id: 4 (type: int)
+2025-12-01 18:19:41 - app.views.dialogs.renew_subscription_dialog - INFO -   start_at: 2025-12-01T00:00:00-06:00 (type: datetime)
+2025-12-01 18:19:41 - app.views.dialogs.renew_subscription_dialog - INFO -   payment_method: cash (type: str)
+2025-12-01 18:19:41 - app.views.dialogs.renew_subscription_dialog - INFO -   amount: 200.0 (type: float)
+2025-12-01 18:19:41 - app.views.dialogs.renew_subscription_dialog - INFO -   template_id: 1 (type: int)
+2025-12-01 18:19:41 - app.views.dialogs.renew_subscription_dialog - INFO -   seat_id: 3 (type: int)
+2025-12-01 18:19:41 - app.views.dialogs.renew_subscription_dialog - INFO - Fecha en rango normal: 0 días de diferencia
+2025-12-01 18:19:41 - app.controllers.renew_subscription_controller - INFO - Validating renewal fields. Form data keys: ['member_id', 'plan_id', 'start_at', 'payment_method', 'amount', 'template_id', 'seat_id']
+2025-12-01 18:19:41 - app.controllers.renew_subscription_controller - INFO -   member_id: 41 (type: int)
+2025-12-01 18:19:41 - app.controllers.renew_subscription_controller - INFO -   plan_id: 4 (type: int)
+2025-12-01 18:19:41 - app.controllers.renew_subscription_controller - INFO -   start_at: 2025-12-01T00:00:00-06:00 (type: datetime)
+2025-12-01 18:19:41 - app.controllers.renew_subscription_controller - INFO -   payment_method: cash (type: str)
+2025-12-01 18:19:41 - app.controllers.renew_subscription_controller - INFO -   amount: 200.0 (type: float)
+2025-12-01 18:19:41 - app.controllers.renew_subscription_controller - INFO -   template_id: 1 (type: int)
+2025-12-01 18:19:41 - app.controllers.renew_subscription_controller - INFO -   seat_id: 3 (type: int)
+2025-12-01 18:19:41 - app.controllers.renew_subscription_controller - INFO - Renewal validation passed successfully
+2025-12-01 18:19:41 - app.controllers.renew_subscription_controller - INFO - Renewing subscription with form data keys: ['member_id', 'plan_id', 'start_at', 'payment_method', 'amount', 'template_id', 'seat_id']
+2025-12-01 18:19:41 - app.controllers.renew_subscription_controller - INFO -   member_id: 41 (type: int)
+2025-12-01 18:19:41 - app.controllers.renew_subscription_controller - INFO -   plan_id: 4 (type: int)
+2025-12-01 18:19:41 - app.controllers.renew_subscription_controller - INFO -   start_at: 2025-12-01T00:00:00-06:00 (type: datetime)
+2025-12-01 18:19:41 - app.controllers.renew_subscription_controller - INFO -   payment_method: cash (type: str)
+2025-12-01 18:19:41 - app.controllers.renew_subscription_controller - INFO -   amount: 200.0 (type: float)
+2025-12-01 18:19:41 - app.controllers.renew_subscription_controller - INFO -   template_id: 1 (type: int)
+2025-12-01 18:19:41 - app.controllers.renew_subscription_controller - INFO -   seat_id: 3 (type: int)
+2025-12-01 18:19:41 - app.controllers.renew_subscription_controller - INFO - Mapped 'amount' (200.0) to 'payment_amount'
+2025-12-01 18:19:41 - app.controllers.renew_subscription_controller - INFO - Using template_id from form: 1
+2025-12-01 18:19:41 - app.controllers.renew_subscription_controller - INFO - Using seat_id from form: 3
+2025-12-01 18:19:41 - app.controllers.renew_subscription_controller - INFO - Form data transformation completed. Original keys: ['member_id', 'plan_id', 'start_at', 'payment_method', 'amount', 'template_id', 'seat_id']
+2025-12-01 18:19:41 - app.controllers.renew_subscription_controller - INFO - Service params keys: ['member_id', 'plan_id', 'start_at', 'payment_method', 'payment_amount', 'template_id', 'seat_id', 'payment_status', 'payment_comment', 'payment_provider', 'provider_payment_id', 'external_reference']
+2025-12-01 18:19:41 - app.controllers.renew_subscription_controller - INFO - Transformed service parameters: ['member_id', 'plan_id', 'start_at', 'payment_method', 'payment_amount', 'template_id', 'seat_id', 'payment_status', 'payment_comment', 'payment_provider', 'provider_payment_id', 'external_reference']
+2025-12-01 18:19:41 - app.controllers.renew_subscription_controller - INFO - Creating renewal operation with MembersService.renew_subscription
+2025-12-01 18:19:42 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 18:19:42 - app.services.members_service - INFO - Parsed message text from JSON envelope
+2025-12-01 18:19:42 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'dict'> | value: {'subscription': MembershipSubscription(id=2681, person_id=41, plan_id=4, start_at=datetime.datetime(2025, 12, 1, 6, ...
+2025-12-01 18:19:42 - app.controllers.renew_subscription_controller - INFO - Subscription renewed successfully via backend. Result keys: ['subscription', 'payment', 'standing_booking_id', 'materialization_stats', 'message']
+2025-12-01 18:19:42 - app.controllers.renew_subscription_controller - INFO - New subscription created with ID: 2681
+2025-12-01 18:19:42 - app.views.dialogs.renew_subscription_dialog - INFO - Emitting subscription_renewed signal for member 41
+2025-12-01 18:19:42 - app.views.tabs.members_tab - INFO - Subscription renewed for member 41, refreshing UI
+2025-12-01 18:19:42 - app.views.tabs.members_tab - INFO - Re-running search with query: Maria el
+2025-12-01 18:19:42 - app.controllers.members_controller - INFO - Loading members search=Maria el limit=100 offset=0
+2025-12-01 18:19:42 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 18:19:42 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 2 items | preview: [Member(id=41, full_name='Maria Elena Martínez Mendez', email='elena_mtz9@hotmail.com', phone_number='+528712345130', ..., Member(id=86, full_name='Maria Elena Chavarria Hernández', email=None, phone_number='+528711310770', wa_id=None, regi...]
+2025-12-01 18:19:42 - app.controllers.members_controller - INFO - Members controller received result of type <class 'list'>
+2025-12-01 18:57:48 - app.controllers.members_controller - INFO - Loading members search=None limit=100 offset=0
+2025-12-01 18:57:49 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 18:57:49 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 100 items | preview: [Member(id=64, full_name='Betzabeth León García', email='betzyleon9@gmail.com', phone_number='+528713981672', wa_id=No..., Member(id=241, full_name='María Fernanda Soto Recendiz', email='fernandarecendiz36918@gmail.com', phone_number='+5287..., Member(id=143, full_name='Janeth Hernández Vazquez', email='sdirectj6@gmail.com', phone_number='+528711383117', wa_id..., ...]
+2025-12-01 18:57:49 - app.controllers.members_controller - INFO - Members controller received result of type <class 'list'>
+2025-12-01 18:57:51 - app.controllers.members_controller - INFO - Loading members search=frin limit=100 offset=0
+2025-12-01 18:57:51 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 18:57:51 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 0 items | preview: []
+2025-12-01 18:57:51 - app.controllers.members_controller - INFO - Members controller received result of type <class 'list'>
+2025-12-01 18:57:52 - app.controllers.members_controller - INFO - Loading members search=frida limit=100 offset=0
+2025-12-01 18:57:52 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 18:57:52 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 2 items | preview: [Member(id=360, full_name='Frida Natalia García Pérez', email='frida.natalia.gp.15@.gmail.com', phone_number='87152526..., Member(id=60, full_name='Frida Marisol López Espino', email='eiso_1974@hotmail.com', phone_number='+528712499918', wa...]
+2025-12-01 18:57:52 - app.controllers.members_controller - INFO - Members controller received result of type <class 'list'>
+2025-12-01 18:57:58 - app.views.dialogs.renew_subscription_dialog - INFO - QDateEditWithToday initialized with calendar popup enabled
+2025-12-01 18:57:58 - app.controllers.base_subscription_controller - INFO - Loading membership plans via shared service
+2025-12-01 18:57:58 - app.services.subscription_service - INFO - Loading membership plans from server...
+2025-12-01 18:57:58 - app.services.members_service - INFO - Executing membership plans GraphQL query...
+2025-12-01 18:57:58 - app.controllers.base_subscription_controller - INFO - Loading class templates via shared service
+2025-12-01 18:57:58 - app.services.subscription_service - INFO - Loading class templates from server...
+2025-12-01 18:57:58 - app.controllers.renew_subscription_controller - INFO - Loading renewal data for member_id=360, name=Frida Natalia García Pérez
+2025-12-01 18:57:58 - app.controllers.renew_subscription_controller - INFO - Emitting member data
+2025-12-01 18:57:58 - app.views.dialogs.renew_subscription_dialog - INFO - Dialog received member data: member={}, active_mem keys=['class_name', 'class_template_id', 'end_date', 'payment_amount', 'plan_name', 'status']
+2025-12-01 18:57:58 - app.views.dialogs.renew_subscription_dialog - INFO - Setting member name to: Miembro #360
+2025-12-01 18:57:58 - app.controllers.renew_subscription_controller - INFO - Loading data intelligently with cache optimization
+2025-12-01 18:57:58 - app.controllers.renew_subscription_controller - INFO - No valid cache, loading fresh data
+2025-12-01 18:57:58 - app.controllers.base_subscription_controller - INFO - Loading membership plans via shared service
+2025-12-01 18:57:58 - app.services.subscription_service - INFO - Membership plans operation already in progress
+2025-12-01 18:57:58 - app.controllers.base_subscription_controller - INFO - Loading class templates via shared service
+2025-12-01 18:57:58 - app.services.subscription_service - INFO - Class templates operation already in progress
+2025-12-01 18:57:58 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 18:57:58 - app.services.members_service - INFO - Membership plans query result: {'membershipPlans': [{'id': 5, 'name': 'Plan Diario', 'description': 'Pase diario en horario seleccionado', 'price': 50.0, 'durationValue': 1, 'durationUnit': 'day', 'classLimit': 14, 'fixedTimeSlot': True, 'maxSessionsPerDay': 1, 'maxSessionsPerWeek': 1, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}, {'id': 4, 'name': 'Plan Semanal', 'description': 'Pase de Lunes a Viernes con horario fijo', 'price': 200.0, 'durationValue': 7, 'durationUnit': 'day', 'classLimit': 14, 'fixedTimeSlot': True, 'maxSessionsPerDay': 1, 'maxSessionsPerWeek': 5, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}, {'id': 3, 'name': 'Plan Spinning Mensual.', 'description': 'Horario fijo de spinning.', 'price': 600.0, 'durationValue': 1, 'durationUnit': 'month', 'classLimit': 14, 'fixedTimeSlot': False, 'maxSessionsPerDay': 2, 'maxSessionsPerWeek': 20, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}, {'id': 2, 'name': 'Plan Anual con acceso ilimitado a las clases.', 'description': 'Acceso ilimitado a todas las clases', 'price': 5800.0, 'durationValue': 12, 'durationUnit': 'month', 'classLimit': 14, 'fixedTimeSlot': False, 'maxSessionsPerDay': None, 'maxSessionsPerWeek': None, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}, {'id': 1, 'name': 'Plan Premium Transformación Total.', 'description': 'Acceso ilimitado a las clases, asesoria nutricional y aparatología estetica.', 'price': 8999.0, 'durationValue': 3, 'durationUnit': 'month', 'classLimit': 14, 'fixedTimeSlot': False, 'maxSessionsPerDay': None, 'maxSessionsPerWeek': None, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}]}
+2025-12-01 18:57:58 - app.services.members_service - INFO - Extracted plans: 5 items
+2025-12-01 18:57:58 - app.services.members_service - INFO - First plan sample: {'id': 5, 'name': 'Plan Diario', 'description': 'Pase diario en horario seleccionado', 'price': 50.0, 'durationValue': 1, 'durationUnit': 'day', 'classLimit': 14, 'fixedTimeSlot': True, 'maxSessionsPerDay': 1, 'maxSessionsPerWeek': 1, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}
+2025-12-01 18:57:58 - app.services.members_service - INFO - Successfully parsed 5 plans
+2025-12-01 18:57:58 - app.services.standing_bookings_service - INFO - Fetching class templates from GraphQL...
+2025-12-01 18:57:58 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 5 items | preview: [MembershipPlan(id=5, name='Plan Diario', price=50.0, duration_value=1, description='Pase diario en horario selecciona..., MembershipPlan(id=4, name='Plan Semanal', price=200.0, duration_value=7, description='Pase de Lunes a Viernes con hor..., MembershipPlan(id=3, name='Plan Spinning Mensual.', price=600.0, duration_value=1, description='Horario fijo de spinn..., ...]
+2025-12-01 18:57:58 - app.services.subscription_service - INFO - Loaded 5 membership plans
+2025-12-01 18:57:58 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 18:57:58 - app.services.standing_bookings_service - INFO - Received 30 templates from GraphQL
+2025-12-01 18:57:58 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 30 items | preview: [ClassTemplate(id=1, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=1, start_time_..., ClassTemplate(id=6, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=1, start_time_..., ClassTemplate(id=8, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=1, start_time_..., ...]
+2025-12-01 18:57:58 - app.services.subscription_service - INFO - Loaded 30 class templates
+2025-12-01 18:57:58 - app.services.subscription_service - INFO - Created 6 timeslot groups from 30 templates
+2025-12-01 18:57:58 - app.controllers.renew_subscription_controller - INFO - Loading member data in background
+2025-12-01 18:57:58 - app.services.members_service - INFO - Executing member by ID GraphQL query for member_id=360
+2025-12-01 18:57:59 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 18:57:59 - app.services.members_service - INFO - Member data loaded successfully for ID 360
+2025-12-01 18:57:59 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'dict'> | value: {'id': 360, 'full_name': 'Frida Natalia García Pérez', 'email': 'frida.natalia.gp.15@.gmail.com', 'phone_number': '87...
+2025-12-01 18:57:59 - app.controllers.renew_subscription_controller - INFO - Member data loaded for renewal
+2025-12-01 18:57:59 - app.controllers.renew_subscription_controller - INFO - Processed member data: full_name=Frida Natalia García Pérez
+2025-12-01 18:57:59 - app.controllers.renew_subscription_controller - INFO - Active standing booking data: {}
+2025-12-01 18:57:59 - app.views.dialogs.renew_subscription_dialog - INFO - Dialog received member data: member={'full_name': 'Frida Natalia García Pérez', 'id': 360}, active_mem keys=['class_name', 'class_template_id', 'end_date', 'payment_amount', 'plan_name', 'price', 'remaining_days', 'start_date', 'status', 'subscription_id']
+2025-12-01 18:57:59 - app.views.dialogs.renew_subscription_dialog - INFO - Setting member name to: Frida Natalia García Pérez
+2025-12-01 18:58:33 - app.views.dialogs.renew_subscription_dialog - INFO - ============================================================
+2025-12-01 18:58:33 - app.views.dialogs.renew_subscription_dialog - INFO - 🔍 _collect_form() EJECUTÁNDOSE - VERSIÓN CON FIXES
+2025-12-01 18:58:33 - app.views.dialogs.renew_subscription_dialog - INFO - ============================================================
+2025-12-01 18:58:33 - app.views.dialogs.renew_subscription_dialog - INFO - 🔍 selected_item = None (type: None)
+2025-12-01 18:58:33 - app.views.dialogs.renew_subscription_dialog - INFO - Collected form data from renewal dialog:
+2025-12-01 18:58:33 - app.views.dialogs.renew_subscription_dialog - INFO -   member_id: 360 (type: int)
+2025-12-01 18:58:33 - app.views.dialogs.renew_subscription_dialog - INFO -   plan_id: 4 (type: int)
+2025-12-01 18:58:33 - app.views.dialogs.renew_subscription_dialog - INFO -   start_at: 2025-12-01T00:00:00-06:00 (type: datetime)
+2025-12-01 18:58:33 - app.views.dialogs.renew_subscription_dialog - INFO -   payment_method: cash (type: str)
+2025-12-01 18:58:33 - app.views.dialogs.renew_subscription_dialog - INFO -   amount: 200.0 (type: float)
+2025-12-01 18:58:33 - app.views.dialogs.renew_subscription_dialog - INFO - Fecha en rango normal: 0 días de diferencia
+2025-12-01 18:58:33 - app.controllers.renew_subscription_controller - INFO - Validating renewal fields. Form data keys: ['member_id', 'plan_id', 'start_at', 'payment_method', 'amount']
+2025-12-01 18:58:33 - app.controllers.renew_subscription_controller - INFO -   member_id: 360 (type: int)
+2025-12-01 18:58:33 - app.controllers.renew_subscription_controller - INFO -   plan_id: 4 (type: int)
+2025-12-01 18:58:33 - app.controllers.renew_subscription_controller - INFO -   start_at: 2025-12-01T00:00:00-06:00 (type: datetime)
+2025-12-01 18:58:33 - app.controllers.renew_subscription_controller - INFO -   payment_method: cash (type: str)
+2025-12-01 18:58:33 - app.controllers.renew_subscription_controller - INFO -   amount: 200.0 (type: float)
+2025-12-01 18:58:33 - app.controllers.renew_subscription_controller - INFO - Renewal validation passed successfully
+2025-12-01 18:58:33 - app.controllers.renew_subscription_controller - INFO - Renewing subscription with form data keys: ['member_id', 'plan_id', 'start_at', 'payment_method', 'amount']
+2025-12-01 18:58:33 - app.controllers.renew_subscription_controller - INFO -   member_id: 360 (type: int)
+2025-12-01 18:58:33 - app.controllers.renew_subscription_controller - INFO -   plan_id: 4 (type: int)
+2025-12-01 18:58:33 - app.controllers.renew_subscription_controller - INFO -   start_at: 2025-12-01T00:00:00-06:00 (type: datetime)
+2025-12-01 18:58:33 - app.controllers.renew_subscription_controller - INFO -   payment_method: cash (type: str)
+2025-12-01 18:58:33 - app.controllers.renew_subscription_controller - INFO -   amount: 200.0 (type: float)
+2025-12-01 18:58:33 - app.controllers.renew_subscription_controller - INFO - Mapped 'amount' (200.0) to 'payment_amount'
+2025-12-01 18:58:33 - app.controllers.renew_subscription_controller - INFO - Fallback: using template_id from active_membership: None
+2025-12-01 18:58:33 - app.controllers.renew_subscription_controller - INFO - No template_id provided - renewal will be without standing booking
+2025-12-01 18:58:33 - app.controllers.renew_subscription_controller - INFO - Form data transformation completed. Original keys: ['member_id', 'plan_id', 'start_at', 'payment_method', 'amount']
+2025-12-01 18:58:33 - app.controllers.renew_subscription_controller - INFO - Service params keys: ['member_id', 'plan_id', 'start_at', 'payment_method', 'payment_amount', 'payment_status', 'payment_comment', 'payment_provider', 'provider_payment_id', 'external_reference']
+2025-12-01 18:58:33 - app.controllers.renew_subscription_controller - INFO - Transformed service parameters: ['member_id', 'plan_id', 'start_at', 'payment_method', 'payment_amount', 'payment_status', 'payment_comment', 'payment_provider', 'provider_payment_id', 'external_reference']
+2025-12-01 18:58:33 - app.controllers.renew_subscription_controller - INFO - Creating renewal operation with MembersService.renew_subscription
+2025-12-01 18:58:33 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 18:58:33 - app.services.members_service - INFO - Parsed message text from JSON envelope
+2025-12-01 18:58:33 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'dict'> | value: {'subscription': MembershipSubscription(id=2682, person_id=360, plan_id=4, start_at=datetime.datetime(2025, 12, 1, 6,...
+2025-12-01 18:58:33 - app.controllers.renew_subscription_controller - INFO - Subscription renewed successfully via backend. Result keys: ['subscription', 'payment', 'standing_booking_id', 'materialization_stats', 'message']
+2025-12-01 18:58:33 - app.controllers.renew_subscription_controller - INFO - New subscription created with ID: 2682
+2025-12-01 18:58:33 - app.views.dialogs.renew_subscription_dialog - INFO - Emitting subscription_renewed signal for member 360
+2025-12-01 18:58:33 - app.views.tabs.members_tab - INFO - Subscription renewed for member 360, refreshing UI
+2025-12-01 18:58:33 - app.views.tabs.members_tab - INFO - Re-running search with query: frida
+2025-12-01 18:58:33 - app.controllers.members_controller - INFO - Loading members search=frida limit=100 offset=0
+2025-12-01 18:58:33 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 18:58:33 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 2 items | preview: [Member(id=360, full_name='Frida Natalia García Pérez', email='frida.natalia.gp.15@.gmail.com', phone_number='87152526..., Member(id=60, full_name='Frida Marisol López Espino', email='eiso_1974@hotmail.com', phone_number='+528712499918', wa...]
+2025-12-01 18:58:33 - app.controllers.members_controller - INFO - Members controller received result of type <class 'list'>
+2025-12-01 20:56:22 - app.controllers.members_controller - INFO - Loading members search=None limit=100 offset=0
+2025-12-01 20:56:22 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 20:56:22 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 100 items | preview: [Member(id=64, full_name='Betzabeth León García', email='betzyleon9@gmail.com', phone_number='+528713981672', wa_id=No..., Member(id=241, full_name='María Fernanda Soto Recendiz', email='fernandarecendiz36918@gmail.com', phone_number='+5287..., Member(id=143, full_name='Janeth Hernández Vazquez', email='sdirectj6@gmail.com', phone_number='+528711383117', wa_id..., ...]
+2025-12-01 20:56:22 - app.controllers.members_controller - INFO - Members controller received result of type <class 'list'>
+2025-12-01 20:56:23 - app.controllers.members_controller - INFO - Loading members search=marga limit=100 offset=0
+2025-12-01 20:56:23 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 20:56:23 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 1 items | preview: [Member(id=61, full_name='Margarita Pérez Rodriguez', email='maguimaggie_perez10@hotmail.com', phone_number='+52871118...]
+2025-12-01 20:56:23 - app.controllers.members_controller - INFO - Members controller received result of type <class 'list'>
+2025-12-01 20:56:25 - app.views.dialogs.renew_subscription_dialog - INFO - QDateEditWithToday initialized with calendar popup enabled
+2025-12-01 20:56:25 - app.controllers.base_subscription_controller - INFO - Loading membership plans via shared service
+2025-12-01 20:56:25 - app.services.subscription_service - INFO - Loading membership plans from server...
+2025-12-01 20:56:25 - app.controllers.base_subscription_controller - INFO - Loading class templates via shared service
+2025-12-01 20:56:25 - app.services.members_service - INFO - Executing membership plans GraphQL query...
+2025-12-01 20:56:25 - app.services.subscription_service - INFO - Loading class templates from server...
+2025-12-01 20:56:25 - app.controllers.renew_subscription_controller - INFO - Loading renewal data for member_id=61, name=Margarita Pérez Rodriguez
+2025-12-01 20:56:25 - app.controllers.renew_subscription_controller - INFO - Emitting member data
+2025-12-01 20:56:25 - app.views.dialogs.renew_subscription_dialog - INFO - Dialog received member data: member={}, active_mem keys=['class_name', 'class_template_id', 'end_date', 'payment_amount', 'plan_name', 'status']
+2025-12-01 20:56:25 - app.views.dialogs.renew_subscription_dialog - INFO - Setting member name to: Miembro #61
+2025-12-01 20:56:25 - app.controllers.renew_subscription_controller - INFO - Loading data intelligently with cache optimization
+2025-12-01 20:56:25 - app.controllers.renew_subscription_controller - INFO - No valid cache, loading fresh data
+2025-12-01 20:56:25 - app.controllers.base_subscription_controller - INFO - Loading membership plans via shared service
+2025-12-01 20:56:25 - app.services.subscription_service - INFO - Membership plans operation already in progress
+2025-12-01 20:56:25 - app.controllers.base_subscription_controller - INFO - Loading class templates via shared service
+2025-12-01 20:56:25 - app.services.subscription_service - INFO - Class templates operation already in progress
+2025-12-01 20:56:25 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 20:56:25 - app.services.members_service - INFO - Membership plans query result: {'membershipPlans': [{'id': 5, 'name': 'Plan Diario', 'description': 'Pase diario en horario seleccionado', 'price': 50.0, 'durationValue': 1, 'durationUnit': 'day', 'classLimit': 14, 'fixedTimeSlot': True, 'maxSessionsPerDay': 1, 'maxSessionsPerWeek': 1, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}, {'id': 4, 'name': 'Plan Semanal', 'description': 'Pase de Lunes a Viernes con horario fijo', 'price': 200.0, 'durationValue': 7, 'durationUnit': 'day', 'classLimit': 14, 'fixedTimeSlot': True, 'maxSessionsPerDay': 1, 'maxSessionsPerWeek': 5, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}, {'id': 3, 'name': 'Plan Spinning Mensual.', 'description': 'Horario fijo de spinning.', 'price': 600.0, 'durationValue': 1, 'durationUnit': 'month', 'classLimit': 14, 'fixedTimeSlot': False, 'maxSessionsPerDay': 2, 'maxSessionsPerWeek': 20, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}, {'id': 2, 'name': 'Plan Anual con acceso ilimitado a las clases.', 'description': 'Acceso ilimitado a todas las clases', 'price': 5800.0, 'durationValue': 12, 'durationUnit': 'month', 'classLimit': 14, 'fixedTimeSlot': False, 'maxSessionsPerDay': None, 'maxSessionsPerWeek': None, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}, {'id': 1, 'name': 'Plan Premium Transformación Total.', 'description': 'Acceso ilimitado a las clases, asesoria nutricional y aparatología estetica.', 'price': 8999.0, 'durationValue': 3, 'durationUnit': 'month', 'classLimit': 14, 'fixedTimeSlot': False, 'maxSessionsPerDay': None, 'maxSessionsPerWeek': None, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}]}
+2025-12-01 20:56:25 - app.services.members_service - INFO - Extracted plans: 5 items
+2025-12-01 20:56:25 - app.services.members_service - INFO - First plan sample: {'id': 5, 'name': 'Plan Diario', 'description': 'Pase diario en horario seleccionado', 'price': 50.0, 'durationValue': 1, 'durationUnit': 'day', 'classLimit': 14, 'fixedTimeSlot': True, 'maxSessionsPerDay': 1, 'maxSessionsPerWeek': 1, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}
+2025-12-01 20:56:25 - app.services.members_service - INFO - Successfully parsed 5 plans
+2025-12-01 20:56:25 - app.services.standing_bookings_service - INFO - Fetching class templates from GraphQL...
+2025-12-01 20:56:25 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 5 items | preview: [MembershipPlan(id=5, name='Plan Diario', price=50.0, duration_value=1, description='Pase diario en horario selecciona..., MembershipPlan(id=4, name='Plan Semanal', price=200.0, duration_value=7, description='Pase de Lunes a Viernes con hor..., MembershipPlan(id=3, name='Plan Spinning Mensual.', price=600.0, duration_value=1, description='Horario fijo de spinn..., ...]
+2025-12-01 20:56:25 - app.services.subscription_service - INFO - Loaded 5 membership plans
+2025-12-01 20:56:25 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 20:56:25 - app.services.standing_bookings_service - INFO - Received 30 templates from GraphQL
+2025-12-01 20:56:25 - app.controllers.renew_subscription_controller - INFO - Loading member data in background
+2025-12-01 20:56:25 - app.services.members_service - INFO - Executing member by ID GraphQL query for member_id=61
+2025-12-01 20:56:25 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 30 items | preview: [ClassTemplate(id=1, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=1, start_time_..., ClassTemplate(id=6, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=1, start_time_..., ClassTemplate(id=8, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=1, start_time_..., ...]
+2025-12-01 20:56:25 - app.services.subscription_service - INFO - Loaded 30 class templates
+2025-12-01 20:56:25 - app.services.subscription_service - INFO - Created 6 timeslot groups from 30 templates
+2025-12-01 20:56:26 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 20:56:26 - app.services.members_service - INFO - Member data loaded successfully for ID 61
+2025-12-01 20:56:26 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'dict'> | value: {'id': 61, 'full_name': 'Margarita Pérez Rodriguez', 'email': 'maguimaggie_perez10@hotmail.com', 'phone_number': '+52...
+2025-12-01 20:56:26 - app.controllers.renew_subscription_controller - INFO - Member data loaded for renewal
+2025-12-01 20:56:26 - app.controllers.renew_subscription_controller - INFO - Processed member data: full_name=Margarita Pérez Rodriguez
+2025-12-01 20:56:26 - app.controllers.renew_subscription_controller - INFO - Active standing booking data: {}
+2025-12-01 20:56:26 - app.views.dialogs.renew_subscription_dialog - INFO - Dialog received member data: member={'full_name': 'Margarita Pérez Rodriguez', 'id': 61}, active_mem keys=['class_name', 'class_template_id', 'end_date', 'payment_amount', 'plan_name', 'price', 'remaining_days', 'start_date', 'status', 'subscription_id']
+2025-12-01 20:56:26 - app.views.dialogs.renew_subscription_dialog - INFO - Setting member name to: Margarita Pérez Rodriguez
+2025-12-01 20:56:56 - app.services.subscription_service - INFO - Loading seats for template 11 on 2025-12-01
+2025-12-01 20:56:56 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 20:56:56 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 14 items | preview: [Seat(id=1, label='Bicicleta 1', venue_id=1, is_active=True, seat_type_name=None, is_available=True), Seat(id=10, label='Bicicleta 10', venue_id=1, is_active=True, seat_type_name=None, is_available=True), Seat(id=11, label='Bicicleta 11', venue_id=1, is_active=True, seat_type_name=None, is_available=True), ...]
+2025-12-01 20:56:56 - app.services.subscription_service - INFO - Loaded 14 available seats
+2025-12-01 20:57:11 - app.views.dialogs.renew_subscription_dialog - INFO - ============================================================
+2025-12-01 20:57:11 - app.views.dialogs.renew_subscription_dialog - INFO - 🔍 _collect_form() EJECUTÁNDOSE - VERSIÓN CON FIXES
+2025-12-01 20:57:11 - app.views.dialogs.renew_subscription_dialog - INFO - ============================================================
+2025-12-01 20:57:11 - app.views.dialogs.renew_subscription_dialog - INFO - 🔍 selected_item = TimeslotGroup(key='52018e3d', class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None, start_time_local='21:00:00', template_ids=[11, 16, 21, 26, 31], templates=[ClassTemplate(id=11, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=1, start_time_local='21:00:00', instructor_id=343, name='Spinning 9:00 pm', is_active=True, class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None), ClassTemplate(id=16, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=2, start_time_local='21:00:00', instructor_id=343, name='Spinning 9:00 pm', is_active=True, class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None), ClassTemplate(id=21, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=3, start_time_local='21:00:00', instructor_id=343, name='Spinning 9:00 pm', is_active=True, class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None), ClassTemplate(id=26, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=4, start_time_local='21:00:00', instructor_id=343, name='Spinning 9:00 pm', is_active=True, class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None), ClassTemplate(id=31, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=5, start_time_local='21:00:00', instructor_id=343, name='Spinning 9:00 pm', is_active=True, class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None)]) (type: TimeslotGroup)
+2025-12-01 20:57:11 - app.views.dialogs.renew_subscription_dialog - INFO - Resolved template_id: 11
+2025-12-01 20:57:11 - app.views.dialogs.renew_subscription_dialog - INFO - Selected seat with id: 1
+2025-12-01 20:57:11 - app.views.dialogs.renew_subscription_dialog - INFO - Collected form data from renewal dialog:
+2025-12-01 20:57:11 - app.views.dialogs.renew_subscription_dialog - INFO -   member_id: 61 (type: int)
+2025-12-01 20:57:11 - app.views.dialogs.renew_subscription_dialog - INFO -   plan_id: 4 (type: int)
+2025-12-01 20:57:11 - app.views.dialogs.renew_subscription_dialog - INFO -   start_at: 2025-12-01T00:00:00-06:00 (type: datetime)
+2025-12-01 20:57:11 - app.views.dialogs.renew_subscription_dialog - INFO -   payment_method: cash (type: str)
+2025-12-01 20:57:11 - app.views.dialogs.renew_subscription_dialog - INFO -   amount: 200.0 (type: float)
+2025-12-01 20:57:11 - app.views.dialogs.renew_subscription_dialog - INFO -   template_id: 11 (type: int)
+2025-12-01 20:57:11 - app.views.dialogs.renew_subscription_dialog - INFO -   seat_id: 1 (type: int)
+2025-12-01 20:57:11 - app.views.dialogs.renew_subscription_dialog - INFO - Fecha en rango normal: 0 días de diferencia
+2025-12-01 20:57:11 - app.controllers.renew_subscription_controller - INFO - Validating renewal fields. Form data keys: ['member_id', 'plan_id', 'start_at', 'payment_method', 'amount', 'template_id', 'seat_id']
+2025-12-01 20:57:11 - app.controllers.renew_subscription_controller - INFO -   member_id: 61 (type: int)
+2025-12-01 20:57:11 - app.controllers.renew_subscription_controller - INFO -   plan_id: 4 (type: int)
+2025-12-01 20:57:11 - app.controllers.renew_subscription_controller - INFO -   start_at: 2025-12-01T00:00:00-06:00 (type: datetime)
+2025-12-01 20:57:11 - app.controllers.renew_subscription_controller - INFO -   payment_method: cash (type: str)
+2025-12-01 20:57:11 - app.controllers.renew_subscription_controller - INFO -   amount: 200.0 (type: float)
+2025-12-01 20:57:11 - app.controllers.renew_subscription_controller - INFO -   template_id: 11 (type: int)
+2025-12-01 20:57:11 - app.controllers.renew_subscription_controller - INFO -   seat_id: 1 (type: int)
+2025-12-01 20:57:11 - app.controllers.renew_subscription_controller - INFO - Renewal validation passed successfully
+2025-12-01 20:57:11 - app.controllers.renew_subscription_controller - INFO - Renewing subscription with form data keys: ['member_id', 'plan_id', 'start_at', 'payment_method', 'amount', 'template_id', 'seat_id']
+2025-12-01 20:57:11 - app.controllers.renew_subscription_controller - INFO -   member_id: 61 (type: int)
+2025-12-01 20:57:11 - app.controllers.renew_subscription_controller - INFO -   plan_id: 4 (type: int)
+2025-12-01 20:57:11 - app.controllers.renew_subscription_controller - INFO -   start_at: 2025-12-01T00:00:00-06:00 (type: datetime)
+2025-12-01 20:57:11 - app.controllers.renew_subscription_controller - INFO -   payment_method: cash (type: str)
+2025-12-01 20:57:11 - app.controllers.renew_subscription_controller - INFO -   amount: 200.0 (type: float)
+2025-12-01 20:57:11 - app.controllers.renew_subscription_controller - INFO -   template_id: 11 (type: int)
+2025-12-01 20:57:11 - app.controllers.renew_subscription_controller - INFO -   seat_id: 1 (type: int)
+2025-12-01 20:57:11 - app.controllers.renew_subscription_controller - INFO - Mapped 'amount' (200.0) to 'payment_amount'
+2025-12-01 20:57:11 - app.controllers.renew_subscription_controller - INFO - Using template_id from form: 11
+2025-12-01 20:57:11 - app.controllers.renew_subscription_controller - INFO - Using seat_id from form: 1
+2025-12-01 20:57:11 - app.controllers.renew_subscription_controller - INFO - Form data transformation completed. Original keys: ['member_id', 'plan_id', 'start_at', 'payment_method', 'amount', 'template_id', 'seat_id']
+2025-12-01 20:57:11 - app.controllers.renew_subscription_controller - INFO - Service params keys: ['member_id', 'plan_id', 'start_at', 'payment_method', 'payment_amount', 'template_id', 'seat_id', 'payment_status', 'payment_comment', 'payment_provider', 'provider_payment_id', 'external_reference']
+2025-12-01 20:57:11 - app.controllers.renew_subscription_controller - INFO - Transformed service parameters: ['member_id', 'plan_id', 'start_at', 'payment_method', 'payment_amount', 'template_id', 'seat_id', 'payment_status', 'payment_comment', 'payment_provider', 'provider_payment_id', 'external_reference']
+2025-12-01 20:57:11 - app.controllers.renew_subscription_controller - INFO - Creating renewal operation with MembersService.renew_subscription
+2025-12-01 20:57:11 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 20:57:11 - app.services.members_service - INFO - Parsed message text from JSON envelope
+2025-12-01 20:57:11 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'dict'> | value: {'subscription': MembershipSubscription(id=2683, person_id=61, plan_id=4, start_at=datetime.datetime(2025, 12, 1, 6, ...
+2025-12-01 20:57:11 - app.controllers.renew_subscription_controller - INFO - Subscription renewed successfully via backend. Result keys: ['subscription', 'payment', 'standing_booking_id', 'materialization_stats', 'message']
+2025-12-01 20:57:11 - app.controllers.renew_subscription_controller - INFO - New subscription created with ID: 2683
+2025-12-01 20:57:11 - app.views.dialogs.renew_subscription_dialog - INFO - Emitting subscription_renewed signal for member 61
+2025-12-01 20:57:11 - app.views.tabs.members_tab - INFO - Subscription renewed for member 61, refreshing UI
+2025-12-01 20:57:11 - app.views.tabs.members_tab - INFO - Re-running search with query: marga
+2025-12-01 20:57:12 - app.controllers.members_controller - INFO - Loading members search=marga limit=100 offset=0
+2025-12-01 20:57:12 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-01 20:57:12 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 1 items | preview: [Member(id=61, full_name='Margarita Pérez Rodriguez', email='maguimaggie_perez10@hotmail.com', phone_number='+52871118...]
+2025-12-01 20:57:12 - app.controllers.members_controller - INFO - Members controller received result of type <class 'list'>
+2025-12-02 13:45:44 - app.controllers.members_controller - INFO - Loading members search=None limit=100 offset=0
+2025-12-02 13:45:45 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-02 13:45:45 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 100 items | preview: [Member(id=64, full_name='Betzabeth León García', email='betzyleon9@gmail.com', phone_number='+528713981672', wa_id=No..., Member(id=241, full_name='María Fernanda Soto Recendiz', email='fernandarecendiz36918@gmail.com', phone_number='+5287..., Member(id=143, full_name='Janeth Hernández Vazquez', email='sdirectj6@gmail.com', phone_number='+528711383117', wa_id..., ...]
+2025-12-02 13:45:45 - app.controllers.members_controller - INFO - Members controller received result of type <class 'list'>
+2025-12-02 20:52:13 - app.controllers.members_controller - INFO - Loading members search=Marisela limit=100 offset=0
+2025-12-02 20:52:13 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-02 20:52:13 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 0 items | preview: []
+2025-12-02 20:52:13 - app.controllers.members_controller - INFO - Members controller received result of type <class 'list'>
+2025-12-02 20:52:15 - app.controllers.members_controller - INFO - Loading members search=Maris limit=100 offset=0
+2025-12-02 20:52:15 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 500 Internal Server Error"
+2025-12-02 20:52:15 - app.graphql.client - ERROR - HTTP 500: Internal Server Error
+2025-12-02 20:52:15 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 0 items | preview: []
+2025-12-02 20:52:15 - app.controllers.members_controller - INFO - Members controller received result of type <class 'list'>
+2025-12-02 20:52:16 - app.controllers.members_controller - INFO - Loading members search=Mar limit=100 offset=0
+2025-12-02 20:52:17 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-02 20:52:17 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 54 items | preview: [Member(id=241, full_name='María Fernanda Soto Recendiz', email='fernandarecendiz36918@gmail.com', phone_number='+5287..., Member(id=366, full_name='Irma Ramírez Valderas', email='irmaramirez39638@gmail.com', phone_number='871', wa_id=None,..., Member(id=61, full_name='Margarita Pérez Rodriguez', email='maguimaggie_perez10@hotmail.com', phone_number='+52871118..., ...]
+2025-12-02 20:52:17 - app.controllers.members_controller - INFO - Members controller received result of type <class 'list'>
+2025-12-02 20:52:18 - app.controllers.members_controller - INFO - Loading members search=Ma limit=100 offset=0
+2025-12-02 20:52:18 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-02 20:52:18 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 100 items | preview: [Member(id=64, full_name='Betzabeth León García', email='betzyleon9@gmail.com', phone_number='+528713981672', wa_id=No..., Member(id=241, full_name='María Fernanda Soto Recendiz', email='fernandarecendiz36918@gmail.com', phone_number='+5287..., Member(id=143, full_name='Janeth Hernández Vazquez', email='sdirectj6@gmail.com', phone_number='+528711383117', wa_id..., ...]
+2025-12-02 20:52:18 - app.controllers.members_controller - INFO - Members controller received result of type <class 'list'>
+2025-12-02 20:52:31 - app.controllers.members_controller - INFO - Opening new subscription dialog
+2025-12-02 20:52:31 - app.controllers.base_subscription_controller - INFO - Loading membership plans via shared service
+2025-12-02 20:52:31 - app.services.subscription_service - INFO - Loading membership plans from server...
+2025-12-02 20:52:31 - app.services.members_service - INFO - Executing membership plans GraphQL query...
+2025-12-02 20:52:31 - app.controllers.base_subscription_controller - INFO - Loading class templates via shared service
+2025-12-02 20:52:31 - app.services.subscription_service - INFO - Loading class templates from server...
+2025-12-02 20:52:31 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-02 20:52:31 - app.services.members_service - INFO - Membership plans query result: {'membershipPlans': [{'id': 5, 'name': 'Plan Diario', 'description': 'Pase diario en horario seleccionado', 'price': 50.0, 'durationValue': 1, 'durationUnit': 'day', 'classLimit': 14, 'fixedTimeSlot': True, 'maxSessionsPerDay': 1, 'maxSessionsPerWeek': 1, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}, {'id': 4, 'name': 'Plan Semanal', 'description': 'Pase de Lunes a Viernes con horario fijo', 'price': 200.0, 'durationValue': 7, 'durationUnit': 'day', 'classLimit': 14, 'fixedTimeSlot': True, 'maxSessionsPerDay': 1, 'maxSessionsPerWeek': 5, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}, {'id': 3, 'name': 'Plan Spinning Mensual.', 'description': 'Horario fijo de spinning.', 'price': 600.0, 'durationValue': 1, 'durationUnit': 'month', 'classLimit': 14, 'fixedTimeSlot': False, 'maxSessionsPerDay': 2, 'maxSessionsPerWeek': 20, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}, {'id': 2, 'name': 'Plan Anual con acceso ilimitado a las clases.', 'description': 'Acceso ilimitado a todas las clases', 'price': 5800.0, 'durationValue': 12, 'durationUnit': 'month', 'classLimit': 14, 'fixedTimeSlot': False, 'maxSessionsPerDay': None, 'maxSessionsPerWeek': None, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}, {'id': 1, 'name': 'Plan Premium Transformación Total.', 'description': 'Acceso ilimitado a las clases, asesoria nutricional y aparatología estetica.', 'price': 8999.0, 'durationValue': 3, 'durationUnit': 'month', 'classLimit': 14, 'fixedTimeSlot': False, 'maxSessionsPerDay': None, 'maxSessionsPerWeek': None, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}]}
+2025-12-02 20:52:31 - app.services.members_service - INFO - Extracted plans: 5 items
+2025-12-02 20:52:31 - app.services.members_service - INFO - First plan sample: {'id': 5, 'name': 'Plan Diario', 'description': 'Pase diario en horario seleccionado', 'price': 50.0, 'durationValue': 1, 'durationUnit': 'day', 'classLimit': 14, 'fixedTimeSlot': True, 'maxSessionsPerDay': 1, 'maxSessionsPerWeek': 1, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}
+2025-12-02 20:52:31 - app.services.members_service - INFO - Successfully parsed 5 plans
+2025-12-02 20:52:31 - app.services.standing_bookings_service - INFO - Fetching class templates from GraphQL...
+2025-12-02 20:52:31 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 5 items | preview: [MembershipPlan(id=5, name='Plan Diario', price=50.0, duration_value=1, description='Pase diario en horario selecciona..., MembershipPlan(id=4, name='Plan Semanal', price=200.0, duration_value=7, description='Pase de Lunes a Viernes con hor..., MembershipPlan(id=3, name='Plan Spinning Mensual.', price=600.0, duration_value=1, description='Horario fijo de spinn..., ...]
+2025-12-02 20:52:31 - app.services.subscription_service - INFO - Loaded 5 membership plans
+2025-12-02 20:52:31 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-02 20:52:31 - app.services.standing_bookings_service - INFO - Received 30 templates from GraphQL
+2025-12-02 20:52:31 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 30 items | preview: [ClassTemplate(id=1, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=1, start_time_..., ClassTemplate(id=6, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=1, start_time_..., ClassTemplate(id=8, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=1, start_time_..., ...]
+2025-12-02 20:52:31 - app.services.subscription_service - INFO - Loaded 30 class templates
+2025-12-02 20:52:31 - app.services.subscription_service - INFO - Created 6 timeslot groups from 30 templates
+2025-12-02 20:52:31 - app.services.subscription_service - INFO - Loading seats for template 2 on 2025-12-02
+2025-12-02 20:52:31 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-02 20:52:31 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 14 items | preview: [Seat(id=1, label='Bicicleta 1', venue_id=1, is_active=True, seat_type_name=None, is_available=True), Seat(id=10, label='Bicicleta 10', venue_id=1, is_active=True, seat_type_name=None, is_available=True), Seat(id=11, label='Bicicleta 11', venue_id=1, is_active=True, seat_type_name=None, is_available=True), ...]
+2025-12-02 20:52:31 - app.services.subscription_service - INFO - Loaded 14 available seats
+2025-12-02 20:53:34 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-02 20:53:34 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'dict'> | value: {'member': Member(id=369, full_name='Marisela Castrellon', email='@live.mx', phone_number='8715', wa_id=None, registr...
+2025-12-02 20:53:36 - app.controllers.members_controller - INFO - New member subscription created successfully
+2025-12-02 20:53:36 - app.controllers.members_controller - INFO - Loading members search=Ma limit=100 offset=0
+2025-12-02 20:53:36 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-02 20:53:36 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 100 items | preview: [Member(id=64, full_name='Betzabeth León García', email='betzyleon9@gmail.com', phone_number='+528713981672', wa_id=No..., Member(id=241, full_name='María Fernanda Soto Recendiz', email='fernandarecendiz36918@gmail.com', phone_number='+5287..., Member(id=143, full_name='Janeth Hernández Vazquez', email='sdirectj6@gmail.com', phone_number='+528711383117', wa_id..., ...]
+2025-12-02 20:53:36 - app.controllers.members_controller - INFO - Members controller received result of type <class 'list'>
+2025-12-03 08:02:10 - app.controllers.members_controller - INFO - Loading members search=None limit=100 offset=0
+2025-12-03 08:02:10 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 500 Internal Server Error"
+2025-12-03 08:02:10 - app.graphql.client - ERROR - HTTP 500: Internal Server Error
+2025-12-03 08:02:10 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 0 items | preview: []
+2025-12-03 08:02:10 - app.controllers.members_controller - INFO - Members controller received result of type <class 'list'>
+2025-12-03 08:02:11 - app.controllers.members_controller - INFO - Loading members search=R limit=100 offset=0
+2025-12-03 08:02:11 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 500 Internal Server Error"
+2025-12-03 08:02:11 - app.graphql.client - ERROR - HTTP 500: Internal Server Error
+2025-12-03 08:02:11 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 0 items | preview: []
+2025-12-03 08:02:11 - app.controllers.members_controller - INFO - Members controller received result of type <class 'list'>
+2025-12-03 08:02:12 - app.controllers.members_controller - INFO - Loading members search=Rocio limit=100 offset=0
+2025-12-03 08:02:12 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-03 08:02:12 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 2 items | preview: [Member(id=177, full_name='Rocio Annel Antuna', email='anneladlp19@gmail.com', phone_number='+528711847518', wa_id=Non..., Member(id=42, full_name='Rocio Navarrete Venegas', email=None, phone_number='+528714748517', wa_id=None, registration...]
+2025-12-03 08:02:12 - app.controllers.members_controller - INFO - Members controller received result of type <class 'list'>
+2025-12-03 08:02:16 - app.views.dialogs.renew_subscription_dialog - INFO - QDateEditWithToday initialized with calendar popup enabled
+2025-12-03 08:02:16 - app.controllers.base_subscription_controller - INFO - Loading membership plans via shared service
+2025-12-03 08:02:16 - app.services.subscription_service - INFO - Loading membership plans from server...
+2025-12-03 08:02:16 - app.controllers.base_subscription_controller - INFO - Loading class templates via shared service
+2025-12-03 08:02:16 - app.services.members_service - INFO - Executing membership plans GraphQL query...
+2025-12-03 08:02:16 - app.services.subscription_service - INFO - Loading class templates from server...
+2025-12-03 08:02:16 - app.controllers.renew_subscription_controller - INFO - Loading renewal data for member_id=42, name=Rocio Navarrete Venegas
+2025-12-03 08:02:16 - app.controllers.renew_subscription_controller - INFO - Emitting member data
+2025-12-03 08:02:16 - app.views.dialogs.renew_subscription_dialog - INFO - Dialog received member data: member={}, active_mem keys=['class_name', 'class_template_id', 'end_date', 'payment_amount', 'plan_name', 'status']
+2025-12-03 08:02:16 - app.views.dialogs.renew_subscription_dialog - INFO - Setting member name to: Miembro #42
+2025-12-03 08:02:16 - app.controllers.renew_subscription_controller - INFO - Loading data intelligently with cache optimization
+2025-12-03 08:02:16 - app.controllers.renew_subscription_controller - INFO - No valid cache, loading fresh data
+2025-12-03 08:02:16 - app.controllers.base_subscription_controller - INFO - Loading membership plans via shared service
+2025-12-03 08:02:16 - app.services.subscription_service - INFO - Membership plans operation already in progress
+2025-12-03 08:02:16 - app.controllers.base_subscription_controller - INFO - Loading class templates via shared service
+2025-12-03 08:02:16 - app.services.subscription_service - INFO - Class templates operation already in progress
+2025-12-03 08:02:16 - app.controllers.renew_subscription_controller - INFO - Loading member data in background
+2025-12-03 08:02:16 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-03 08:02:16 - app.services.members_service - INFO - Membership plans query result: {'membershipPlans': [{'id': 5, 'name': 'Plan Diario', 'description': 'Pase diario en horario seleccionado', 'price': 50.0, 'durationValue': 1, 'durationUnit': 'day', 'classLimit': 14, 'fixedTimeSlot': True, 'maxSessionsPerDay': 1, 'maxSessionsPerWeek': 1, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}, {'id': 4, 'name': 'Plan Semanal', 'description': 'Pase de Lunes a Viernes con horario fijo', 'price': 200.0, 'durationValue': 7, 'durationUnit': 'day', 'classLimit': 14, 'fixedTimeSlot': True, 'maxSessionsPerDay': 1, 'maxSessionsPerWeek': 5, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}, {'id': 3, 'name': 'Plan Spinning Mensual.', 'description': 'Horario fijo de spinning.', 'price': 600.0, 'durationValue': 1, 'durationUnit': 'month', 'classLimit': 14, 'fixedTimeSlot': False, 'maxSessionsPerDay': 2, 'maxSessionsPerWeek': 20, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}, {'id': 2, 'name': 'Plan Anual con acceso ilimitado a las clases.', 'description': 'Acceso ilimitado a todas las clases', 'price': 5800.0, 'durationValue': 12, 'durationUnit': 'month', 'classLimit': 14, 'fixedTimeSlot': False, 'maxSessionsPerDay': None, 'maxSessionsPerWeek': None, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}, {'id': 1, 'name': 'Plan Premium Transformación Total.', 'description': 'Acceso ilimitado a las clases, asesoria nutricional y aparatología estetica.', 'price': 8999.0, 'durationValue': 3, 'durationUnit': 'month', 'classLimit': 14, 'fixedTimeSlot': False, 'maxSessionsPerDay': None, 'maxSessionsPerWeek': None, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}]}
+2025-12-03 08:02:16 - app.services.members_service - INFO - Extracted plans: 5 items
+2025-12-03 08:02:16 - app.services.members_service - INFO - First plan sample: {'id': 5, 'name': 'Plan Diario', 'description': 'Pase diario en horario seleccionado', 'price': 50.0, 'durationValue': 1, 'durationUnit': 'day', 'classLimit': 14, 'fixedTimeSlot': True, 'maxSessionsPerDay': 1, 'maxSessionsPerWeek': 1, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}
+2025-12-03 08:02:16 - app.services.members_service - INFO - Successfully parsed 5 plans
+2025-12-03 08:02:16 - app.services.standing_bookings_service - INFO - Fetching class templates from GraphQL...
+2025-12-03 08:02:16 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 5 items | preview: [MembershipPlan(id=5, name='Plan Diario', price=50.0, duration_value=1, description='Pase diario en horario selecciona..., MembershipPlan(id=4, name='Plan Semanal', price=200.0, duration_value=7, description='Pase de Lunes a Viernes con hor..., MembershipPlan(id=3, name='Plan Spinning Mensual.', price=600.0, duration_value=1, description='Horario fijo de spinn..., ...]
+2025-12-03 08:02:16 - app.services.subscription_service - INFO - Loaded 5 membership plans
+2025-12-03 08:02:16 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-03 08:02:16 - app.services.standing_bookings_service - INFO - Received 30 templates from GraphQL
+2025-12-03 08:02:16 - app.services.members_service - INFO - Executing member by ID GraphQL query for member_id=42
+2025-12-03 08:02:16 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 30 items | preview: [ClassTemplate(id=1, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=1, start_time_..., ClassTemplate(id=6, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=1, start_time_..., ClassTemplate(id=8, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=1, start_time_..., ...]
+2025-12-03 08:02:16 - app.services.subscription_service - INFO - Loaded 30 class templates
+2025-12-03 08:02:16 - app.services.subscription_service - INFO - Created 6 timeslot groups from 30 templates
+2025-12-03 08:02:17 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-03 08:02:17 - app.services.members_service - INFO - Member data loaded successfully for ID 42
+2025-12-03 08:02:17 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'dict'> | value: {'id': 42, 'full_name': 'Rocio Navarrete Venegas', 'email': None, 'phone_number': '+528714748517', 'total_payments': ...
+2025-12-03 08:02:17 - app.controllers.renew_subscription_controller - INFO - Member data loaded for renewal
+2025-12-03 08:02:17 - app.controllers.renew_subscription_controller - INFO - Processed member data: full_name=Rocio Navarrete Venegas
+2025-12-03 08:02:17 - app.controllers.renew_subscription_controller - INFO - Active standing booking data: {}
+2025-12-03 08:02:17 - app.views.dialogs.renew_subscription_dialog - INFO - Dialog received member data: member={'full_name': 'Rocio Navarrete Venegas', 'id': 42}, active_mem keys=['class_name', 'class_template_id', 'end_date', 'payment_amount', 'plan_name', 'price', 'remaining_days', 'start_date', 'status', 'subscription_id']
+2025-12-03 08:02:17 - app.views.dialogs.renew_subscription_dialog - INFO - Setting member name to: Rocio Navarrete Venegas
+2025-12-03 08:02:19 - app.services.subscription_service - INFO - Loading seats for template 3 on 2025-12-03
+2025-12-03 08:02:19 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-03 08:02:19 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 14 items | preview: [Seat(id=1, label='Bicicleta 1', venue_id=1, is_active=True, seat_type_name=None, is_available=True), Seat(id=10, label='Bicicleta 10', venue_id=1, is_active=True, seat_type_name=None, is_available=True), Seat(id=11, label='Bicicleta 11', venue_id=1, is_active=True, seat_type_name=None, is_available=True), ...]
+2025-12-03 08:02:19 - app.services.subscription_service - INFO - Loaded 14 available seats
+2025-12-03 08:02:22 - app.views.dialogs.renew_subscription_dialog - INFO - ============================================================
+2025-12-03 08:02:22 - app.views.dialogs.renew_subscription_dialog - INFO - 🔍 _collect_form() EJECUTÁNDOSE - VERSIÓN CON FIXES
+2025-12-03 08:02:22 - app.views.dialogs.renew_subscription_dialog - INFO - ============================================================
+2025-12-03 08:02:22 - app.views.dialogs.renew_subscription_dialog - INFO - 🔍 selected_item = TimeslotGroup(key='9d4b0f03', class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None, start_time_local='08:00:00', template_ids=[1, 2, 3, 4, 5], templates=[ClassTemplate(id=1, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=1, start_time_local='08:00:00', instructor_id=343, name='Spinning 8:00 am', is_active=True, class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None), ClassTemplate(id=2, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=2, start_time_local='08:00:00', instructor_id=343, name='Spinning 8:00 am', is_active=True, class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None), ClassTemplate(id=3, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=3, start_time_local='08:00:00', instructor_id=343, name='Spinning 8:00 am', is_active=True, class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None), ClassTemplate(id=4, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=4, start_time_local='08:00:00', instructor_id=343, name='Spinning 8:00 am', is_active=True, class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None), ClassTemplate(id=5, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=5, start_time_local='08:00:00', instructor_id=343, name='Spinning 8:00 am', is_active=True, class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None)]) (type: TimeslotGroup)
+2025-12-03 08:02:22 - app.views.dialogs.renew_subscription_dialog - INFO - Resolved template_id: 3
+2025-12-03 08:02:22 - app.views.dialogs.renew_subscription_dialog - INFO - Selected seat with id: 13
+2025-12-03 08:02:22 - app.views.dialogs.renew_subscription_dialog - INFO - Collected form data from renewal dialog:
+2025-12-03 08:02:22 - app.views.dialogs.renew_subscription_dialog - INFO -   member_id: 42 (type: int)
+2025-12-03 08:02:22 - app.views.dialogs.renew_subscription_dialog - INFO -   plan_id: 4 (type: int)
+2025-12-03 08:02:22 - app.views.dialogs.renew_subscription_dialog - INFO -   start_at: 2025-12-03T00:00:00-06:00 (type: datetime)
+2025-12-03 08:02:22 - app.views.dialogs.renew_subscription_dialog - INFO -   payment_method: cash (type: str)
+2025-12-03 08:02:22 - app.views.dialogs.renew_subscription_dialog - INFO -   amount: 200.0 (type: float)
+2025-12-03 08:02:22 - app.views.dialogs.renew_subscription_dialog - INFO -   template_id: 3 (type: int)
+2025-12-03 08:02:22 - app.views.dialogs.renew_subscription_dialog - INFO -   seat_id: 13 (type: int)
+2025-12-03 08:02:22 - app.views.dialogs.renew_subscription_dialog - INFO - Fecha en rango normal: 0 días de diferencia
+2025-12-03 08:02:22 - app.controllers.renew_subscription_controller - INFO - Validating renewal fields. Form data keys: ['member_id', 'plan_id', 'start_at', 'payment_method', 'amount', 'template_id', 'seat_id']
+2025-12-03 08:02:22 - app.controllers.renew_subscription_controller - INFO -   member_id: 42 (type: int)
+2025-12-03 08:02:22 - app.controllers.renew_subscription_controller - INFO -   plan_id: 4 (type: int)
+2025-12-03 08:02:22 - app.controllers.renew_subscription_controller - INFO -   start_at: 2025-12-03T00:00:00-06:00 (type: datetime)
+2025-12-03 08:02:22 - app.controllers.renew_subscription_controller - INFO -   payment_method: cash (type: str)
+2025-12-03 08:02:22 - app.controllers.renew_subscription_controller - INFO -   amount: 200.0 (type: float)
+2025-12-03 08:02:22 - app.controllers.renew_subscription_controller - INFO -   template_id: 3 (type: int)
+2025-12-03 08:02:22 - app.controllers.renew_subscription_controller - INFO -   seat_id: 13 (type: int)
+2025-12-03 08:02:22 - app.controllers.renew_subscription_controller - INFO - Renewal validation passed successfully
+2025-12-03 08:02:22 - app.controllers.renew_subscription_controller - INFO - Renewing subscription with form data keys: ['member_id', 'plan_id', 'start_at', 'payment_method', 'amount', 'template_id', 'seat_id']
+2025-12-03 08:02:22 - app.controllers.renew_subscription_controller - INFO -   member_id: 42 (type: int)
+2025-12-03 08:02:22 - app.controllers.renew_subscription_controller - INFO -   plan_id: 4 (type: int)
+2025-12-03 08:02:22 - app.controllers.renew_subscription_controller - INFO -   start_at: 2025-12-03T00:00:00-06:00 (type: datetime)
+2025-12-03 08:02:22 - app.controllers.renew_subscription_controller - INFO -   payment_method: cash (type: str)
+2025-12-03 08:02:22 - app.controllers.renew_subscription_controller - INFO -   amount: 200.0 (type: float)
+2025-12-03 08:02:22 - app.controllers.renew_subscription_controller - INFO -   template_id: 3 (type: int)
+2025-12-03 08:02:22 - app.controllers.renew_subscription_controller - INFO -   seat_id: 13 (type: int)
+2025-12-03 08:02:22 - app.controllers.renew_subscription_controller - INFO - Mapped 'amount' (200.0) to 'payment_amount'
+2025-12-03 08:02:22 - app.controllers.renew_subscription_controller - INFO - Using template_id from form: 3
+2025-12-03 08:02:22 - app.controllers.renew_subscription_controller - INFO - Using seat_id from form: 13
+2025-12-03 08:02:22 - app.controllers.renew_subscription_controller - INFO - Form data transformation completed. Original keys: ['member_id', 'plan_id', 'start_at', 'payment_method', 'amount', 'template_id', 'seat_id']
+2025-12-03 08:02:22 - app.controllers.renew_subscription_controller - INFO - Service params keys: ['member_id', 'plan_id', 'start_at', 'payment_method', 'payment_amount', 'template_id', 'seat_id', 'payment_status', 'payment_comment', 'payment_provider', 'provider_payment_id', 'external_reference']
+2025-12-03 08:02:22 - app.controllers.renew_subscription_controller - INFO - Transformed service parameters: ['member_id', 'plan_id', 'start_at', 'payment_method', 'payment_amount', 'template_id', 'seat_id', 'payment_status', 'payment_comment', 'payment_provider', 'provider_payment_id', 'external_reference']
+2025-12-03 08:02:22 - app.controllers.renew_subscription_controller - INFO - Creating renewal operation with MembersService.renew_subscription
+2025-12-03 08:02:22 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-03 08:02:22 - app.services.members_service - INFO - Parsed message text from JSON envelope
+2025-12-03 08:02:22 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'dict'> | value: {'subscription': MembershipSubscription(id=2685, person_id=42, plan_id=4, start_at=datetime.datetime(2025, 12, 3, 6, ...
+2025-12-03 08:02:22 - app.controllers.renew_subscription_controller - INFO - Subscription renewed successfully via backend. Result keys: ['subscription', 'payment', 'standing_booking_id', 'materialization_stats', 'message']
+2025-12-03 08:02:22 - app.controllers.renew_subscription_controller - INFO - New subscription created with ID: 2685
+2025-12-03 08:02:22 - app.views.dialogs.renew_subscription_dialog - INFO - Emitting subscription_renewed signal for member 42
+2025-12-03 08:02:22 - app.views.tabs.members_tab - INFO - Subscription renewed for member 42, refreshing UI
+2025-12-03 08:02:22 - app.views.tabs.members_tab - INFO - Re-running search with query: Rocio
+2025-12-03 08:02:22 - app.controllers.members_controller - INFO - Loading members search=Rocio limit=100 offset=0
+2025-12-03 08:02:23 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-03 08:02:23 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 2 items | preview: [Member(id=42, full_name='Rocio Navarrete Venegas', email=None, phone_number='+528714748517', wa_id=None, registration..., Member(id=177, full_name='Rocio Annel Antuna', email='anneladlp19@gmail.com', phone_number='+528711847518', wa_id=Non...]
+2025-12-03 08:02:23 - app.controllers.members_controller - INFO - Members controller received result of type <class 'list'>
+2025-12-03 21:56:05 - app.controllers.members_controller - INFO - Loading members search=lesir limit=100 offset=0
+2025-12-03 21:56:06 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-03 21:56:06 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 0 items | preview: []
+2025-12-03 21:56:06 - app.controllers.members_controller - INFO - Members controller received result of type <class 'list'>
+2025-12-03 21:56:06 - app.controllers.members_controller - INFO - Loading members search=lesie limit=100 offset=0
+2025-12-03 21:56:06 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-03 21:56:06 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 0 items | preview: []
+2025-12-03 21:56:06 - app.controllers.members_controller - INFO - Members controller received result of type <class 'list'>
+2025-12-03 21:56:09 - app.controllers.members_controller - INFO - Loading members search=les limit=100 offset=0
+2025-12-03 21:56:09 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-03 21:56:09 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 7 items | preview: [Member(id=2, full_name='Leslie Rivas', email='@mail.com', phone_number='+528711580241', wa_id='528711580241', registr..., Member(id=10, full_name='María de los Angeles Salas López', email='marysal01@outlook.com', phone_number='+52871333149..., Member(id=224, full_name='María de los Angeles Salas Uribe', email='angelessalas0309@hotmail.com', phone_number='+528..., ...]
+2025-12-03 21:56:09 - app.controllers.members_controller - INFO - Members controller received result of type <class 'list'>
+2025-12-03 21:56:14 - app.views.dialogs.renew_subscription_dialog - INFO - QDateEditWithToday initialized with calendar popup enabled
+2025-12-03 21:56:14 - app.controllers.base_subscription_controller - INFO - Loading membership plans via shared service
+2025-12-03 21:56:14 - app.services.subscription_service - INFO - Loading membership plans from server...
+2025-12-03 21:56:14 - app.services.members_service - INFO - Executing membership plans GraphQL query...
+2025-12-03 21:56:14 - app.controllers.base_subscription_controller - INFO - Loading class templates via shared service
+2025-12-03 21:56:14 - app.services.subscription_service - INFO - Loading class templates from server...
+2025-12-03 21:56:14 - app.controllers.renew_subscription_controller - INFO - Loading renewal data for member_id=2, name=Leslie Rivas
+2025-12-03 21:56:14 - app.controllers.renew_subscription_controller - INFO - Emitting member data
+2025-12-03 21:56:14 - app.views.dialogs.renew_subscription_dialog - INFO - Dialog received member data: member={}, active_mem keys=['class_name', 'class_template_id', 'end_date', 'payment_amount', 'plan_name', 'status']
+2025-12-03 21:56:14 - app.views.dialogs.renew_subscription_dialog - INFO - Setting member name to: Miembro #2
+2025-12-03 21:56:14 - app.controllers.renew_subscription_controller - INFO - Loading data intelligently with cache optimization
+2025-12-03 21:56:14 - app.controllers.renew_subscription_controller - INFO - No valid cache, loading fresh data
+2025-12-03 21:56:14 - app.controllers.base_subscription_controller - INFO - Loading membership plans via shared service
+2025-12-03 21:56:14 - app.services.subscription_service - INFO - Membership plans operation already in progress
+2025-12-03 21:56:14 - app.controllers.base_subscription_controller - INFO - Loading class templates via shared service
+2025-12-03 21:56:14 - app.services.subscription_service - INFO - Class templates operation already in progress
+2025-12-03 21:56:14 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-03 21:56:14 - app.services.members_service - INFO - Membership plans query result: {'membershipPlans': [{'id': 5, 'name': 'Plan Diario', 'description': 'Pase diario en horario seleccionado', 'price': 50.0, 'durationValue': 1, 'durationUnit': 'day', 'classLimit': 14, 'fixedTimeSlot': True, 'maxSessionsPerDay': 1, 'maxSessionsPerWeek': 1, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}, {'id': 4, 'name': 'Plan Semanal', 'description': 'Pase de Lunes a Viernes con horario fijo', 'price': 200.0, 'durationValue': 7, 'durationUnit': 'day', 'classLimit': 14, 'fixedTimeSlot': True, 'maxSessionsPerDay': 1, 'maxSessionsPerWeek': 5, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}, {'id': 3, 'name': 'Plan Spinning Mensual.', 'description': 'Horario fijo de spinning.', 'price': 600.0, 'durationValue': 1, 'durationUnit': 'month', 'classLimit': 14, 'fixedTimeSlot': False, 'maxSessionsPerDay': 2, 'maxSessionsPerWeek': 20, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}, {'id': 2, 'name': 'Plan Anual con acceso ilimitado a las clases.', 'description': 'Acceso ilimitado a todas las clases', 'price': 5800.0, 'durationValue': 12, 'durationUnit': 'month', 'classLimit': 14, 'fixedTimeSlot': False, 'maxSessionsPerDay': None, 'maxSessionsPerWeek': None, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}, {'id': 1, 'name': 'Plan Premium Transformación Total.', 'description': 'Acceso ilimitado a las clases, asesoria nutricional y aparatología estetica.', 'price': 8999.0, 'durationValue': 3, 'durationUnit': 'month', 'classLimit': 14, 'fixedTimeSlot': False, 'maxSessionsPerDay': None, 'maxSessionsPerWeek': None, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}]}
+2025-12-03 21:56:14 - app.services.members_service - INFO - Extracted plans: 5 items
+2025-12-03 21:56:14 - app.services.members_service - INFO - First plan sample: {'id': 5, 'name': 'Plan Diario', 'description': 'Pase diario en horario seleccionado', 'price': 50.0, 'durationValue': 1, 'durationUnit': 'day', 'classLimit': 14, 'fixedTimeSlot': True, 'maxSessionsPerDay': 1, 'maxSessionsPerWeek': 1, 'createdAt': '2025-09-26T16:58:44.706802+00:00'}
+2025-12-03 21:56:14 - app.services.members_service - INFO - Successfully parsed 5 plans
+2025-12-03 21:56:14 - app.services.standing_bookings_service - INFO - Fetching class templates from GraphQL...
+2025-12-03 21:56:14 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 5 items | preview: [MembershipPlan(id=5, name='Plan Diario', price=50.0, duration_value=1, description='Pase diario en horario selecciona..., MembershipPlan(id=4, name='Plan Semanal', price=200.0, duration_value=7, description='Pase de Lunes a Viernes con hor..., MembershipPlan(id=3, name='Plan Spinning Mensual.', price=600.0, duration_value=1, description='Horario fijo de spinn..., ...]
+2025-12-03 21:56:14 - app.services.subscription_service - INFO - Loaded 5 membership plans
+2025-12-03 21:56:14 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-03 21:56:14 - app.services.standing_bookings_service - INFO - Received 30 templates from GraphQL
+2025-12-03 21:56:14 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 30 items | preview: [ClassTemplate(id=1, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=1, start_time_..., ClassTemplate(id=6, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=1, start_time_..., ClassTemplate(id=8, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=1, start_time_..., ...]
+2025-12-03 21:56:14 - app.services.subscription_service - INFO - Loaded 30 class templates
+2025-12-03 21:56:14 - app.services.subscription_service - INFO - Created 6 timeslot groups from 30 templates
+2025-12-03 21:56:14 - app.controllers.renew_subscription_controller - INFO - Loading member data in background
+2025-12-03 21:56:14 - app.services.members_service - INFO - Executing member by ID GraphQL query for member_id=2
+2025-12-03 21:56:14 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-03 21:56:14 - app.services.members_service - INFO - Member data loaded successfully for ID 2
+2025-12-03 21:56:14 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'dict'> | value: {'id': 2, 'full_name': 'Leslie Rivas', 'email': '@mail.com', 'phone_number': '+528711580241', 'total_payments': 18130...
+2025-12-03 21:56:14 - app.controllers.renew_subscription_controller - INFO - Member data loaded for renewal
+2025-12-03 21:56:14 - app.controllers.renew_subscription_controller - INFO - Processed member data: full_name=Leslie Rivas
+2025-12-03 21:56:14 - app.controllers.renew_subscription_controller - INFO - Active standing booking data: {}
+2025-12-03 21:56:14 - app.views.dialogs.renew_subscription_dialog - INFO - Dialog received member data: member={'full_name': 'Leslie Rivas', 'id': 2}, active_mem keys=['class_name', 'class_template_id', 'end_date', 'payment_amount', 'plan_name', 'price', 'remaining_days', 'start_date', 'status', 'subscription_id']
+2025-12-03 21:56:14 - app.views.dialogs.renew_subscription_dialog - INFO - Setting member name to: Leslie Rivas
+2025-12-03 21:56:37 - app.services.subscription_service - INFO - Loading seats for template 21 on 2025-12-03
+2025-12-03 21:56:37 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-03 21:56:37 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 14 items | preview: [Seat(id=1, label='Bicicleta 1', venue_id=1, is_active=True, seat_type_name=None, is_available=True), Seat(id=10, label='Bicicleta 10', venue_id=1, is_active=True, seat_type_name=None, is_available=True), Seat(id=11, label='Bicicleta 11', venue_id=1, is_active=True, seat_type_name=None, is_available=True), ...]
+2025-12-03 21:56:37 - app.services.subscription_service - INFO - Loaded 14 available seats
+2025-12-03 21:56:43 - app.views.dialogs.renew_subscription_dialog - INFO - ============================================================
+2025-12-03 21:56:43 - app.views.dialogs.renew_subscription_dialog - INFO - 🔍 _collect_form() EJECUTÁNDOSE - VERSIÓN CON FIXES
+2025-12-03 21:56:43 - app.views.dialogs.renew_subscription_dialog - INFO - ============================================================
+2025-12-03 21:56:43 - app.views.dialogs.renew_subscription_dialog - INFO - 🔍 selected_item = TimeslotGroup(key='52018e3d', class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None, start_time_local='21:00:00', template_ids=[11, 16, 21, 26, 31], templates=[ClassTemplate(id=11, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=1, start_time_local='21:00:00', instructor_id=343, name='Spinning 9:00 pm', is_active=True, class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None), ClassTemplate(id=16, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=2, start_time_local='21:00:00', instructor_id=343, name='Spinning 9:00 pm', is_active=True, class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None), ClassTemplate(id=21, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=3, start_time_local='21:00:00', instructor_id=343, name='Spinning 9:00 pm', is_active=True, class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None), ClassTemplate(id=26, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=4, start_time_local='21:00:00', instructor_id=343, name='Spinning 9:00 pm', is_active=True, class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None), ClassTemplate(id=31, class_type_id=1, venue_id=1, default_capacity=14, default_duration_min=60, weekday=5, start_time_local='21:00:00', instructor_id=343, name='Spinning 9:00 pm', is_active=True, class_type_name='Spinning', venue_name='Love fitness Bugambilias', instructor_name=None)]) (type: TimeslotGroup)
+2025-12-03 21:56:43 - app.views.dialogs.renew_subscription_dialog - INFO - Resolved template_id: 21
+2025-12-03 21:56:43 - app.views.dialogs.renew_subscription_dialog - INFO - Selected seat with id: 3
+2025-12-03 21:56:43 - app.views.dialogs.renew_subscription_dialog - INFO - Collected form data from renewal dialog:
+2025-12-03 21:56:43 - app.views.dialogs.renew_subscription_dialog - INFO -   member_id: 2 (type: int)
+2025-12-03 21:56:43 - app.views.dialogs.renew_subscription_dialog - INFO -   plan_id: 4 (type: int)
+2025-12-03 21:56:43 - app.views.dialogs.renew_subscription_dialog - INFO -   start_at: 2025-12-03T00:00:00-06:00 (type: datetime)
+2025-12-03 21:56:43 - app.views.dialogs.renew_subscription_dialog - INFO -   payment_method: card (type: str)
+2025-12-03 21:56:43 - app.views.dialogs.renew_subscription_dialog - INFO -   amount: 200.0 (type: float)
+2025-12-03 21:56:43 - app.views.dialogs.renew_subscription_dialog - INFO -   template_id: 21 (type: int)
+2025-12-03 21:56:43 - app.views.dialogs.renew_subscription_dialog - INFO -   seat_id: 3 (type: int)
+2025-12-03 21:56:43 - app.views.dialogs.renew_subscription_dialog - INFO - Fecha en rango normal: 0 días de diferencia
+2025-12-03 21:56:43 - app.controllers.renew_subscription_controller - INFO - Validating renewal fields. Form data keys: ['member_id', 'plan_id', 'start_at', 'payment_method', 'amount', 'template_id', 'seat_id']
+2025-12-03 21:56:43 - app.controllers.renew_subscription_controller - INFO -   member_id: 2 (type: int)
+2025-12-03 21:56:43 - app.controllers.renew_subscription_controller - INFO -   plan_id: 4 (type: int)
+2025-12-03 21:56:43 - app.controllers.renew_subscription_controller - INFO -   start_at: 2025-12-03T00:00:00-06:00 (type: datetime)
+2025-12-03 21:56:43 - app.controllers.renew_subscription_controller - INFO -   payment_method: card (type: str)
+2025-12-03 21:56:43 - app.controllers.renew_subscription_controller - INFO -   amount: 200.0 (type: float)
+2025-12-03 21:56:43 - app.controllers.renew_subscription_controller - INFO -   template_id: 21 (type: int)
+2025-12-03 21:56:43 - app.controllers.renew_subscription_controller - INFO -   seat_id: 3 (type: int)
+2025-12-03 21:56:43 - app.controllers.renew_subscription_controller - INFO - Renewal validation passed successfully
+2025-12-03 21:56:43 - app.controllers.renew_subscription_controller - INFO - Renewing subscription with form data keys: ['member_id', 'plan_id', 'start_at', 'payment_method', 'amount', 'template_id', 'seat_id']
+2025-12-03 21:56:43 - app.controllers.renew_subscription_controller - INFO -   member_id: 2 (type: int)
+2025-12-03 21:56:43 - app.controllers.renew_subscription_controller - INFO -   plan_id: 4 (type: int)
+2025-12-03 21:56:43 - app.controllers.renew_subscription_controller - INFO -   start_at: 2025-12-03T00:00:00-06:00 (type: datetime)
+2025-12-03 21:56:43 - app.controllers.renew_subscription_controller - INFO -   payment_method: card (type: str)
+2025-12-03 21:56:43 - app.controllers.renew_subscription_controller - INFO -   amount: 200.0 (type: float)
+2025-12-03 21:56:43 - app.controllers.renew_subscription_controller - INFO -   template_id: 21 (type: int)
+2025-12-03 21:56:43 - app.controllers.renew_subscription_controller - INFO -   seat_id: 3 (type: int)
+2025-12-03 21:56:43 - app.controllers.renew_subscription_controller - INFO - Mapped 'amount' (200.0) to 'payment_amount'
+2025-12-03 21:56:43 - app.controllers.renew_subscription_controller - INFO - Using template_id from form: 21
+2025-12-03 21:56:43 - app.controllers.renew_subscription_controller - INFO - Using seat_id from form: 3
+2025-12-03 21:56:43 - app.controllers.renew_subscription_controller - INFO - Form data transformation completed. Original keys: ['member_id', 'plan_id', 'start_at', 'payment_method', 'amount', 'template_id', 'seat_id']
+2025-12-03 21:56:43 - app.controllers.renew_subscription_controller - INFO - Service params keys: ['member_id', 'plan_id', 'start_at', 'payment_method', 'payment_amount', 'template_id', 'seat_id', 'payment_status', 'payment_comment', 'payment_provider', 'provider_payment_id', 'external_reference']
+2025-12-03 21:56:43 - app.controllers.renew_subscription_controller - INFO - Transformed service parameters: ['member_id', 'plan_id', 'start_at', 'payment_method', 'payment_amount', 'template_id', 'seat_id', 'payment_status', 'payment_comment', 'payment_provider', 'provider_payment_id', 'external_reference']
+2025-12-03 21:56:43 - app.controllers.renew_subscription_controller - INFO - Creating renewal operation with MembersService.renew_subscription
+2025-12-03 21:56:43 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-03 21:56:43 - app.services.members_service - INFO - Parsed message text from JSON envelope
+2025-12-03 21:56:43 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'dict'> | value: {'subscription': MembershipSubscription(id=2686, person_id=2, plan_id=4, start_at=datetime.datetime(2025, 12, 3, 6, 0...
+2025-12-03 21:56:43 - app.controllers.renew_subscription_controller - INFO - Subscription renewed successfully via backend. Result keys: ['subscription', 'payment', 'standing_booking_id', 'materialization_stats', 'message']
+2025-12-03 21:56:43 - app.controllers.renew_subscription_controller - INFO - New subscription created with ID: 2686
+2025-12-03 21:56:43 - app.views.dialogs.renew_subscription_dialog - INFO - Emitting subscription_renewed signal for member 2
+2025-12-03 21:56:43 - app.views.tabs.members_tab - INFO - Subscription renewed for member 2, refreshing UI
+2025-12-03 21:56:43 - app.views.tabs.members_tab - INFO - Re-running search with query: les
+2025-12-03 21:56:44 - app.controllers.members_controller - INFO - Loading members search=les limit=100 offset=0
+2025-12-03 21:56:44 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2025-12-03 21:56:44 - app.threads.authenticated_operations - INFO - AuthenticatedOperation result: <class 'list'> with 7 items | preview: [Member(id=2, full_name='Leslie Rivas', email='@mail.com', phone_number='+528711580241', wa_id='528711580241', registr..., Member(id=10, full_name='María de los Angeles Salas López', email='marysal01@outlook.com', phone_number='+52871333149..., Member(id=224, full_name='María de los Angeles Salas Uribe', email='angelessalas0309@hotmail.com', phone_number='+528..., ...]
+2025-12-03 21:56:44 - app.controllers.members_controller - INFO - Members controller received result of type <class 'list'>

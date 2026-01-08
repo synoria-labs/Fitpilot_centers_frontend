@@ -1,0 +1,545 @@
+Windows fatal exception: access violation
+
+Thread 0x00009b94 (most recent call first):
+  File "C:\Python313\Lib\socket.py", line 627 in _fallback_socketpair
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 1550 in _make_self_pipe
+  File Windows fatal exception: access violation
+
+Windows fatal exception: access violation
+
+Thread 0x000084f0 (most recent call first):
+  File "C:\Python313\Lib\socket.py", line 623 in _fallback_socketpair
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 784 in _make_self_pipe
+  File Windows fatal exception: access violation
+
+Windows fatal exception: access violation
+
+Current thread 0x00002c38 (most recent call first):
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 286 in run
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 299 in main
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 302 in <module>
+Windows fatal exception: access violation
+
+Current thread 0x0000a21c (most recent call first):
+  File "c:\Users\ale_o\FitPilot\frontend\main.py", line 251 in run
+  File "c:\Users\ale_o\FitPilot\frontend\main.py", line 264 in main
+  File "c:\Users\ale_o\FitPilot\frontend\main.py", line 267 in <module>
+Windows fatal exception: access violation
+
+Thread 0x0000a830 (most recent call first):
+  File "C:\Python313\Lib\socket.py", line 623 in _fallback_socketpair
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 784 in _make_self_pipe
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 637 in __init__
+  File "C:\Python313\Lib\asyncio\windows_events.py", line 316 in __init__
+  File "C:\Python313\Lib\asyncio\events.py", line 734 in new_event_loop
+  File "C:\Python313\Lib\asyncio\events.py", line 832 in new_event_loop
+  File "c:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 145 in _run_coroutine_safely
+  File "c:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 130 in _call_method
+  File "c:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 176 in run
+
+Current thread 0x0000513c (most recent call first):
+  File "c:\Users\ale_o\FitPilot\frontend\main.py", line 251 in run
+  File "c:\Users\ale_o\FitPilot\frontend\main.py", line 264 in main
+  File "c:\Users\ale_o\FitPilot\frontend\main.py", line 267 in <module>
+Windows fatal exception: access violation
+
+Thread 0x00005104 (most recent call first):
+  File "C:\Python313\Lib\socket.py", line 623 in _fallback_socketpair
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 784 in _make_self_pipe
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 637 in __init__
+  File "C:\Python313\Lib\asyncio\windows_events.py", line 316 in __init__
+  File "C:\Python313\Lib\asyncio\events.py", line 734 in new_event_loop
+  File "C:\Python313\Lib\asyncio\events.py", line 837 in new_event_loop
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 142 in _run_coroutine_safely
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 130 in _call_method
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 176 in run
+
+Current thread 0x0000a990 (most recent call first):
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 251 in run
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 264 in main
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 267 in <module>
+Windows fatal exception: access violation
+
+Thread 0x00001520 (most recent call first):
+  File "C:\Python313\Lib\socket.py", line 623 in _fallback_socketpair
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 784 in _make_self_pipe
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 637 in __init__
+  File "C:\Python313\Lib\asyncio\windows_events.py", line 316 in __init__
+  File Windows fatal exception: access violation
+
+Windows fatal exception: access violation
+
+Thread 0x00005fd0 (most recent call first):
+  File "C:\Python313\Lib\socket.py", line 623 in _fallback_socketpair
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 784 in _make_self_pipe
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 637 in __init__
+  File "C:\Python313\Lib\asyncio\windows_events.py", line 316 in __init__
+  File "C:\Python313\Lib\asyncio\events.py", line 734 in new_event_loop
+  File "C:\Python313\Lib\asyncio\events.py", line 837 in new_event_loop
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 142 in _run_coroutine_safely
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 130 in _call_method
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 176 in run
+
+Current thread 0x00004634 (most recent call first):
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 251 in run
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 264 in main
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 267 in <module>
+Windows fatal exception: access violation
+
+Thread 0x00007494 (most recent call first):
+  File "C:\Python313\Lib\socket.py", line 623 in _fallback_socketpair
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 784 in _make_self_pipe
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 637 in __init__
+  File "C:\Python313\Lib\asyncio\windows_events.py", line 316 in __init__
+  File "C:\Python313\Lib\asyncio\events.py", line 734 in new_event_loop
+  File "C:\Python313\Lib\asyncio\events.py", line 837 in new_event_loop
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 142 in _run_coroutine_safely
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 130 in _call_method
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 176 in run
+
+Current thread 0x00002b10 (most recent call first):
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 251 in run
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 264 in main
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 267 in <module>
+Windows fatal exception: access violation
+
+Thread 0x00003b70 (most recent call first):
+  File "C:\Python313\Lib\socket.py", line 623 in _fallback_socketpair
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 784 in _make_self_pipe
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 637 in __init__
+  File "C:\Python313\Lib\asyncio\windows_events.py", line 316 in __init__
+  File "C:\Python313\Lib\asyncio\events.py", line 734 in new_event_loop
+  File "C:\Python313\Lib\asyncio\events.py", line 837 in new_event_loop
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 145 in _run_coroutine_safely
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 130 in _call_method
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 176 in run
+
+Current thread 0x0000b150 (most recent call first):
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 251 in run
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 264 in main
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 267 in <module>
+Windows fatal exception: access violation
+
+Thread 0x0000b1d0 (most recent call first):
+  File "C:\Python313\Lib\socket.py", line 623 in _fallback_socketpair
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 784 in _make_self_pipe
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 637 in __init__
+  File "C:\Python313\Lib\asyncio\windows_events.py", line 316 in __init__
+  File "C:\Python313\Lib\asyncio\events.py", line 734 in new_event_loop
+  File "C:\Python313\Lib\asyncio\events.py", line 837 in new_event_loop
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 142 in _run_coroutine_safely
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 130 in _call_method
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 176 in run
+
+Current thread 0x00007e98 (most recent call first):
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 251 in run
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 264 in main
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 267 in <module>
+Windows fatal exception: access violation
+
+Thread 0x00005658 (most recent call first):
+  File "C:\Python313\Lib\socket.py", line 623 in _fallback_socketpair
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 784 in _make_self_pipe
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 637 in __init__
+  File "C:\Python313\Lib\asyncio\windows_events.py", line 316 in __init__
+  File "C:\Python313\Lib\asyncio\events.py", line 734 in new_event_loop
+  File "C:\Python313\Lib\asyncio\events.py", line 837 in new_event_loop
+  File "c:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 142 in _run_coroutine_safely
+  File "c:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 130 in _call_method
+  File "c:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 176 in run
+
+Thread 0x000094ac (most recent call first):
+  File "C:\Python313\Lib\ssl.py", line 717 in create_default_context
+  File "C:\Users\ale_o\FitPilot\frontend\.venv\Lib\site-packages\httpx\_config.py", line 40 in create_ssl_context
+  File "C:\Users\ale_o\FitPilot\frontend\.venv\Lib\site-packages\httpx\_transports\default.py", line 297 in __init__
+  File "C:\Users\ale_o\FitPilot\frontend\.venv\Lib\site-packages\httpx\_client.py", line 1445 in _init_transport
+  File "C:\Users\ale_o\FitPilot\frontend\.venv\Lib\site-packages\httpx\_client.py", line 1402 in __init__
+  File "c:\Users\ale_o\FitPilot\frontend\app\graphql\client.py", line 80 in _get_client
+  File "c:\Users\ale_o\FitPilot\frontend\app\graphql\client.py", line 140 in execute
+  File "c:\Users\ale_o\FitPilot\frontend\app\services\sessions_service.py", line 37 in get_my_sessions
+  File "C:\Python313\Lib\asyncio\events.py", line 89 in _run
+  File "C:\Python313\Lib\asyncio\base_events.py", line 2033 in _run_once
+  File "C:\Python313\Lib\asyncio\base_events.py", line 678 in run_forever
+  File "C:\Python313\Lib\asyncio\base_events.py", line 707 in run_until_complete
+  File "c:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 145 in _run_coroutine_safely
+  File "c:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 130 in _call_method
+  File "c:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 176 in run
+
+Current thread 0x0000b398 (most recent call first):
+  File "c:\Users\ale_o\FitPilot\frontend\main.py", line 251 in run
+  File "c:\Users\ale_o\FitPilot\frontend\main.py", line 264 in main
+  File "c:\Users\ale_o\FitPilot\frontend\main.py", line 267 in <module>
+Windows fatal exception: access violation
+
+Thread 0x000088d4 (most recent call first):
+  File "C:\Python313\Lib\socket.py", line 623 in _fallback_socketpair
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 784 in _make_self_pipe
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 637 in __init__
+  File "C:\Python313\Lib\asyncio\windows_events.py", line 316 in __init__
+  File "C:\Python313\Lib\asyncio\events.py"Windows fatal exception: access violation
+
+Windows fatal exception: access violation
+
+Thread 0x0000180c (most recent call first):
+  File "C:\Python313\Lib\socket.py", line 623 in _fallback_socketpair
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 784 in _make_self_pipe
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 637 in __init__
+  File "C:\Python313\Lib\asyncio\windows_events.py", line 316 in __init__
+  File "C:\Python313\Lib\asyncio\events.py", line 734 in new_event_loop
+  File "C:\Python313\Lib\asyncio\events.py", line 837 in new_event_loop
+  File "c:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 145 in _run_coroutine_safely
+  File "c:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 130 in _call_method
+  File "c:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 176 in run
+
+Current thread 0x00008c24 (most recent call first):
+  File "c:\Users\ale_o\FitPilot\frontend\main.py", line 251 in run
+  File "c:\Users\ale_o\FitPilot\frontend\main.py", line 264 in main
+  File "c:\Users\ale_o\FitPilot\frontend\main.py", line 267 in <module>
+Windows fatal exception: access violation
+
+Thread 0x00009d6c (most recent call first):
+  File "C:\Python313\Lib\socket.py", line 623 in _fallback_socketpair
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 784 in _make_self_pipe
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 637 in __init__
+  File "C:\Python313\Lib\asyncio\windows_events.py", line 316 in __init__
+  File "C:\Python313\Lib\asyncio\events.py", line 734 in new_event_loop
+  File "C:\Python313\Lib\asyncio\events.py", line 837 in new_event_loop
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 142 in _run_coroutine_safely
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 130 in _call_method
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 176 in run
+
+Current thread 0x0000ae88 (most recent call first):
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 251 in run
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 264 in main
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 267 in <module>
+Windows fatal exception: access violation
+
+Thread 0x0000a980 (most recent call first):
+  File "C:\Python313\Lib\socket.py", line 623 in _fallback_socketpair
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 784 in _make_self_pipe
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 637 in __init__
+  File "C:\Python313\Lib\asyncio\windows_events.py", line 316 in __init__
+  File Windows fatal exception: access violation
+
+Windows fatal exception: access violation
+
+Thread 0x00005b34 (most recent call first):
+  File "C:\Python313\Lib\socket.py", line 623 in _fallback_socketpair
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 784 in _make_self_pipe
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 637 in __init__
+  File "C:\Python313\Lib\asyncio\windows_events.py", line 316 in __init__
+  File "C:\Python313\Lib\asyncio\events.py", line 734 in new_event_loop
+  File "C:\Python313\Lib\asyncio\events.py", line 837 in new_event_loop
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 142 in _run_coroutine_safely
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 130 in _call_method
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 176 in run
+
+Current thread 0x0000250c (most recent call first):
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 251 in run
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 264 in main
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 267 in <module>
+Windows fatal exception: access violation
+
+Thread 0x000063c0 (most recent call first):
+  File "C:\Python313\Lib\socket.py", line 623 in _fallback_socketpair
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 784 in _make_self_pipe
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 637 in __init__
+  File "C:\Python313\Lib\asyncio\windows_events.py", line 316 in __init__
+  File "C:\Python313\Lib\asyncio\events.py"Windows fatal exception: access violation
+
+Windows fatal exception: access violation
+
+Current thread 0x0000758c (most recent call first):
+  File "c:\Users\ale_o\FitPilot\frontend\main.py", line 251 in run
+  File "c:\Users\ale_o\FitPilot\frontend\main.py", line 264 in main
+  File "c:\Users\ale_o\FitPilot\frontend\main.py", line 267 in <module>
+Windows fatal exception: access violation
+
+Current thread 0x00003b50 (most recent call first):
+  File "c:\Users\ale_o\FitPilot\frontend\main.py", line 251 in run
+  File "c:\Users\ale_o\FitPilot\frontend\main.py", line 264 in main
+  File "c:\Users\ale_o\FitPilot\frontend\main.py", line 267 in <module>
+Windows fatal exception: access violation
+
+Thread 0x0000a864 (most recent call first):
+  File "C:\Python313\Lib\socket.py", line 623 in _fallback_socketpair
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 784 in _make_self_pipe
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 637 in __init__
+  File "C:\Python313\Lib\asyncio\windows_events.py", line 316 in __init__
+  File "C:\Python313\Lib\asyncio\events.py", line 734 in new_event_loop
+  File "C:\Python313\Lib\asyncio\events.py", line 837 in new_event_loop
+  File "c:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 142 in _run_coroutine_safely
+  File "c:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 130 in _call_method
+  File "c:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 176 in run
+
+Current thread 0x00006c18 (most recent call first):
+  File "c:\Users\ale_o\FitPilot\frontend\main.py", line 251 in run
+  File "c:\Users\ale_o\FitPilot\frontend\main.py", line 264 in main
+  File "c:\Users\ale_o\FitPilot\frontend\main.py", line 267 in <module>
+Windows fatal exception: access violation
+
+Thread 0x0000b300 (most recent call first):
+  File "C:\Python313\Lib\socket.py", line 623 in _fallback_socketpair
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 784 in _make_self_pipe
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 637 in __init__
+  File "C:\Python313\Lib\asyncio\windows_events.py", line 316 in __init__
+  File "C:\Python313\Lib\asyncio\events.py", line 734 in new_event_loop
+  File "C:\Python313\Lib\asyncio\events.py", line 837 in new_event_loop
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 145 in _run_coroutine_safely
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 130 in _call_method
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 176 in run
+
+Current thread 0x000006e4 (most recent call first):
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 251 in run
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 264 in main
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 267 in <module>
+Windows fatal exception: access violation
+
+Thread 0x000048a8 (most recent call first):
+  File "C:\Users\ale_o\FitPilot\frontend\app\graphql\client.py", line 76 in _get_client
+  File "C:\Users\ale_o\FitPilot\frontend\app\graphql\client.py", line 140 in execute
+  File "C:\Users\ale_o\FitPilot\frontend\app\services\members_service.py", line 89 in get_members
+  File "C:\Python313\Lib\asyncio\events.py", line 89 in _run
+  File "C:\Python313\Lib\asyncio\base_events.py", line 2033 in _run_once
+  File "C:\Python313\Lib\asyncio\base_events.py", line 678 in run_forever
+  File "C:\Python313\Lib\asyncio\base_events.py", line 707 in run_until_complete
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 145 in _run_coroutine_safely
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 130 in _call_method
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 176 in run
+
+Thread 0x00006934 (most recent call first):
+  File "C:\Python313\Lib\ssl.py", line 717 in create_default_context
+  File "C:\Users\ale_o\FitPilot\frontend\.venv\Lib\site-packages\httpx\_config.py", line 40 in create_ssl_context
+  File "C:\Users\ale_o\FitPilot\frontend\.venv\Lib\site-packages\httpx\_transports\default.py", line 297 in __init__
+  File "C:\Users\ale_o\FitPilot\frontend\.venv\Lib\site-packages\httpx\_client.py", line 1445 in _init_transport
+  File "C:\Users\ale_o\FitPilot\frontend\.venv\Lib\site-packages\httpx\_client.py", line 1402 in __init__
+  File "C:\Users\ale_o\FitPilot\frontend\app\graphql\client.py", line 80 in _get_client
+  File "C:\Users\ale_o\FitPilot\frontend\app\graphql\client.py", line 140 in execute
+  File "C:\Users\ale_o\FitPilot\frontend\app\services\sessions_service.py", line 37 in get_my_sessions
+  File "C:\Python313\Lib\asyncio\events.py", line 89 in _run
+  File "C:\Python313\Lib\asyncio\base_events.py", line 2033 in _run_once
+  File "C:\Python313\Lib\asyncio\base_events.py", line 678 in run_forever
+  File "C:\Python313\Lib\asyncio\base_events.py", line 707 in run_until_complete
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 145 in _run_coroutine_safely
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 130 in _call_method
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 176 in run
+
+Current thread 0x00008ec4 (most recent call first):
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 251 in run
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 264 in main
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 267 in <module>
+Windows fatal exception: access violation
+
+Thread 0x0000a7dc (most recent call first):
+  File "C:\Python313\Lib\socket.py", line 623 in _fallback_socketpair
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 784 in _make_self_pipe
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 637 in __init__
+  File "C:\Python313\Lib\asyncio\windows_events.py", line 316 in __init__
+  File "C:\Python313\Lib\asyncio\events.py", line 734 in new_event_loop
+  File "C:\Python313\Lib\asyncio\events.py", line 837 in new_event_loop
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 142 in _run_coroutine_safely
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 130 in _call_method
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 176 in run
+
+Current thread 0x000077b8 (most recent call first):
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 251 in run
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 264 in main
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 267 in <module>
+Windows fatal exception: access violation
+
+Thread 0x00000a8c (most recent call first):
+  File "C:\Python313\Lib\socket.py", line 623 in _fallback_socketpair
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 784 in _make_self_pipe
+  File "C:\Python313\Lib\asyncio\proactor_events.py", line 637 in __init__
+  File "C:\Python313\Lib\asyncio\windows_events.py", line 32763 in __init__
+  File Windows fatal exception: access violation
+
+Windows fatal exception: access violation
+
+Current thread 0x0000a2e8 (most recent call first):
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 259 in run
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 272 in main
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 275 in <module>
+Windows fatal exception: access violation
+
+Current thread 0x00001b68 (most recent call first):
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 259 in run
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 272 in main
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 275 in <module>
+Windows fatal exception: access violation
+
+Thread 0x00008fa4 (most recent call first):
+  File "C:\Python313\Lib\socket.py", line 623 in _fallback_socketpair
+  File "C:\Python313\Lib\asyncio\selector_events.py", line 120 in _make_self_pipe
+  File "C:\Python313\Lib\asyncio\selector_events.py", line 66 in __init__
+  File "C:\Python313\Lib\asyncio\events.py", line 734 in new_event_loop
+  File "C:\Python313\Lib\asyncio\events.py", line 837 in new_event_loop
+  File "C:\Python313\Lib\asyncio\runners.py", line 137 in _lazy_init
+  File "C:\Python313\Lib\asyncio\runners.py", line 58 in __enter__
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 144 in _run_coroutine_safely
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 130 in _call_method
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 182 in run
+
+Thread 0x0000af70 (most recent call first):
+  File "C:\Python313\Lib\ssl.py", line 717 in create_default_context
+  File "C:\Users\ale_o\FitPilot\frontend\.venv\Lib\site-packages\httpx\_config.py", line 40 in create_ssl_context
+  File "C:\Users\ale_o\FitPilot\frontend\.venv\Lib\site-packages\httpx\_transports\default.py", line 297 in __init__
+  File "C:\Users\ale_o\FitPilot\frontend\.venv\Lib\site-packages\httpx\_client.py", line 1445 in _init_transport
+  File "C:\Users\ale_o\FitPilot\frontend\.venv\Lib\site-packages\httpx\_client.py", line 1402 in __init__
+  File "C:\Users\ale_o\FitPilot\frontend\app\graphql\client.py", line 80 in _get_client
+  File "C:\Users\ale_o\FitPilot\frontend\app\graphql\client.py", line 140 in execute
+  File "C:\Users\ale_o\FitPilot\frontend\app\services\sessions_service.py", line 37 in get_my_sessions
+  File "C:\Python313\Lib\asyncio\events.py", line 89 in _run
+  File "C:\Python313\Lib\asyncio\base_events.py", line 2033 in _run_once
+  File "C:\Python313\Lib\asyncio\base_events.py", line 678 in run_forever
+  File "C:\Python313\Lib\asyncio\base_events.py", line 707 in run_until_complete
+  File "C:\Python313\Lib\asyncio\runners.py", line 118 in run
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 145 in _run_coroutine_safely
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 130 in _call_method
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 182 in run
+
+Current thread 0x0000aa10 (most recent call first):
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 259 in run
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 272 in main
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 275 in <module>
+Windows fatal exception: access violation
+
+Current thread 0x000092f4 (most recent call first):
+  File "c:\Users\ale_o\FitPilot\frontend\main.py", line 259 in run
+  File "c:\Users\ale_o\FitPilot\frontend\main.py", line 272 in main
+  File "c:\Users\ale_o\FitPilot\frontend\main.py", line 275 in <module>
+Windows fatal exception: access violation
+
+Thread 0x000085f8 (most recent call first):
+  File "C:\Python313\Lib\ssl.py", line 717 in create_default_context
+  File "C:\Users\ale_o\FitPilot\frontend\.venv\Lib\site-packages\httpx\_config.py", line 40 in create_ssl_context
+  File "C:\Users\ale_o\FitPilot\frontend\.venv\Lib\site-packages\httpx\_transports\default.py", line 297 in __init__
+  File "C:\Users\ale_o\FitPilot\frontend\.venv\Lib\site-packages\httpx\_client.py", line 1445 in _init_transport
+  File "C:\Users\ale_o\FitPilot\frontend\.venv\Lib\site-packages\httpx\_client.py", line 1402 in __init__
+  File "C:\Users\ale_o\FitPilot\frontend\app\graphql\client.py", line 80 in _get_client
+  File "C:\Users\ale_o\FitPilot\frontend\app\graphql\client.py", line 140 in execute
+  File "C:\Users\ale_o\FitPilot\frontend\app\services\sessions_service.py", line 37 in get_my_sessions
+  File "C:\Python313\Lib\asyncio\events.py", line 89 in _run
+  File "C:\Python313\Lib\asyncio\base_events.py", line 2033 in _run_once
+  File "C:\Python313\Lib\asyncio\base_events.py", line 678 in run_forever
+  File "C:\Python313\Lib\asyncio\base_events.py", line 707 in run_until_complete
+  File "C:\Python313\Lib\asyncio\runners.py", line 118 in run
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 145 in _run_coroutine_safely
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 130 in _call_method
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 182 in run
+
+Current thread 0x0000bd8c (most recent call first):
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 259 in run
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 272 in main
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 275 in <module>
+Windows fatal exception: access violation
+
+Thread 0x0000b6a8 (most recent call first):
+  File "C:\Python313\Lib\socket.py", line 623 in _fallback_socketpair
+  File "C:\Python313\Lib\asyncio\selector_events.py", line 120 in _make_self_pipe
+  File "C:\Python313\Lib\asyncio\selector_events.py", line 66 in __init__
+  File "C:\Python313\Lib\asyncio\events.py", line 734 in new_event_loop
+  File "C:\Python313\Lib\asyncio\events.py", line 832 in new_event_loop
+
+Current thread 0x0000f184 (most recent call first):
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 259 in run
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 272 in main
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 275 in <module>
+Windows fatal exception: access violation
+
+Thread 0x00007eac (most recent call first):
+  File "C:\Python313\Lib\socket.py", line 627 in _fallback_socketpair
+  File "C:\Python313\Lib\asyncio\selector_events.py", line 124 in _make_self_pipe
+  File Windows fatal exception: access violation
+
+Windows fatal exception: access violation
+
+Thread 0x000017d0 (most recent call first):
+  File "C:\Python313\Lib\socket.py", line 623 in _fallback_socketpair
+  File "C:\Python313\Lib\asyncio\selector_events.py", line 120 in _make_self_pipe
+  File "C:\Python313\Lib\asyncio\selector_events.py", line 66 in __init__
+  File "C:\Python313\Lib\asyncio\events.py", line 734 in new_event_loop
+  File "C:\Python313\Lib\asyncio\events.py", line 837 in new_event_loop
+  File "C:\Python313\Lib\asyncio\runners.py", line 137 in _lazy_init
+  File "C:\Python313\Lib\asyncio\runners.py", line 58 in __enter__
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 144 in _run_coroutine_safely
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 130 in _call_method
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 182 in run
+
+Current thread 0x0000667c (most recent call first):
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 259 in run
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 272 in main
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 275 in <module>
+Windows fatal exception: access violation
+
+Thread 0x0000369c (most recent call first):
+  File "C:\Python313\Lib\socket.py", line 623 in _fallback_socketpair
+  File "C:\Python313\Lib\asyncio\selector_events.py", line 120 in _make_self_pipe
+  File "C:\Python313\Lib\asyncio\selector_events.py", line 66 in __init__
+  File "C:\Python313\Lib\asyncio\events.py", line 734 in new_event_loop
+  File "C:\Python313\Lib\asyncio\events.py", line 837 in new_event_loop
+  File "C:\Python313\Lib\asyncio\runners.py", line 137 in _lazy_init
+  File "C:\Python313\Lib\asyncio\runners.py", line 58 in __enter__
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 144 in _run_coroutine_safely
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 130 in _call_method
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 182 in run
+
+Thread 0x00009330 (most recent call first):
+  File "C:\Python313\Lib\ssl.py", line 717 in create_default_context
+  File "C:\Users\ale_o\FitPilot\frontend\.venv\Lib\site-packages\httpx\_config.py", line 40 in create_ssl_context
+  File "C:\Users\ale_o\FitPilot\frontend\.venv\Lib\site-packages\httpx\_transports\default.py", line 297 in __init__
+  File "C:\Users\ale_o\FitPilot\frontend\.venv\Lib\site-packages\httpx\_client.py", line 1445 in _init_transport
+  File "C:\Users\ale_o\FitPilot\frontend\.venv\Lib\site-packages\httpx\_client.py", line 1402 in __init__
+  File "C:\Users\ale_o\FitPilot\frontend\app\graphql\client.py", line 80 in _get_client
+  File "C:\Users\ale_o\FitPilot\frontend\app\graphql\client.py", line 140 in execute
+  File "C:\Users\ale_o\FitPilot\frontend\app\services\sessions_service.py", line 37 in get_my_sessions
+  File "C:\Python313\Lib\asyncio\events.py", line 89 in _run
+  File "C:\Python313\Lib\asyncio\base_events.py", line 2033 in _run_once
+  File "C:\Python313\Lib\asyncio\base_events.py", line 678 in run_forever
+  File "C:\Python313\Lib\asyncio\base_events.py", line 707 in run_until_complete
+  File "C:\Python313\Lib\asyncio\runners.py", line 118 in run
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 145 in _run_coroutine_safely
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 130 in _call_method
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 182 in run
+
+Current thread 0x00009498 (most recent call first):
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 259 in run
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 272 in main
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 275 in <module>
+Windows fatal exception: access violation
+
+Thread 0x000094cc (most recent call first):
+  File "C:\Users\ale_o\FitPilot\frontend\app\graphql\client.py", line 114 in _get_client
+  File "C:\Users\ale_o\FitPilot\frontend\app\graphql\client.py", line 178 in execute
+  File "C:\Users\ale_o\FitPilot\frontend\app\services\members_service.py", line 89 in get_members
+  File "C:\Python313\Lib\asyncio\events.py", line 89 in _run
+  File "C:\Python313\Lib\asyncio\base_events.py", line 2033 in _run_once
+  File "C:\Python313\Lib\asyncio\base_events.py", line 678 in run_forever
+  File "C:\Python313\Lib\asyncio\base_events.py", line 707 in run_until_complete
+  File "C:\Python313\Lib\asyncio\runners.py", line 118 in run
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 145 in _run_coroutine_safely
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 130 in _call_method
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 182 in run
+
+Thread 0x00007814 (most recent call first):
+  File "C:\Python313\Lib\ssl.py", line 717 in create_default_context
+  File "C:\Users\ale_o\FitPilot\frontend\.venv\Lib\site-packages\httpx\_config.py", line 40 in create_ssl_context
+  File "C:\Users\ale_o\FitPilot\frontend\.venv\Lib\site-packages\httpx\_transports\default.py", line 297 in __init__
+  File "C:\Users\ale_o\FitPilot\frontend\.venv\Lib\site-packages\httpx\_client.py", line 1445 in _init_transport
+  File "C:\Users\ale_o\FitPilot\frontend\.venv\Lib\site-packages\httpx\_client.py", line 1402 in __init__
+  File "C:\Users\ale_o\FitPilot\frontend\app\graphql\client.py", line 118 in _get_client
+  File "C:\Users\ale_o\FitPilot\frontend\app\graphql\client.py", line 178 in execute
+  File "C:\Users\ale_o\FitPilot\frontend\app\services\sessions_service.py", line 37 in get_my_sessions
+  File "C:\Python313\Lib\asyncio\events.py", line 89 in _run
+  File "C:\Python313\Lib\asyncio\base_events.py", line 2033 in _run_once
+  File "C:\Python313\Lib\asyncio\base_events.py", line 678 in run_forever
+  File "C:\Python313\Lib\asyncio\base_events.py", line 707 in run_until_complete
+  File "C:\Python313\Lib\asyncio\runners.py", line 118 in run
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 145 in _run_coroutine_safely
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 130 in _call_method
+  File "C:\Users\ale_o\FitPilot\frontend\app\threads\authenticated_operations.py", line 182 in run
+
+Current thread 0x0000a2e4 (most recent call first):
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 259 in run
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 272 in main
+  File "C:\Users\ale_o\FitPilot\frontend\main.py", line 275 in <module>

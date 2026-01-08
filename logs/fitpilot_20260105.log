@@ -1,0 +1,26 @@
+2026-01-05 21:26:17 - __main__ - INFO - ==================================================
+2026-01-05 21:26:17 - __main__ - INFO - Starting FitPilot v1.0.0
+2026-01-05 21:26:17 - __main__ - INFO - Environment: development
+2026-01-05 21:26:17 - __main__ - INFO - ==================================================
+2026-01-05 21:26:19 - __main__ - INFO - Initializing services...
+2026-01-05 21:26:19 - __main__ - INFO - Starting AsyncioExecutor...
+2026-01-05 21:26:19 - app.threads.asyncio_executor - INFO - AsyncioExecutor initialized
+2026-01-05 21:26:19 - app.threads.asyncio_executor - INFO - Global AsyncioExecutor created
+2026-01-05 21:26:19 - app.threads.asyncio_executor - INFO - AsyncioExecutor event loop created (thread: Dummy-1)
+2026-01-05 21:26:19 - __main__ - INFO - AsyncioExecutor started successfully
+2026-01-05 21:26:19 - app.threads.asyncio_executor - INFO - AsyncioExecutor started processing tasks
+2026-01-05 21:26:19 - __main__ - INFO - Services initialized successfully
+2026-01-05 21:26:19 - __main__ - INFO - Creating views...
+2026-01-05 21:26:19 - app.views.main_window - INFO - Tab changed to: Socios (index: 0)
+2026-01-05 21:26:19 - __main__ - INFO - Views created successfully
+2026-01-05 21:26:19 - __main__ - INFO - Setting up controllers...
+2026-01-05 21:26:19 - app.controllers.main_controller - INFO - Main controller initialized
+2026-01-05 21:26:19 - __main__ - INFO - Controllers setup successfully
+2026-01-05 21:26:38 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2026-01-05 21:26:38 - app.graphql.client - ERROR - GraphQL errors (no auth): [{'message': "Multiple exceptions: [Errno 10061] Connect call failed ('::1', 5432, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 5432)", 'locations': [{'line': 3, 'column': 21}], 'path': ['login']}]
+2026-01-05 21:26:38 - app.controllers.auth_controller - ERROR - Login failed: Credenciales invalidas
+2026-01-05 21:28:57 - httpx - INFO - HTTP Request: POST http://127.0.0.1:8000/graphql "HTTP/1.1 200 OK"
+2026-01-05 21:28:57 - app.graphql.client - ERROR - GraphQL errors (no auth): [{'message': "Multiple exceptions: [Errno 10061] Connect call failed ('::1', 5432, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 5432)", 'locations': [{'line': 3, 'column': 21}], 'path': ['login']}]
+2026-01-05 21:28:57 - app.controllers.auth_controller - ERROR - Login failed: Credenciales invalidas
+2026-01-06 14:22:44 - __main__ - INFO - Cleaning up resources...
+2026-01-06 14:22:44 - app.controllers.main_controller - INFO - Cleaning up resources

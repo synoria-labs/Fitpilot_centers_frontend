@@ -1,6 +1,8 @@
 """
 Servicio de autenticacion con backend GraphQL.
 """
+import json
+import base64
 from typing import Optional, Dict, Any, Tuple
 
 from ..core.logging import get_logger
@@ -16,6 +18,32 @@ def _first_present(data: Dict[str, Any], *keys: str) -> Optional[Any]:
     return None
 
 
+def _decode_jwt_payload(token: str) -> Optional[Dict[str, Any]]:
+    """Decodifica el payload de un JWT sin verificar la firma."""
+    try:
+        # JWT tiene 3 partes separadas por puntos: header.payload.signature
+        parts = token.split('.')
+        if len(parts) != 3:
+            return None
+
+        # Decodificar el payload (segunda parte)
+        payload_part = parts[1]
+
+        # Agregar padding si es necesario
+        padding = 4 - (len(payload_part) % 4)
+        if padding != 4:
+            payload_part += '=' * padding
+
+        # Decodificar base64
+        payload_bytes = base64.urlsafe_b64decode(payload_part)
+        payload = json.loads(payload_bytes.decode('utf-8'))
+
+        return payload
+    except Exception as e:
+        logger.debug(f"Error decoding JWT payload: {e}")
+        return None
+
+
 class AuthService:
     """Servicio de autenticacion con JWT."""
 
@@ -23,13 +51,13 @@ class AuthService:
         self.client = graphql_client
         self.session = session_store
 
-    async def login(self, email: str, password: str) -> Tuple[bool, str]:
+    async def login(self, email: str, password: str, remember_me: bool = False) -> Tuple[bool, str]:
         """Realiza login con email y password."""
         try:
             mutation = """
                 mutation Login($data: LoginInput!) {
                     login(data: $data) {
-                        access_token
+                        accessToken
                     }
                 }
             """
@@ -41,23 +69,57 @@ class AuthService:
                 }
             }
 
-            result = await self.client.execute(mutation, variables)
+            result = await self.client.execute(mutation, variables, use_auth=False)
 
             if result and "login" in result:
                 login_data = result["login"]
 
-                access_token = login_data.get("access_token")
+                access_token = login_data.get("accessToken")
 
                 if not access_token:
                     logger.error("Login mutation did not return access_token")
                     return False, "Respuesta invalida del servidor"
 
-                # El refresh token se envía como cookie HTTP-only, no en la respuesta GraphQL
+                # Extraer datos del usuario del JWT
+                user_payload = _decode_jwt_payload(access_token)
+                user_data = {}
+                if user_payload:
+                    user_data = {
+                        'username': user_payload.get('username'),
+                        'person_id': user_payload.get('person_id'),
+                        'session_id': user_payload.get('session_id'),
+                        'role': 'admin',  # Por defecto admin, se puede mejorar después
+                    }
+
+                # Intentar extraer refresh_token de las cookies (si está disponible)
+                refresh_token = None
+                try:
+                    # El cliente GraphQL almacena cookies en _shared_cookies
+                    from ..graphql.client import GraphQLClient
+                    cookies_dict = dict(GraphQLClient._shared_cookies)
+                    refresh_token = cookies_dict.get('refresh_token')
+                    if refresh_token:
+                        logger.debug("Refresh token extracted from cookie jar")
+                except Exception as e:
+                    logger.debug(f"Could not extract refresh_token from cookies: {e}")
+
+                # Guardar tokens como fallback (cookies HTTP-only son primarias)
                 self.session.save_session(
-                    access_token=access_token,
-                    refresh_token=None,  # Se maneja por cookies
-                    user_data={},  # Los datos del usuario no se devuelven en login
+                    access_token=access_token,  # Almacenar como fallback
+                    refresh_token=refresh_token,  # Almacenar si está disponible
+                    user_data=user_data,
                 )
+
+                # Si remember_me está activado, guardar refresh_token de forma persistente
+                if remember_me and refresh_token:
+                    from .persistent_storage import save_refresh_token
+                    username = user_data.get('username', email)
+                    if save_refresh_token(username, refresh_token):
+                        logger.info(f"Refresh token saved persistently for user: {username}")
+                    else:
+                        logger.warning(f"Failed to save refresh token persistently for user: {username}")
+                elif remember_me and not refresh_token:
+                    logger.warning("Remember me is enabled but no refresh token available to save")
 
                 logger.info(f"User logged in: {email}")
                 return True, "Login exitoso"
@@ -69,38 +131,68 @@ class AuthService:
             return False, str(e)
 
     async def refresh_token(self) -> bool:
-        """Renueva el token de acceso usando el refresh token."""
+        """Renueva el token usando la mutation manual (para casos edge)."""
         try:
-            refresh_token_value = self.session.get_refresh_token()
-            if not refresh_token_value:
-                return False
-
+            logger.debug("Starting refresh_token mutation")
             mutation = """
-                mutation RefreshToken($refreshToken: String!) {
-                    refreshToken(refreshToken: $refreshToken) {
+                mutation RefreshToken {
+                    refreshToken {
                         accessToken
                     }
                 }
             """
 
-            variables = {"refreshToken": refresh_token_value}
-
-            result = await self.client.execute(mutation, variables, use_auth=False)
+            logger.debug("Executing refresh_token mutation")
+            result = await self.client.execute(mutation, use_auth=False)
+            logger.debug(f"refresh_token mutation result: {result}")
 
             if result and "refreshToken" in result:
-                tokens = result["refreshToken"]
-                new_token = _first_present(tokens, "accessToken", "access_token")
-                if not new_token:
-                    logger.error("Refresh mutation did not return access token")
+                logger.debug("refreshToken found in result")
+                refresh_data = result["refreshToken"]
+                access_token = refresh_data.get("accessToken")
+
+                if not access_token:
+                    logger.error("RefreshToken mutation did not return access_token")
                     return False
 
-                self.session.update_access_token(new_token)
-                logger.info("Token refreshed successfully")
+                # Extraer datos del usuario del JWT
+                user_payload = _decode_jwt_payload(access_token)
+                user_data = {}
+                if user_payload:
+                    user_data = {
+                        'username': user_payload.get('username'),
+                        'person_id': user_payload.get('person_id'),
+                        'session_id': user_payload.get('session_id'),
+                        'role': 'admin',  # Por defecto admin
+                    }
+
+                # Intentar extraer refresh_token de las cookies (si está disponible)
+                refresh_token = None
+                try:
+                    from ..graphql.client import GraphQLClient
+                    cookies_dict = dict(GraphQLClient._shared_cookies)
+                    refresh_token = cookies_dict.get('refresh_token')
+                    if refresh_token:
+                        logger.debug("Refresh token extracted from cookie jar")
+                except Exception as e:
+                    logger.debug(f"Could not extract refresh_token from cookies: {e}")
+
+                # Actualizar la sesión con los nuevos tokens
+                self.session.save_session(
+                    access_token=access_token,
+                    refresh_token=refresh_token,
+                    user_data=user_data,
+                )
+
+                logger.info("Token refreshed successfully via manual mutation")
                 return True
+            else:
+                logger.warning(f"refresh_token mutation failed - result: {result}")
 
         except Exception as e:
-            logger.error(f"Token refresh error: {e}")
+            logger.exception(f"Token refresh error: {e}")
 
+        logger.debug("refresh_token returning False")
         return False
 
     async def logout(self):
@@ -108,9 +200,7 @@ class AuthService:
         try:
             mutation = """
                 mutation Logout {
-                    logout {
-                        success
-                    }
+                    logout
                 }
             """
 
@@ -119,7 +209,14 @@ class AuthService:
         except Exception as e:
             logger.error(f"Logout error: {e}")
         finally:
+            # Limpiar sesión en memoria
             self.session.clear()
+
+            # Limpiar tokens persistentes si existen
+            from .persistent_storage import clear_refresh_token
+            if clear_refresh_token():
+                logger.info("Persistent tokens cleared")
+
             logger.info("User logged out")
 
     def is_authenticated(self) -> bool:
@@ -135,7 +232,7 @@ class AuthService:
         return self.session.has_permission(required_role)
 
     async def auto_refresh_if_needed(self) -> bool:
-        """Refresca el token automaticamente si esta por expirar."""
-        if self.session.needs_refresh():
-            return await self.refresh_token()
-        return True
+        """Verifica estado de autenticación - el backend maneja renovación automática."""
+        # Con cookies HTTP-only, el backend maneja la renovación automática
+        # Solo verificamos si el usuario sigue autenticado
+        return self.session.is_authenticated()

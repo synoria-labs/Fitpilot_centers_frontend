@@ -1,0 +1,38 @@
+# Core
+PySide6>=6.5.0
+python-dotenv>=1.0.0
+QtAwesome>=1.2.3
+
+# GraphQL
+httpx>=0.24.0
+gql>=3.4.0
+
+# Async support
+asyncio>=3.4.3
+aiofiles>=23.1.0
+
+# Data handling
+pandas>=2.0.0
+openpyxl>=3.1.0
+
+# Visualization (opcional para gráficas)
+matplotlib>=3.7.0
+plotly>=5.14.0
+
+# Utilities
+python-dateutil>=2.8.2
+pytz>=2023.3
+keyring>=24.0.0
+
+# Development
+pytest>=7.3.0
+pytest-qt>=4.2.0
+pytest-asyncio>=0.21.0
+black>=23.3.0
+flake8>=6.0.0
+
+# JWT handling (si necesitas decodificar tokens localmente)
+PyJWT>=2.6.0
+
+# JSON validation
+jsonschema>=4.17.0
