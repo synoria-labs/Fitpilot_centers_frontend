@@ -82,6 +82,7 @@ class FitPilotApp:
             from app.services.cache_service import CacheService
             from app.services.standing_bookings_service import StandingBookingsService
             from app.services.sessions_service import SessionsService
+            from app.services.finances_service import FinancesService
             from app.auth.auth_service import AuthService
 
             container.register('auth_service', service=AuthService(graphql_client, session_store))
@@ -93,7 +94,9 @@ class FitPilotApp:
             container.register('dashboard_service', service=DashboardService(graphql_client))
             container.register('standing_bookings_service', service=StandingBookingsService(graphql_client))
             container.register('sessions_service', service=SessionsService(graphql_client))
-            container.register('cache_service', service=CacheService())
+            cache_service = CacheService()
+            container.register('cache_service', service=cache_service)
+            container.register('finances_service', service=FinancesService(graphql_client, cache_service))
             logger.info("Services initialized successfully")
             return True
 
