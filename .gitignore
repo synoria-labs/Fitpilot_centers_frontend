@@ -1,0 +1,78 @@
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.code-workspace
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+.python-version
+
+# --- Virtual environments ---
+.venv/
+venv/
+env/
+ENV/
+
+# --- Packaging ---
+*.egg-info/
+.eggs/
+dist/
+build/
+pip-wheel-metadata/
+
+# --- Tests & coverage ---
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# --- Linters / type checkers ---
+.mypy_cache/
+.pytype/
+.ruff_cache/
+.pyre/
+.tox/
+
+# --- Notebooks ---
+.ipynb_checkpoints/
+
+# --- Runtime: logs, cache, debug screenshots ---
+logs/
+*.log
+fitpilot_*.log
+cache/
+.cache/
+tmp/
+
+# --- Debug screenshots / generated previews ---
+*_debug*.png
+*_validation*.png
+*_preview.png
+member_card_*.png
+
+# --- Secrets ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+
+# --- Investigation / debug scripts (one-off tools) ---
+analyze_*.py
+debug_*.py
+fix_*.py
+inspect_*.py
+
+# --- Investigation outputs ---
+*_report.txt
+*_dump.txt
+debug_output*.txt
+
+# --- Claude Code local settings ---
+.claude/settings.local.json
