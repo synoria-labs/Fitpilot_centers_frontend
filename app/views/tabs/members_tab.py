@@ -10,7 +10,8 @@ from PySide6.QtCore import (
     Signal,
     Slot,
     QEvent,
-    QRect
+    QRect,
+    Qt,
 )
 from PySide6.QtWidgets import (
     QApplication,
@@ -36,6 +37,7 @@ from ...viewmodels.members_state import (
     MemberSummary,
 )
 from ..dialogs.admin_password_dialog import AdminPasswordDialog
+from ..dialogs.reschedule_standing_booking_dialog import RescheduleStandingBookingDialog
 from ..dialogs.renew_subscription_dialog import RenewSubscriptionDialog
 from ...controllers.renew_subscription_controller import RenewSubscriptionController
 from .members.member_detail_card import MemberDetailCard
@@ -78,6 +80,7 @@ class MembersTab(QWidget):
         self._card_width: int = 320
         self._pending_delete_member_id: Optional[int] = None
         self._delete_in_progress: bool = False
+        self._basic_update_in_progress: bool = False
         self._current_member_id: Optional[int] = None
 
         self._search_timer = QTimer(self)
@@ -202,6 +205,7 @@ class MembersTab(QWidget):
         self.member_card.save_requested.connect(self._on_basic_info_save_requested)
         self.member_card.delete_requested.connect(self._on_delete_requested)
         self.member_card.edit_mode_changed.connect(self._on_edit_mode_changed)
+        self.member_card.reschedule_requested.connect(self._on_reschedule_requested)
 
         self.controller.state_changed.connect(self._on_state_changed)
         self.controller.loading_changed.connect(self._on_loading_changed)
@@ -227,15 +231,37 @@ class MembersTab(QWidget):
 
         self.member_table.populate(state.members)
         if previous_id:
-            self.member_table.select_member(previous_id)
+            restored = self.member_table.select_member(previous_id)
+            if not restored:
+                logger.info(
+                    "selected member not present after state refresh -> clearing selection/card member_id=%s",
+                    previous_id,
+                )
+                self._current_member_id = None
+                self.member_selected.emit(-1)
+                self.member_card.reset()
+                self._hide_member_card()
         else:
-            self.member_table.clearSelection()
+            self.member_table.select_member(None)
 
         self._update_status_label(state)
+        self._update_action_buttons()
 
     @Slot(bool)
     def _on_loading_changed(self, loading: bool) -> None:
         self._loading = loading
+        if self._basic_update_in_progress:
+            self.member_table.setEnabled(False)
+            self.search_input.setEnabled(False)
+            self.new_button.setEnabled(False)
+            self.renew_button.setEnabled(False)
+            if loading:
+                self.status_label.setText("Guardando cambios...")
+            else:
+                self._update_action_buttons()
+                self._update_status_label(self._state)
+            return
+
         # Mantener el buscador habilitado durante las cargas para no perder el foco al tipear.
         # Solo se deshabilita cuando la tarjeta está en modo edición.
         self.search_input.setEnabled(not self.member_card.is_editing())
@@ -254,22 +280,42 @@ class MembersTab(QWidget):
 
     @Slot(int)
     def _on_basic_info_update_started(self, member_id: int) -> None:  # noqa: ARG002
+        self._basic_update_in_progress = True
         self.member_card.set_loading(True)
         self.member_table.setEnabled(False)
         self.search_input.setEnabled(False)
+        self.new_button.setEnabled(False)
         self.renew_button.setEnabled(False)
 
     @Slot(object, str)
     def _on_basic_info_update_succeeded(self, summary: MemberSummary, message: str) -> None:
         self.member_card.set_loading(False)
-        self.member_table.setEnabled(not self._loading)
-        self.search_input.setEnabled(not self._loading)
-        self.member_table.upsert_member(summary)
-        self.member_table.select_member(summary.member_id)
-        detail = MemberDetailState.from_summary(summary)
-        self.member_card.set_state(detail)
-        if summary.member_id:
-            self._current_member_id = summary.member_id
+        is_member_visible = any(item.member_id == summary.member_id for item in self._state.members)
+
+        if is_member_visible:
+            self.member_table.upsert_member(summary)
+            selected = self.member_table.select_member(summary.member_id)
+            self.member_card.set_state(MemberDetailState.from_summary(summary))
+            if selected and summary.member_id:
+                self._current_member_id = summary.member_id
+                self.member_selected.emit(summary.member_id)
+                self._show_member_card()
+        else:
+            logger.info(
+                "save success with member outside current dataset -> refresh requested member_id=%s",
+                summary.member_id,
+            )
+            self._current_member_id = None
+            self.member_selected.emit(-1)
+            self.member_card.reset()
+            self.member_table.select_member(None)
+            self._hide_member_card()
+            self.controller.refresh_members()
+
+        self._basic_update_in_progress = False
+        self.member_table.setEnabled(not self._loading and not self.member_card.is_editing() and not self._delete_in_progress)
+        self.search_input.setEnabled(not self._loading and not self.member_card.is_editing())
+        self.new_button.setEnabled(not self._loading and not self._delete_in_progress)
         self._update_action_buttons()
         if message:
             show_info(self, message, title="Editar socio")
@@ -277,8 +323,10 @@ class MembersTab(QWidget):
     @Slot(str)
     def _on_basic_info_update_failed(self, message: str) -> None:
         self.member_card.set_loading(False)
-        self.member_table.setEnabled(not self._loading)
-        self.search_input.setEnabled(not self._loading)
+        self._basic_update_in_progress = False
+        self.member_table.setEnabled(not self._loading and not self.member_card.is_editing() and not self._delete_in_progress)
+        self.search_input.setEnabled(not self._loading and not self.member_card.is_editing())
+        self.new_button.setEnabled(not self._loading and not self._delete_in_progress)
         show_error(self, message, title="Editar socio")
         self._update_action_buttons()
 
@@ -311,9 +359,10 @@ class MembersTab(QWidget):
     def _on_delete_finished(self, member_id: int) -> None:  # noqa: ARG002
         self._delete_in_progress = False
         self.member_card.set_loading(False)
-        self.member_table.setEnabled(not self._loading)
-        self.search_input.setEnabled(not self._loading)
-        self.new_button.setEnabled(not self._loading)
+        controls_available = not self._loading and not self._basic_update_in_progress
+        self.member_table.setEnabled(controls_available and not self.member_card.is_editing())
+        self.search_input.setEnabled(controls_available and not self.member_card.is_editing())
+        self.new_button.setEnabled(controls_available)
         self._update_action_buttons()
         if not self._loading:
             self._update_status_label(self._state)
@@ -373,6 +422,7 @@ class MembersTab(QWidget):
 
     @Slot(int, object)
     def _on_basic_info_save_requested(self, member_id: int, payload: BasicInfoPayload) -> None:
+        logger.info("Submitting basic info update for member_id=%s", member_id)
         self.controller.update_basic_info(member_id, payload)
 
     @Slot(int)
@@ -391,9 +441,18 @@ class MembersTab(QWidget):
 
     @Slot(bool)
     def _on_edit_mode_changed(self, editing: bool) -> None:
-        self.member_table.setEnabled(not editing and not self._loading)
+        logger.info("MembersTab edit mode changed: editing=%s member_id=%s", editing, self._current_member_id)
+        if self._basic_update_in_progress:
+            self.member_table.setEnabled(False)
+            self.search_input.setEnabled(False)
+            self.new_button.setEnabled(False)
+            self.renew_button.setEnabled(False)
+            return
+
+        controls_available = not editing and not self._loading and not self._delete_in_progress
+        self.member_table.setEnabled(controls_available)
         self.search_input.setEnabled(not editing and not self._loading)
-        self.new_button.setEnabled(not editing and not self._loading)
+        self.new_button.setEnabled(controls_available)
         if editing:
             self.renew_button.setEnabled(False)
         else:
@@ -432,6 +491,37 @@ class MembersTab(QWidget):
             if payload is not None:
                 self.renewal_submitted.emit(payload)
 
+    @Slot(int)
+    def _on_reschedule_requested(self, member_id: int) -> None:
+        if self._loading or member_id <= 0:
+            return
+
+        summary = self.member_table.current_summary()
+        if summary is None or summary.member_id != member_id:
+            summary = next((item for item in self._state.members if item.member_id == member_id), None)
+
+        if summary is None:
+            show_warning(self, "No se pudo cargar el socio seleccionado.", title="Cambiar clase")
+            return
+
+        detail = MemberDetailState.from_summary(summary)
+        if detail.standing_booking is None:
+            show_warning(self, "Este socio no tiene un horario fijo activo.", title="Cambiar clase")
+            return
+
+        dialog = RescheduleStandingBookingDialog(
+            member_id=member_id,
+            member_name=detail.full_name,
+            standing_template_id=detail.standing_booking.template_id,
+            membership_start=detail.membership.start_date,
+            membership_end=detail.membership.end_date,
+            membership_remaining_days=detail.membership.remaining_days,
+            standing_bookings_service=self.standing_bookings_service,
+            parent=self,
+        )
+
+        dialog.exec()
+
     @Slot(int, dict)
     def _on_subscription_renewed(self, member_id: int, result: dict) -> None:
         """Handle subscription renewal completion and refresh UI."""
@@ -450,6 +540,14 @@ class MembersTab(QWidget):
             logger.info("Reloading all members")
             QTimer.singleShot(100, lambda: self.controller.load_members())
 
+    def keyPressEvent(self, event) -> None:
+        if event.key() == Qt.Key.Key_Escape and self.member_card.is_editing():
+            logger.info("MembersTab fallback ESC cancel triggered for member_id=%s", self._current_member_id)
+            self.member_card.cancel_edit()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
@@ -463,9 +561,10 @@ class MembersTab(QWidget):
 
     def _update_action_buttons(self) -> None:
         has_selection = self._current_member_id is not None
-        can_edit = has_selection and not self._loading and not self._delete_in_progress
+        controls_locked = self._loading or self._delete_in_progress or self._basic_update_in_progress
+        can_edit = has_selection and not controls_locked
         self.member_card.set_actions_enabled(can_edit, can_edit)
-        self.renew_button.setEnabled(has_selection and not self._loading and not self.member_card.is_editing())
+        self.renew_button.setEnabled(has_selection and not controls_locked and not self.member_card.is_editing())
 
     def _show_member_card(self) -> None:
         if self._card_visible:
@@ -499,8 +598,8 @@ class MembersTab(QWidget):
     # Click-away global para to close panel
     # ------------------------------------------------------------------
     def eventFilter(self, obj, event):
-        # Sólo actuamos si el panel está visible y no estamos editando
-        if event.type() == QEvent.Type.MouseButtonPress and self._card_visible and not self.member_card.is_editing():
+        # Sólo actuamos con panel visible
+        if event.type() == QEvent.Type.MouseButtonPress and self._card_visible:
             # Nos interesan los eventos que ocurren dentro de este tab
             if isinstance(obj, QWidget) and self.isAncestorOf(obj):
                 # Punto global del click (Qt6 -> QPointF, Qt5 -> QPoint)
@@ -517,6 +616,16 @@ class MembersTab(QWidget):
 
                 in_card = global_rect(self.side_card_frame).contains(global_pt)
                 in_table = global_rect(self.member_table.viewport()).contains(global_pt)
+
+                # Si estamos editando y el click cae fuera de la tarjeta,
+                # cancelar edición de forma explícita para evitar estados bloqueados.
+                if self.member_card.is_editing() and not in_card:
+                    logger.info(
+                        "Click-away detected while editing; cancelling edit for member_id=%s",
+                        self._current_member_id,
+                    )
+                    self.member_card.cancel_edit()
+                    return False
 
                 # Clic fuera de la tabla y fuera del panel -> cerrar
                 if not in_card and not in_table:

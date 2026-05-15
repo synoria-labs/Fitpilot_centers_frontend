@@ -5,7 +5,7 @@ from datetime import datetime
 import re
 from typing import Any, Iterable, Optional, Sequence
 
-from ..models.base import Member, MembershipInfo
+from ..models.base import Member, MembershipInfo, ActiveStandingBookingInfo
 
 
 @dataclass(frozen=True)
@@ -58,6 +58,46 @@ class MembershipSnapshot:
 
 
 @dataclass(frozen=True)
+class StandingBookingSnapshot:
+    template_id: Optional[int] = None
+    template_name: str = ""
+    class_type_name: str = ""
+    weekday: Optional[int] = None
+    start_time_local: Optional[str] = None
+    venue_name: Optional[str] = None
+    instructor_name: Optional[str] = None
+
+    @classmethod
+    def from_source(cls, booking: Optional[Any]) -> Optional["StandingBookingSnapshot"]:
+        if booking is None:
+            return None
+
+        if isinstance(booking, ActiveStandingBookingInfo):
+            return cls(
+                template_id=int(booking.template_id),
+                template_name=str(booking.template_name or ""),
+                class_type_name=str(booking.class_type_name or ""),
+                weekday=booking.weekday,
+                start_time_local=booking.start_time_local,
+                venue_name=booking.venue_name,
+                instructor_name=booking.instructor_name
+            )
+
+        if isinstance(booking, dict):
+            return cls(
+                template_id=booking.get("template_id") or booking.get("templateId"),
+                template_name=str(booking.get("template_name") or booking.get("templateName") or ""),
+                class_type_name=str(booking.get("class_type_name") or booking.get("classTypeName") or ""),
+                weekday=booking.get("weekday"),
+                start_time_local=booking.get("start_time_local") or booking.get("startTimeLocal"),
+                venue_name=booking.get("venue_name") or booking.get("venueName"),
+                instructor_name=booking.get("instructor_name") or booking.get("instructorName")
+            )
+
+        return None
+
+
+@dataclass(frozen=True)
 class MemberSummary:
     """Dataset displayed on the members table."""
 
@@ -66,24 +106,28 @@ class MemberSummary:
     email: str
     phone_number: str
     membership: MembershipSnapshot
+    standing_booking: Optional[StandingBookingSnapshot]
     source: Any
 
     @classmethod
     def from_member(cls, member: Any) -> "MemberSummary":
         if isinstance(member, Member):
             membership = MembershipSnapshot.from_source(member.active_membership)
+            standing_booking = StandingBookingSnapshot.from_source(member.active_standing_booking)
             return cls(
                 member_id=int(member.id),
                 full_name=str(member.full_name or "Sin nombre"),
                 email=str(member.email or ""),
                 phone_number=str(member.phone_number or ""),
                 membership=membership,
+                standing_booking=standing_booking,
                 source=member,
             )
 
         # fallback for dict payloads coming from older services
         member_id = int(member.get("id") or member.get("member_id") or 0)
         membership = MembershipSnapshot.from_source(member.get("active_membership"))
+        standing_booking = StandingBookingSnapshot.from_source(member.get("active_standing_booking"))
         full_name = str(member.get("full_name") or member.get("name") or "Sin nombre")
         email = str(member.get("email") or member.get("mail") or "")
         phone = str(member.get("phone_number") or member.get("phone") or "")
@@ -93,6 +137,7 @@ class MemberSummary:
             email=email,
             phone_number=phone,
             membership=membership,
+            standing_booking=standing_booking,
             source=member,
         )
 
@@ -114,6 +159,7 @@ class MemberDetailState:
     profile_picture_url: Optional[str] = None
     registration_date: Optional[datetime] = None
     membership: MembershipSnapshot = MembershipSnapshot()
+    standing_booking: Optional[StandingBookingSnapshot] = None
 
     @classmethod
     def from_summary(cls, summary: Optional[MemberSummary]) -> "MemberDetailState":
@@ -149,6 +195,7 @@ class MemberDetailState:
             profile_picture_url=profile_picture_url,
             registration_date=registration_date,
             membership=summary.membership,
+            standing_booking=summary.standing_booking,
         )
 
 

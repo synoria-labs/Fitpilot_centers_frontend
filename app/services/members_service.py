@@ -1,12 +1,14 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from datetime import datetime, timezone
+import time
 from typing import Any, Dict, List, Optional
 
 from ..core.logging import get_logger
 from ..utils.datetime_helpers import parse_iso_datetime, format_iso_datetime
 from ..models.base import (
     Member,
+    ActiveStandingBookingInfo,
     MembershipInfo,
     MembershipPlan,
     MembershipSubscription,
@@ -29,6 +31,133 @@ def _serialize_datetime(value) -> Optional[str]:
 
     logger.warning("Unexpected datetime type received: %s", type(value))
     return None
+
+
+def _normalize_renewal_error_message(
+    message_text: str,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> Dict[str, str]:
+    """Normalize renewal failures into stable codes and user-friendly messages."""
+    meta = metadata if isinstance(metadata, dict) else {}
+    raw_text = (message_text or "").strip()
+    details = str(meta.get("details") or raw_text).strip()
+    error_code = str(meta.get("errorCode") or "").strip().upper()
+    cause = str(meta.get("cause") or "").strip()
+
+    corpus = " ".join(filter(None, [raw_text, details, cause])).lower()
+
+    if not error_code:
+        if any(
+            marker in corpus
+            for marker in (
+                "already reserved by another person",
+                "no se pudieron crear los standing bookings",
+                "no se pudieron materializar las reservas",
+                "sin cupo",
+                "asientos ocupados",
+                "seat",
+                "disponibilidad",
+            )
+        ):
+            error_code = "NO_AVAILABILITY"
+        elif "debe seleccionar un horario" in corpus:
+            error_code = "MISSING_TEMPLATE"
+        elif "comunicacion" in corpus or "connection" in corpus or "network" in corpus:
+            error_code = "NETWORK_ERROR"
+        else:
+            error_code = "RENEWAL_FAILED"
+
+    if not cause:
+        cause_by_code = {
+            "NO_AVAILABILITY": "Falta de disponibilidad",
+            "MISSING_TEMPLATE": "Falta seleccionar horario",
+            "NETWORK_ERROR": "Error de comunicacion con el servidor",
+            "RENEWAL_FAILED": "Error al renovar la suscripcion",
+        }
+        cause = cause_by_code.get(error_code, "Error al renovar la suscripcion")
+
+    base_message = f"{cause}."
+    detail_suffix = details if details and details.lower() != cause.lower() else ""
+    if detail_suffix:
+        return {
+            "error_code": error_code,
+            "error_cause": cause,
+            "message": f"{base_message} {detail_suffix}",
+        }
+
+    return {
+        "error_code": error_code,
+        "error_cause": cause,
+        "message": base_message,
+    }
+
+
+def _normalize_member_update_error_message(
+    message_text: str,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> Dict[str, str]:
+    """Normalize member update failures into stable codes and user-friendly messages."""
+    meta = metadata if isinstance(metadata, dict) else {}
+    raw_text = (message_text or "").strip()
+    details = str(meta.get("details") or raw_text).strip()
+    error_code = str(
+        meta.get("errorCode")
+        or meta.get("error_code")
+        or ""
+    ).strip().upper()
+    cause = str(
+        meta.get("errorCause")
+        or meta.get("error_cause")
+        or meta.get("cause")
+        or ""
+    ).strip()
+
+    corpus = " ".join(filter(None, [raw_text, details, cause])).lower()
+
+    if not error_code:
+        if any(marker in corpus for marker in ("no encontrado", "not found", "miembro no encontrado", "socio no encontrado")):
+            error_code = "MEMBER_NOT_FOUND"
+        elif any(
+            marker in corpus
+            for marker in (
+                "inval",
+                "invalid",
+                "validation",
+                "requerid",
+                "required",
+                "email",
+                "correo",
+                "telefono",
+                "phone",
+            )
+        ):
+            error_code = "VALIDATION_ERROR"
+        elif any(marker in corpus for marker in ("network", "connection", "timeout", "comunicacion", "servidor")):
+            error_code = "NETWORK_ERROR"
+        else:
+            error_code = "UPDATE_FAILED"
+
+    if not cause:
+        cause_by_code = {
+            "MEMBER_NOT_FOUND": "Socio no encontrado",
+            "VALIDATION_ERROR": "Datos invalidos",
+            "NETWORK_ERROR": "Error de comunicacion con el servidor",
+            "UPDATE_FAILED": "Error al actualizar socio",
+        }
+        cause = cause_by_code.get(error_code, "Error al actualizar socio")
+
+    base_message = f"No se guardaron los cambios. Causa: {cause}."
+    detail_suffix = details if details and details.lower() != cause.lower() else ""
+    if detail_suffix and detail_suffix.lower() not in base_message.lower():
+        message = f"{base_message} {detail_suffix}"
+    else:
+        message = base_message
+
+    return {
+        "error_code": error_code,
+        "error_cause": cause,
+        "message": message,
+    }
 
 
 class MembersService:
@@ -55,6 +184,15 @@ class MembersService:
                     registrationDate
                     totalPayments
                     lastActivity
+                    activeStandingBooking {
+                        templateId
+                        templateName
+                        classTypeName
+                        weekday
+                        startTimeLocal
+                        venueName
+                        instructorName
+                    }
                     activeMembership {
                         subscriptionId
                         planName
@@ -173,6 +311,186 @@ class MembersService:
             logger.error("Error fetching member by ID %s: %s", member_id, str(e))
             logger.info("Using fallback member data for member_id=%s", member_id)
             return self._create_fallback_member_data(member_id)
+
+    async def update_member(self, member_id: int, payload: Dict[str, str]) -> Dict[str, Any]:
+        """Update basic member info in the backend."""
+        mutation = """
+            mutation UpdateMember($memberId: Int!, $input: UpdateMemberInput!) {
+                updateMember(memberId: $memberId, input: $input) {
+                    success
+                    member {
+                        id
+                        fullName
+                        email
+                        phoneNumber
+                        waId
+                    }
+                    message
+                    errorCode
+                    errorCause
+                }
+            }
+        """
+        legacy_mutation = """
+            mutation UpdateMemberLegacy($memberId: Int!, $input: UpdateMemberInput!) {
+                updateMember(memberId: $memberId, input: $input) {
+                    member {
+                        id
+                        fullName
+                        email
+                        phoneNumber
+                        waId
+                    }
+                    message
+                }
+            }
+        """
+
+        name = payload.get("name") or payload.get("full_name") or payload.get("fullName")
+        email = payload.get("email")
+        phone = payload.get("phone") or payload.get("phone_number") or payload.get("phoneNumber")
+
+        input_payload = {
+            "fullName": name if name else None,
+            "email": email if email else None,
+            "phoneNumber": phone if phone else None,
+        }
+        input_payload = {key: value for key, value in input_payload.items() if value is not None}
+
+        if not input_payload:
+            normalized = _normalize_member_update_error_message(
+                "No se enviaron datos para actualizar",
+                {
+                    "errorCode": "VALIDATION_ERROR",
+                    "errorCause": "Sin datos para actualizar",
+                    "details": "No se enviaron datos para actualizar",
+                },
+            )
+            return {
+                "success": False,
+                "message": normalized["message"],
+                "error_code": normalized["error_code"],
+                "error_cause": normalized["error_cause"],
+                "member": None,
+            }
+
+        variables = {
+            "memberId": int(member_id),
+            "input": input_payload,
+        }
+
+        started_at = time.perf_counter()
+        used_legacy_shape = False
+
+        try:
+            result = await self.client.execute(mutation, variables)
+            if result is None:
+                # Backward compatibility for deployments without the new response fields.
+                logger.warning(
+                    "Update member returned no data for member_id=%s using modern shape. Retrying legacy shape.",
+                    member_id,
+                )
+                used_legacy_shape = True
+                result = await self.client.execute(legacy_mutation, variables)
+
+            if result is None:
+                normalized = _normalize_member_update_error_message(
+                    "Error de comunicacion con el servidor",
+                    {"errorCode": "NETWORK_ERROR", "cause": "Error de comunicacion con el servidor"},
+                )
+                duration_ms = (time.perf_counter() - started_at) * 1000
+                logger.warning(
+                    "update_member member_id=%s success=%s error_code=%s duration_ms=%.2f used_legacy_shape=%s",
+                    member_id,
+                    False,
+                    normalized["error_code"],
+                    duration_ms,
+                    used_legacy_shape,
+                )
+                return {
+                    "success": False,
+                    "message": normalized["message"],
+                    "error_code": normalized["error_code"],
+                    "error_cause": normalized["error_cause"],
+                    "member": None,
+                }
+
+            response_payload = (result or {}).get("updateMember") or {}
+            member_data = response_payload.get("member")
+            message = str(response_payload.get("message") or "").strip()
+            success_flag = response_payload.get("success")
+            if used_legacy_shape:
+                success = bool(member_data)
+            elif isinstance(success_flag, bool):
+                success = bool(success_flag) and bool(member_data)
+            else:
+                success = bool(member_data)
+
+            metadata = {
+                "errorCode": response_payload.get("errorCode"),
+                "errorCause": response_payload.get("errorCause"),
+                "details": message,
+            }
+
+            if not success:
+                normalized = _normalize_member_update_error_message(
+                    message or "Error al actualizar socio",
+                    metadata,
+                )
+                duration_ms = (time.perf_counter() - started_at) * 1000
+                logger.warning(
+                    "update_member member_id=%s success=%s error_code=%s duration_ms=%.2f used_legacy_shape=%s",
+                    member_id,
+                    False,
+                    normalized["error_code"],
+                    duration_ms,
+                    used_legacy_shape,
+                )
+                return {
+                    "success": False,
+                    "message": normalized["message"],
+                    "error_code": normalized["error_code"],
+                    "error_cause": normalized["error_cause"],
+                    "member": None,
+                    "raw_message": message,
+                }
+
+            duration_ms = (time.perf_counter() - started_at) * 1000
+            logger.info(
+                "update_member member_id=%s success=%s duration_ms=%.2f used_legacy_shape=%s",
+                member_id,
+                True,
+                duration_ms,
+                used_legacy_shape,
+            )
+            return {
+                "success": True,
+                "message": message or "Datos actualizados correctamente.",
+                "error_code": None,
+                "error_cause": None,
+                "member": self._parse_member(member_data) if member_data else None,
+            }
+        except Exception as exc:  # noqa: BLE001
+            normalized = _normalize_member_update_error_message(
+                str(exc),
+                {"errorCode": "UPDATE_FAILED", "cause": "Error al actualizar socio"},
+            )
+            duration_ms = (time.perf_counter() - started_at) * 1000
+            logger.error(
+                "update_member member_id=%s success=%s error_code=%s duration_ms=%.2f error=%s",
+                member_id,
+                False,
+                normalized["error_code"],
+                duration_ms,
+                exc,
+            )
+            return {
+                "success": False,
+                "message": normalized["message"],
+                "error_code": normalized["error_code"],
+                "error_cause": normalized["error_cause"],
+                "member": None,
+            }
 
     async def get_membership_plans(self) -> List[MembershipPlan]:
         """Retrieve catalog of membership plans."""
@@ -351,6 +669,7 @@ class MembersService:
         mutation = """
             mutation RenewSubscription($input: RenewSubscriptionInput!) {
                 renewSubscription(input: $input) {
+                    success
                     subscription {
                         id
                         personId
@@ -403,67 +722,118 @@ class MembersService:
         try:
             result = await self.client.execute(mutation, variables)
 
-            # Check if GraphQL request failed completely
+            # GraphQL request failed completely
             if result is None:
                 logger.error("GraphQL mutation failed - no result returned for member %s", member_id)
+                normalized = _normalize_renewal_error_message(
+                    "Error de comunicacion con el servidor",
+                    {"errorCode": "NETWORK_ERROR", "cause": "Error de comunicacion con el servidor"},
+                )
                 return {
-                    "subscription": None,
-                    "payment": None,
-                    "message": "Error de comunicación con el servidor"
-                }
-
-            payload = result.get("renewSubscription") or {}
-            subscription_data = payload.get("subscription")
-            payment_data = payload.get("payment")
-            message = payload.get("message", "")
-
-            # Extract standing booking data directly from GraphQL response fields
-            standing_booking_id = payload.get("standingBookingId")
-            materialization_stats = payload.get("materializationStats")
-
-            # Parse message as JSON if it contains additional metadata, otherwise use as-is
-            parsed_message = message
-            try:
-                import json
-                # Try to parse as JSON to extract additional text if present
-                message_data = json.loads(message)
-                if isinstance(message_data, dict) and "text" in message_data:
-                    parsed_message = message_data.get("text", message)
-                    logger.info("Parsed message text from JSON envelope")
-            except (json.JSONDecodeError, TypeError):
-                # If not JSON, use message as-is
-                logger.debug("Message is plain text, not JSON envelope")
-
-            # Log standing booking information if present
-            if standing_booking_id:
-                logger.info("Standing booking created: ID=%s, stats=%s", standing_booking_id, materialization_stats)
-
-            # Check if the mutation returned empty results (indicates backend failure)
-            if not subscription_data and not payment_data and not message:
-                logger.warning("Renewal mutation returned empty results for member %s - this indicates a backend error", member_id)
-                return {
+                    "success": False,
                     "subscription": None,
                     "payment": None,
                     "standing_booking_id": None,
                     "materialization_stats": None,
-                    "message": "Error en el servidor - la renovación no se completó"
+                    "error_code": normalized["error_code"],
+                    "error_cause": normalized["error_cause"],
+                    "message": normalized["message"],
+                }
+
+            payload = result.get("renewSubscription") or {}
+            success_flag = payload.get("success")
+            subscription_data = payload.get("subscription")
+            payment_data = payload.get("payment")
+            message = payload.get("message", "")
+
+            standing_booking_id = payload.get("standingBookingId")
+            materialization_stats = payload.get("materializationStats")
+
+            # Parse message envelope when present
+            parsed_message = message
+            message_data: Dict[str, Any] = {}
+            try:
+                import json
+
+                candidate_data = json.loads(message)
+                if isinstance(candidate_data, dict):
+                    message_data = candidate_data
+                    if "text" in message_data:
+                        parsed_message = message_data.get("text", message)
+                        logger.info("Parsed message text from JSON envelope")
+            except (json.JSONDecodeError, TypeError):
+                logger.debug("Message is plain text, not JSON envelope")
+
+            # Backward compatibility for metadata in message envelope
+            if standing_booking_id is None:
+                standing_booking_id = message_data.get("standingBookingId")
+
+            if materialization_stats is None:
+                envelope_stats = message_data.get("materializationStats")
+                if envelope_stats is not None:
+                    if isinstance(envelope_stats, str):
+                        materialization_stats = envelope_stats
+                    else:
+                        try:
+                            import json
+                            materialization_stats = json.dumps(envelope_stats)
+                        except (TypeError, ValueError):
+                            materialization_stats = str(envelope_stats)
+
+            if standing_booking_id:
+                logger.info("Standing booking created: ID=%s, stats=%s", standing_booking_id, materialization_stats)
+
+            has_required_entities = bool(subscription_data and payment_data)
+            is_success = bool(success_flag) if isinstance(success_flag, bool) else has_required_entities
+            is_success = is_success and has_required_entities
+
+            if not is_success:
+                normalized = _normalize_renewal_error_message(
+                    parsed_message or message or "Error en el servidor - la renovacion no se completo",
+                    message_data,
+                )
+                logger.warning(
+                    "Renewal failed for member %s: code=%s cause=%s message=%s",
+                    member_id,
+                    normalized["error_code"],
+                    normalized["error_cause"],
+                    normalized["message"],
+                )
+                return {
+                    "success": False,
+                    "subscription": None,
+                    "payment": None,
+                    "standing_booking_id": standing_booking_id,
+                    "materialization_stats": materialization_stats,
+                    "error_code": normalized["error_code"],
+                    "error_cause": normalized["error_cause"],
+                    "message": normalized["message"],
+                    "raw_message": parsed_message,
                 }
 
             return {
+                "success": True,
                 "subscription": self._parse_subscription(subscription_data) if subscription_data else None,
                 "payment": self._parse_payment(payment_data) if payment_data else None,
                 "standing_booking_id": standing_booking_id,
                 "materialization_stats": materialization_stats,
-                "message": parsed_message
+                "message": parsed_message,
             }
         except Exception as exc:  # noqa: BLE001
             logger.error("Error renewing subscription for member %s: %s", member_id, exc)
+            normalized = _normalize_renewal_error_message(
+                str(exc),
+                {"errorCode": "RENEWAL_FAILED", "cause": "Error en la renovacion"},
+            )
             return {
+                "success": False,
                 "subscription": None,
                 "payment": None,
                 "standing_booking_id": None,
                 "materialization_stats": None,
-                "message": str(exc)
+                "error_code": normalized["error_code"],
+                "error_cause": normalized["error_cause"],
+                "message": normalized["message"],
             }
 
     async def delete_member(self, member_id: int, admin_password: str) -> Dict[str, Any]:
@@ -507,6 +877,22 @@ class MembersService:
                 remaining_days=membership.get("remainingDays")
             )
 
+        standing_info = None
+        if data.get("activeStandingBooking"):
+            standing = data["activeStandingBooking"]
+            try:
+                standing_info = ActiveStandingBookingInfo(
+                    template_id=int(standing.get("templateId") or 0),
+                    template_name=standing.get("templateName"),
+                    class_type_name=standing.get("classTypeName"),
+                    weekday=standing.get("weekday"),
+                    start_time_local=standing.get("startTimeLocal"),
+                    venue_name=standing.get("venueName"),
+                    instructor_name=standing.get("instructorName")
+                )
+            except Exception:
+                standing_info = None
+
         registration_date = parse_iso_datetime(data.get("registrationDate")) or datetime.now(timezone.utc)
         last_activity = parse_iso_datetime(data.get("lastActivity"))
 
@@ -518,6 +904,7 @@ class MembersService:
             wa_id=data.get("waId"),
             registration_date=registration_date,
             active_membership=membership_info,
+            active_standing_booking=standing_info,
             total_payments=float(data.get("totalPayments") or 0.0),
             last_activity=last_activity
         )

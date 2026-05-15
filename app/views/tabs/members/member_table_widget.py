@@ -65,21 +65,29 @@ class MemberTableWidget(QTableWidget):
     def summaries(self) -> Iterable[MemberSummary]:
         return tuple(self._rows)
 
-    def select_member(self, member_id: Optional[int]) -> None:
+    def select_member(self, member_id: Optional[int]) -> bool:
         if member_id is None:
-            self.clearSelection()
-            return
+            if self.selectionModel() is not None:
+                self.selectionModel().clearSelection()
+            self.setCurrentIndex(QModelIndex())
+            return False
+
         for index, summary in enumerate(self._rows):
             if summary.member_id == member_id:
                 self.selectRow(index)
-                break
+                return True
+
+        if self.selectionModel() is not None:
+            self.selectionModel().clearSelection()
+        self.setCurrentIndex(QModelIndex())
+        return False
 
     # ------------------------------------------------------------------
     # Configuration
     # ------------------------------------------------------------------
     def _configure(self) -> None:
-        self.setColumnCount(5)
-        self.setHorizontalHeaderLabels(["Nombre", "Telefono", "Email", "Membresia", "Estado"])
+        self.setColumnCount(2)
+        self.setHorizontalHeaderLabels(["Nombre", "Estado"])
 
         self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
@@ -92,14 +100,8 @@ class MemberTableWidget(QTableWidget):
         header.setDefaultAlignment(Qt.AlignmentFlag.AlignCenter)
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
-        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
-        header.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
 
-        self.setColumnWidth(1, 120)
-        self.setColumnWidth(2, 200)
-        self.setColumnWidth(3, 150)
-        self.setColumnWidth(4, 140)
+        self.setColumnWidth(1, 140)
 
         self.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
         self.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
@@ -121,9 +123,6 @@ class MemberTableWidget(QTableWidget):
         # Backend now calculates the real status based on dates
         values = [
             summary.full_name or "Sin nombre",
-            summary.phone_number or "",
-            summary.email or "",
-            summary.membership.plan_name or "Sin membresia",
             summary.membership.status or "Sin estado",
         ]
 
@@ -138,7 +137,7 @@ class MemberTableWidget(QTableWidget):
 
             if col == 0:
                 item.setData(Qt.ItemDataRole.UserRole, summary.member_id)
-            if col == 4:
+            if col == 1:
                 item.setIcon(create_status_icon(summary.membership.status))
 
     # ------------------------------------------------------------------
