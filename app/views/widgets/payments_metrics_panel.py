@@ -1,31 +1,26 @@
 """Payments metrics panel for the Finances tab.
 
 Six compact metric cards arranged horizontally, refreshed from the GraphQL
-``payment_metrics`` payload. Cards are theme-aware: backgrounds and secondary
-text use ``palette(...)`` so the panel matches whatever Qt theme (light/dark)
-is active. Orphan and duplicate cards switch to a warning accent when their
-count is non-zero, surfacing integrity issues without a separate dashboard.
+``payment_metrics`` payload. Cards use the shared ``CompactMetricCard`` widget
+so the visual language stays consistent with other tabs (Dashboard, etc.).
+Orphan and duplicate cards switch to a warning accent when their count is
+non-zero, surfacing integrity issues without a separate dashboard.
 """
 from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QFrame,
     QHBoxLayout,
-    QLabel,
     QSizePolicy,
-    QVBoxLayout,
     QWidget,
 )
+
+from .compact_metric_card import CompactMetricCard
 
 
 # Refined palette. Each accent has enough contrast on both light and dark
 # backgrounds; idle/alert pairs let cards "wake up" on bad signals.
-# Secondary text uses a hard-coded medium gray instead of palette(mid) because
-# palette(mid) is intended for separators and reads as nearly invisible on most
-# dark themes.
 _INCOME = "#2ecc71"      # emerald
 _COUNT = "#3498db"       # blue
 _AVG = "#1abc9c"         # turquoise (distinct from blue/green)
@@ -33,18 +28,6 @@ _PENDING = "#f39c12"     # amber
 _IDLE = "#bdc3c7"        # silver — readable "all good" state
 _ORPHAN_ALERT = "#e74c3c"  # red — broken integrity
 _DUP_ALERT = "#e67e22"     # orange — needs review
-
-_SECONDARY_TEXT = "#a0a8b0"  # readable on dark + acceptable on light
-
-
-_CARD_QSS_TEMPLATE = """
-QFrame#compactMetricCard {{
-    background-color: palette(alternate-base);
-    border: 1px solid palette(mid);
-    border-left: 3px solid {accent};
-    border-radius: 5px;
-}}
-"""
 
 
 def _money(value: float | int | None) -> str:
@@ -73,88 +56,6 @@ def _top_method_trend(metrics: Dict[str, Any]) -> Optional[str]:
     return f"Top: {top.get('method', '?')}"
 
 
-class _CompactMetricCard(QFrame):
-    """Compact, theme-aware metric card.
-
-    Layout:
-        ▎ 💵  Ingresos
-        ▎ $4,400.00
-        ▎ Top: cash
-    """
-
-    def __init__(
-        self, title: str, icon: str, accent: str, parent: Optional[QWidget] = None
-    ) -> None:
-        super().__init__(parent)
-        self.setObjectName("compactMetricCard")
-        self.setFrameShape(QFrame.Shape.NoFrame)
-        self._accent = accent
-        self._build()
-        self._apply_accent()
-
-    def _build(self) -> None:
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(10, 6, 10, 6)
-        outer.setSpacing(1)
-
-        header = QHBoxLayout()
-        header.setSpacing(6)
-        header.setContentsMargins(0, 0, 0, 0)
-        self._icon = QLabel(self._icon_text() if hasattr(self, "_icon_text") else "")
-        header.addWidget(self._icon)
-        self._title = QLabel("")
-        header.addWidget(self._title)
-        header.addStretch()
-        outer.addLayout(header)
-
-        self._value = QLabel("0")
-        outer.addWidget(self._value)
-
-        self._trend = QLabel("")
-        self._trend.setVisible(False)
-        outer.addWidget(self._trend)
-
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.setFixedHeight(78)
-
-    def _apply_accent(self) -> None:
-        self.setStyleSheet(_CARD_QSS_TEMPLATE.format(accent=self._accent))
-        self._icon.setStyleSheet(
-            f"font-size: 14px; color: {self._accent}; background: transparent; border: none;"
-        )
-        self._title.setStyleSheet(
-            f"font-size: 11px; color: {_SECONDARY_TEXT}; background: transparent; "
-            f"border: none; font-weight: 500;"
-        )
-        self._value.setStyleSheet(
-            f"font-size: 19px; font-weight: bold; color: {self._accent}; "
-            f"background: transparent; border: none;"
-        )
-        self._trend.setStyleSheet(
-            f"font-size: 10px; color: {_SECONDARY_TEXT}; background: transparent; border: none;"
-        )
-
-    # ----------------------------------------------------------------- public
-
-    def configure(self, *, icon: str, title: str) -> None:
-        self._icon.setText(icon)
-        self._title.setText(title)
-
-    def set_value(self, value: str, trend: Optional[str] = None) -> None:
-        self._value.setText(value)
-        if trend:
-            self._trend.setText(trend)
-            self._trend.setVisible(True)
-        else:
-            self._trend.setVisible(False)
-
-    def set_accent(self, accent: str) -> None:
-        if accent == self._accent:
-            return
-        self._accent = accent
-        self._apply_accent()
-
-
 class PaymentsMetricsPanel(QWidget):
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -165,23 +66,12 @@ class PaymentsMetricsPanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
 
-        self._income = _CompactMetricCard("Ingresos", "💵", _INCOME)
-        self._income.configure(icon="💵", title="Ingresos")
-
-        self._count = _CompactMetricCard("Transacciones", "🧾", _COUNT)
-        self._count.configure(icon="🧾", title="Transacciones")
-
-        self._avg = _CompactMetricCard("Ticket promedio", "📊", _AVG)
-        self._avg.configure(icon="📊", title="Ticket promedio")
-
-        self._pending = _CompactMetricCard("Pendientes", "⏳", _PENDING)
-        self._pending.configure(icon="⏳", title="Pendientes")
-
-        self._orphan = _CompactMetricCard("Pagos huérfanos", "🔗", _IDLE)
-        self._orphan.configure(icon="🔗", title="Pagos huérfanos")
-
-        self._dup = _CompactMetricCard("Posibles duplicados", "⚠️", _IDLE)
-        self._dup.configure(icon="⚠️", title="Posibles duplicados")
+        self._income = CompactMetricCard("Ingresos", "💵", _INCOME)
+        self._count = CompactMetricCard("Transacciones", "🧾", _COUNT)
+        self._avg = CompactMetricCard("Ticket promedio", "📊", _AVG)
+        self._pending = CompactMetricCard("Pendientes", "⏳", _PENDING)
+        self._orphan = CompactMetricCard("Pagos huérfanos", "🔗", _IDLE)
+        self._dup = CompactMetricCard("Posibles duplicados", "⚠️", _IDLE)
 
         for card in (
             self._income,

@@ -93,12 +93,12 @@ class FitPilotApp:
             container.register('classes_service', service=ClassesService(graphql_client))
             container.register('payments_service', service=PaymentsService(graphql_client))
             container.register('whatsapp_service', service=WhatsAppService(graphql_client))
-            container.register('dashboard_service', service=DashboardService(graphql_client))
             container.register('standing_bookings_service', service=StandingBookingsService(graphql_client))
             container.register('sessions_service', service=SessionsService(graphql_client))
             cache_service = CacheService()
             container.register('cache_service', service=cache_service)
             container.register('finances_service', service=FinancesService(graphql_client, cache_service))
+            container.register('dashboard_service', service=DashboardService(graphql_client, cache_service))
             logger.info("Services initialized successfully")
             return True
 
