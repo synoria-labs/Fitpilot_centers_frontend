@@ -721,3 +721,128 @@ class StandingBookingsService:
         except Exception as e:
             logger.error(f"Error in generate_and_materialize_for_template(template_id={template_id}): {e}")
             raise
+
+    async def preview_reschedule_standing_booking(
+        self,
+        *,
+        standing_booking_id: int,
+        start_date: date,
+        end_date: date,
+        target_template_id: int,
+        target_seat_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Preview reschedule results for a standing booking."""
+        mutation = """
+        mutation PreviewRescheduleStandingBooking($input: RescheduleStandingBookingInput!) {
+            previewRescheduleStandingBooking(input: $input) {
+                items {
+                    sessionDate
+                    standingBookingId
+                    sourceSessionId
+                    targetSessionId
+                    seatId
+                    status
+                    reason
+                }
+                counts {
+                    status
+                    count
+                }
+            }
+        }
+        """
+
+        variables = {
+            "input": {
+                "standingBookingId": standing_booking_id,
+                "startDate": start_date.isoformat(),
+                "endDate": end_date.isoformat(),
+                "targetTemplateId": target_template_id,
+                "targetSeatId": target_seat_id,
+            }
+        }
+
+        try:
+            result = self._require_result(
+                await self.client.execute(mutation, variables),
+                "PreviewRescheduleStandingBooking",
+            )
+            response = result.get("previewRescheduleStandingBooking", {}) or {}
+            items = response.get("items") or []
+            counts_list = response.get("counts") or []
+            counts = {
+                item.get("status"): item.get("count", 0)
+                for item in counts_list
+                if isinstance(item, dict) and item.get("status") is not None
+            }
+            return {"items": items, "counts": counts}
+        except Exception as e:
+            logger.error(f"Error previewing reschedule: {e}")
+            raise
+
+    async def reschedule_standing_booking(
+        self,
+        *,
+        standing_booking_id: int,
+        start_date: date,
+        end_date: date,
+        target_template_id: int,
+        target_seat_id: Optional[int] = None,
+        strict: bool = False,
+    ) -> Dict[str, Any]:
+        """Apply reschedule changes for a standing booking."""
+        mutation = """
+        mutation RescheduleStandingBooking($input: RescheduleStandingBookingInput!) {
+            rescheduleStandingBooking(input: $input) {
+                success
+                message
+                items {
+                    sessionDate
+                    standingBookingId
+                    sourceSessionId
+                    targetSessionId
+                    seatId
+                    status
+                    reason
+                }
+                counts {
+                    status
+                    count
+                }
+            }
+        }
+        """
+
+        variables = {
+            "input": {
+                "standingBookingId": standing_booking_id,
+                "startDate": start_date.isoformat(),
+                "endDate": end_date.isoformat(),
+                "targetTemplateId": target_template_id,
+                "targetSeatId": target_seat_id,
+                "strict": strict,
+            }
+        }
+
+        try:
+            result = self._require_result(
+                await self.client.execute(mutation, variables),
+                "RescheduleStandingBooking",
+            )
+            response = result.get("rescheduleStandingBooking", {}) or {}
+            items = response.get("items") or []
+            counts_list = response.get("counts") or []
+            counts = {
+                item.get("status"): item.get("count", 0)
+                for item in counts_list
+                if isinstance(item, dict) and item.get("status") is not None
+            }
+            return {
+                "success": bool(response.get("success")),
+                "message": response.get("message", ""),
+                "items": items,
+                "counts": counts,
+            }
+        except Exception as e:
+            logger.error(f"Error applying reschedule: {e}")
+            raise

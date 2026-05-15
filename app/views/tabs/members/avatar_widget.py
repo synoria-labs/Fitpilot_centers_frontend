@@ -12,7 +12,10 @@ from PySide6.QtWidgets import (
     QFileDialog, QLabel, QMenu,
     QWidget, QVBoxLayout, QHBoxLayout
 )
+from ....core.logging import get_logger
 from ....utils.dialog_helpers import show_confirmation, show_warning
+
+logger = get_logger(__name__)
 
 
 class AvatarWidget(QWidget):
@@ -205,7 +208,7 @@ class AvatarWidget(QWidget):
             else:
                 self._pixmap = None
         except Exception as e:
-            print(f"Error loading image: {e}")
+            logger.exception("Error loading image: %s", e)
             self._pixmap = None
 
         self.update()

@@ -1,10 +1,11 @@
-﻿"""
+"""
 FitPilot - Sistema de Gestión para Gimnasios
 Punto de entrada principal de la aplicación.
 """
 import sys
 import asyncio
 import faulthandler
+import ctypes
 from pathlib import Path
 from typing import Optional
 
@@ -19,8 +20,8 @@ if sys.platform.startswith('win'):
 sys.path.insert(0, str(Path(__file__).parent))
 
 from PySide6.QtWidgets import QApplication, QSplashScreen, QMessageBox
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QPixmap, QColor
+from PySide6.QtCore import Qt, QSize
+from PySide6.QtGui import QPixmap, QColor, QIcon
 
 from app.core import Config
 from app.core import get_logger
@@ -39,6 +40,7 @@ class FitPilotApp:
     
     def __init__(self) -> None:
         self.app: Optional[QApplication] = None
+        self.app_icon: Optional[QIcon] = None
         self.splash: Optional[QSplashScreen] = None
         self.main_controller: Optional[MainController] = None
         self.login_view: Optional[LoginView] = None
@@ -109,6 +111,36 @@ class FitPilotApp:
             self.app = QApplication(sys.argv)
             self.app.setApplicationName("FitPilot")
             self.app.setOrganizationName("FitPilot")
+
+            if sys.platform.startswith("win"):
+                try:
+                    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("FitPilot")
+                except Exception as exc:
+                    logger.warning("Failed to set AppUserModelID: %s", exc)
+
+            app_icon = QIcon()
+            icon_loaded = False
+            favicon_path = Path(__file__).parent / "app" / "assets" / "icons" / "favicon.ico"
+            logo_path = Path(__file__).parent / "app" / "assets" / "FitPilot-Logo.svg"
+
+            if favicon_path.exists():
+                app_icon.addFile(str(favicon_path), QSize(16, 16))
+                icon_loaded = True
+            else:
+                logger.warning("Favicon icon not found at %s", favicon_path)
+
+            if logo_path.exists():
+                app_icon.addFile(str(logo_path), QSize(32, 32))
+                app_icon.addFile(str(logo_path), QSize(64, 64))
+                app_icon.addFile(str(logo_path), QSize(128, 128))
+                app_icon.addFile(str(logo_path), QSize(256, 256))
+                icon_loaded = True
+            else:
+                logger.warning("App logo not found at %s", logo_path)
+
+            if icon_loaded:
+                self.app_icon = app_icon
+                self.app.setWindowIcon(app_icon)
             
             # Configurar tema
             self.setup_theme()
@@ -131,9 +163,11 @@ class FitPilotApp:
 
             # Crear splash screen simple (sin imagen por ahora)
             self.splash = QSplashScreen()
+            if self.app_icon:
+                self.splash.setWindowIcon(self.app_icon)
             self.splash.setWindowFlags(Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.FramelessWindowHint)
             
-            # Usar un QPixmap vacÃ­o con color de fondo
+            # Usar un QPixmap vací­o con color de fondo
             pixmap = QPixmap(400, 300)
             pixmap.fill(QColor(44, 62, 80))  # Color de fondo
             self.splash.setPixmap(pixmap)
@@ -156,7 +190,11 @@ class FitPilotApp:
             try:
                 self.login_view = LoginView()
                 self.main_window = MainWindow()
-                
+
+                if self.app_icon:
+                    self.login_view.setWindowIcon(self.app_icon)
+                    self.main_window.setWindowIcon(self.app_icon)
+
                 logger.info("Views created successfully")
                 return True
                 
@@ -174,7 +212,8 @@ class FitPilotApp:
                     raise RuntimeError('Application views are not initialized')
                 self.main_controller.initialize(self.login_view, self.main_window)
                 
-                # Conectar seÃ±ales de error
+                # Conectar seÃ±ales del arranque
+                self.main_controller.app_ready.connect(self.on_app_ready)
                 self.main_controller.app_error.connect(self.on_app_error)
                 
                 logger.info("Controllers setup successfully")
@@ -184,8 +223,15 @@ class FitPilotApp:
                 logger.error(f"Failed to setup controllers: {e}")
                 return False
         
+    def on_app_ready(self) -> None:
+            """Cierra el splash cuando la UI base ya esta lista."""
+            if self.splash:
+                self.splash.close()
+                self.splash.deleteLater()
+                self.splash = None
+
     def on_app_error(self, error_message: str):
-            """Maneja errores crÃ­ticos de la aplicación."""
+            """Maneja errores crí­ticos de la aplicación."""
             logger.error(f"Application error: {error_message}")
             
             QMessageBox.critical(
@@ -200,10 +246,6 @@ class FitPilotApp:
         
     def start(self) -> None:
             """Inicia la aplicación."""
-            # Ocultar splash despuÃ©s de un breve retraso
-            if self.splash:
-                QTimer.singleShot(1500, self.splash.close)
-            
             # Iniciar controlador principal
             if self.main_controller is None:
                 raise RuntimeError("MainController is not initialized")

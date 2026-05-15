@@ -119,6 +119,7 @@ class MainWindow(QMainWindow):
             ("WhatsApp", "whatsapp", False),  # Solo admin
             ("Membresías", "memberships", True),
             ("Dashboard", "dashboard", True),
+            ("Finanzas", "finances", False),  # Solo admin
         ]
         
         for tab_name, tab_id, is_public in tab_configs:

@@ -4,14 +4,27 @@ import re
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import QSize, Qt, Signal, QRegularExpression
+from PySide6.QtCore import QSize, Qt, Signal, QRegularExpression, QEvent
 from ....core.config import Config
-from PySide6.QtGui import QAction, QIcon, QRegularExpressionValidator, QPainter, QColor
+from ....core.logging import get_logger
+from PySide6.QtGui import (
+    QAction,
+    QIcon,
+    QRegularExpressionValidator,
+    QPainter,
+    QColor,
+    QKeySequence,
+    QShortcut,
+)
 from PySide6.QtWidgets import (
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QStyle,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -21,6 +34,8 @@ from ....viewmodels.members_state import BasicInfoPayload, MemberDetailState
 from .avatar_widget import AvatarWidget
 from ....utils.dialog_helpers import show_warning
 
+logger = get_logger(__name__)
+
 
 class MemberDetailCard(QWidget):
     """Displays member details and handles inline editing."""
@@ -28,6 +43,7 @@ class MemberDetailCard(QWidget):
     save_requested = Signal(int, object)  # member_id, BasicInfoPayload
     delete_requested = Signal(int)
     edit_mode_changed = Signal(bool)
+    reschedule_requested = Signal(int)
     avatar_upload_requested = Signal(int, str)  # member_id, file_path
     avatar_delete_requested = Signal(int)  # member_id
 
@@ -36,8 +52,10 @@ class MemberDetailCard(QWidget):
         self._current_state = MemberDetailState()
         self._editing = False
         self._loading = False
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
         self._build_ui()
+        self._setup_shortcuts()
         self._update_actions()
 
     # ------------------------------------------------------------------
@@ -45,23 +63,36 @@ class MemberDetailCard(QWidget):
     # ------------------------------------------------------------------
     def set_state(self, state: MemberDetailState) -> None:
         """Update the card with the provided member state."""
+        was_editing = self._editing
         self._current_state = state
         if not state.member_id:
             self._editing = False
         self._populate_from_state()
         self._update_actions()
+        if was_editing and not self._editing:
+            logger.info("Member edit mode forced off by state reset")
+            self.edit_mode_changed.emit(False)
 
     def set_loading(self, loading: bool) -> None:
         self._loading = loading
+        was_editing = self._editing
         if loading and self._editing:
             self._editing = False
             self._populate_from_state()
         self._update_actions()
+        if was_editing and not self._editing:
+            logger.info("Member edit mode forced off due to loading transition")
+            self.edit_mode_changed.emit(False)
 
     def set_actions_enabled(self, can_edit: bool, can_delete: bool) -> None:
         if self._loading:
             can_edit = False
             can_delete = False
+        # Defensive: keep actions visible even if disabled to avoid "missing buttons" perception.
+        self.edit_action.setVisible(True)
+        self.delete_action.setVisible(True)
+        self.edit_button.setVisible(True)
+        self.delete_button.setVisible(True)
         self.edit_action.setEnabled(can_edit)
         self.edit_button.setEnabled(can_edit)
         self.delete_action.setEnabled(can_delete)
@@ -69,24 +100,62 @@ class MemberDetailCard(QWidget):
 
     def reset(self) -> None:
         """Clear content and exit edit mode."""
+        was_editing = self._editing
         self._current_state = MemberDetailState()
         self._editing = False
         self._populate_from_state()
         self._update_actions()
+        if was_editing:
+            logger.info("Member edit mode forced off by card reset")
+            self.edit_mode_changed.emit(False)
 
     def is_editing(self) -> bool:
         return self._editing
+
+    def cancel_edit(self) -> None:
+        """Public API to cancel inline editing from parent widgets."""
+        if not self._editing:
+            return
+        self._cancel_edit()
+
+    def save_if_valid(self) -> None:
+        """Public API to trigger save action only when payload is valid."""
+        if self._loading or not self._editing:
+            return
+        self._validate_inputs()
+        if self.save_button.isEnabled():
+            self._on_save_clicked()
+        else:
+            logger.info(
+                "Save shortcut ignored due to invalid payload for member_id=%s",
+                self._current_state.member_id,
+            )
 
     # ------------------------------------------------------------------
     # UI construction
     # ------------------------------------------------------------------
     def _build_ui(self) -> None:
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 16, 16, 16)
+        root_layout = QVBoxLayout(self)
+        root_layout.setContentsMargins(16, 16, 16, 16)
+        root_layout.setSpacing(12)
+
+        self.scroll_area = QScrollArea(self)
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+
+        scroll_content = QWidget(self.scroll_area)
+        scroll_content.setMinimumWidth(0)
+        scroll_content.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        layout = QVBoxLayout(scroll_content)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
 
         # Header with avatar and title
         header_container = QWidget()
+        header_container.setMinimumWidth(0)
+        header_container.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         header_layout = QVBoxLayout(header_container)
         header_layout.setContentsMargins(0, 0, 0, 0)
         header_layout.setSpacing(12)
@@ -151,6 +220,10 @@ class MemberDetailCard(QWidget):
 
         self.name_value = QLabel("-")
         self.name_value.setStyleSheet(value_style)
+        self.name_value.setWordWrap(True)
+        self.name_value.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        self.name_value.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.name_value.setMinimumWidth(0)
         layout.addWidget(self.name_value)
 
         self.name_input = QLineEdit()
@@ -166,6 +239,10 @@ class MemberDetailCard(QWidget):
 
         self.email_value = QLabel("-")
         self.email_value.setStyleSheet(value_style)
+        self.email_value.setWordWrap(True)
+        self.email_value.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        self.email_value.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.email_value.setMinimumWidth(0)
         layout.addWidget(self.email_value)
 
         self.email_input = QLineEdit()
@@ -209,6 +286,36 @@ class MemberDetailCard(QWidget):
         self.status_value.setStyleSheet(value_style)
         layout.addWidget(self.status_value)
 
+        self.schedule_label = QLabel("Horario fijo")
+        self.schedule_label.setStyleSheet(label_style)
+        layout.addWidget(self.schedule_label)
+
+        self.schedule_value = QLabel("-")
+        self.schedule_value.setStyleSheet(value_style)
+        self.schedule_value.setWordWrap(True)
+        self.schedule_value.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        self.schedule_value.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.schedule_value.setMinimumWidth(0)
+        layout.addWidget(self.schedule_value)
+
+        self.center_label = QLabel("Centro de entrenamiento")
+        self.center_label.setStyleSheet(label_style)
+        layout.addWidget(self.center_label)
+
+        self.center_value = QLabel("-")
+        self.center_value.setStyleSheet(value_style)
+        self.center_value.setWordWrap(True)
+        self.center_value.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        self.center_value.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.center_value.setMinimumWidth(0)
+        layout.addWidget(self.center_value)
+
+        self.change_schedule_button = QPushButton("Cambiar clase")
+        self.change_schedule_button.clicked.connect(self._on_reschedule_clicked)
+        self.change_schedule_button.setEnabled(False)
+        self.change_schedule_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        layout.addWidget(self.change_schedule_button)
+
         # Separator
         separator = QWidget()
         separator.setFixedHeight(1)
@@ -236,14 +343,6 @@ class MemberDetailCard(QWidget):
         self.membership_start_value.setStyleSheet(value_style)
         layout.addWidget(self.membership_start_value)
 
-        self.membership_end_label = QLabel("Vencimiento de membresía")
-        self.membership_end_label.setStyleSheet(label_style)
-        layout.addWidget(self.membership_end_label)
-
-        self.membership_end_value = QLabel("-")
-        self.membership_end_value.setStyleSheet(value_style)
-        layout.addWidget(self.membership_end_value)
-
         self.remaining_days_label = QLabel("Días restantes")
         self.remaining_days_label.setStyleSheet(label_style)
         layout.addWidget(self.remaining_days_label)
@@ -251,6 +350,10 @@ class MemberDetailCard(QWidget):
         self.remaining_days_value = QLabel("-")
         self.remaining_days_value.setStyleSheet(value_style)
         layout.addWidget(self.remaining_days_value)
+
+        self.scroll_area.setWidget(scroll_content)
+        self.scroll_area.viewport().installEventFilter(self)
+        root_layout.addWidget(self.scroll_area, 1)
 
         buttons_container = QWidget(self)
         buttons_layout = QHBoxLayout(buttons_container)
@@ -269,27 +372,42 @@ class MemberDetailCard(QWidget):
 
         buttons_container.setVisible(False)
         self.buttons_container = buttons_container
-        layout.addWidget(buttons_container)
-        layout.addStretch()
+        root_layout.addWidget(buttons_container, 0)
 
     def _build_icon_button(self, action: QAction) -> QToolButton:
         button = QToolButton(self)
         button.setObjectName("memberCardIconButton")
         button.setDefaultAction(action)
-        button.setIconSize(QSize(20, 20))
-        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        button.setFixedSize(30, 30)
+        button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        icon_size = QSize(16, 16)
+        button.setIconSize(icon_size)
         button.setCursor(Qt.CursorShape.PointingHandCursor)
-        button.setAccessibleName(action.toolTip())
+        button.setAutoRaise(False)
+        tooltip = action.toolTip() or self._action_label(action)
+        button.setToolTip(tooltip)
+        button.setAccessibleName(tooltip)
+        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        action.setText("")
         button.setStyleSheet(
             "QToolButton#memberCardIconButton {"
-            " border: none; padding: 4px; border-radius: 6px;"
-            " background-color: rgba(0, 0, 0, 0.18); color: #ffffff; }"
+            " border: 1px solid rgba(120, 150, 190, 217); padding: 4px; border-radius: 6px;"
+            " background-color: rgba(35, 50, 70, 242); color: #ffffff; }"
             "QToolButton#memberCardIconButton:hover, QToolButton#memberCardIconButton:focus {"
-            " background-color: palette(highlight); color: palette(base); }"
+            " background-color: rgba(65, 100, 140, 242); color: #ffffff; }"
             "QToolButton#memberCardIconButton:disabled {"
-            " background-color: rgba(0, 0, 0, 0.08); color: rgba(255, 255, 255, 0.6); }"
+            " border: 1px solid rgba(90, 90, 90, 217);"
+            " background-color: rgba(50, 50, 50, 217); color: rgba(230, 230, 230, 217); }"
         )
         return button
+
+    def _action_label(self, action: QAction) -> str:
+        tooltip = (action.toolTip() or "").lower()
+        if "editar" in tooltip:
+            return "Editar"
+        if "eliminar" in tooltip:
+            return "Eliminar"
+        return "Accion"
 
     # ------------------------------------------------------------------
     # Event handlers
@@ -298,6 +416,11 @@ class MemberDetailCard(QWidget):
         if self._loading or not self._current_state.member_id:
             return
         self._editing = not self._editing
+        logger.info(
+            "Member edit mode changed: editing=%s member_id=%s",
+            self._editing,
+            self._current_state.member_id,
+        )
         self._update_edit_widgets()
         self.edit_mode_changed.emit(self._editing)
 
@@ -307,6 +430,7 @@ class MemberDetailCard(QWidget):
         self.delete_requested.emit(self._current_state.member_id)
 
     def _cancel_edit(self) -> None:
+        logger.info("Member edit cancelled for member_id=%s", self._current_state.member_id)
         self._editing = False
         self._populate_from_state()
         self._update_edit_widgets()
@@ -315,6 +439,7 @@ class MemberDetailCard(QWidget):
     def _on_save_clicked(self) -> None:
         if self._loading or not self._current_state.member_id:
             return
+        logger.info("Member save requested for member_id=%s", self._current_state.member_id)
         payload = self._collect_payload()
         if not payload.is_valid():
             show_warning(self, "Completa los datos requeridos antes de guardar.", title="Editar socio")
@@ -352,13 +477,33 @@ class MemberDetailCard(QWidget):
 
     def _populate_from_state(self) -> None:
         data = self._current_state
-        self.name_value.setText(data.full_name or "-")
-        self.email_value.setText(data.email or "-")
-        self.phone_value.setText(data.phone_number or "-")
-        self.plan_value.setText(data.membership.plan_name)
+        name_text = data.full_name or "-"
+        email_text = data.email or "-"
+        phone_text = data.phone_number or "-"
+        plan_text = data.membership.plan_name or "-"
+        status_text = data.membership.status or "-"
+
+        self.name_value.setText(name_text)
+        self.name_value.setToolTip(name_text)
+        self.email_value.setText(email_text)
+        self.email_value.setToolTip(email_text)
+        self.phone_value.setText(phone_text)
+        self.plan_value.setText(plan_text)
 
         # Backend now calculates the real status
-        self.status_value.setText(data.membership.status)
+        self.status_value.setText(status_text)
+
+        if data.standing_booking:
+            schedule_text = self._format_schedule_label(data.standing_booking)
+            center_text = getattr(data.standing_booking, "venue_name", None) or "-"
+        else:
+            schedule_text = "-"
+            center_text = "-"
+
+        self.schedule_value.setText(schedule_text)
+        self.schedule_value.setToolTip(schedule_text)
+        self.center_value.setText(center_text)
+        self.center_value.setToolTip(center_text)
 
         # Update avatar
         self.avatar_widget.set_initials(data.full_name)
@@ -384,12 +529,6 @@ class MemberDetailCard(QWidget):
             self.membership_start_value.setText(formatted_date)
         else:
             self.membership_start_value.setText("-")
-
-        if data.membership.end_date:
-            formatted_date = self._format_date(data.membership.end_date)
-            self.membership_end_value.setText(formatted_date)
-        else:
-            self.membership_end_value.setText("-")
 
         # Display remaining days with color indicator - backend calculates this now
         if data.membership.remaining_days is not None:
@@ -433,6 +572,30 @@ class MemberDetailCard(QWidget):
         }
         return f"{date.day} de {months.get(date.month, '')} de {date.year}"
 
+    def _format_schedule_label(self, booking) -> str:
+        name_label = (
+            getattr(booking, "template_name", None)
+            or getattr(booking, "class_type_name", None)
+            or ""
+        )
+        label = str(name_label).strip()
+        return label or "-"
+
+    def _weekday_name(self, weekday: Optional[int]) -> str:
+        if weekday is None:
+            return ""
+        mapping = {
+            0: "Domingo",
+            1: "Lunes",
+            2: "Martes",
+            3: "Miercoles",
+            4: "Jueves",
+            5: "Viernes",
+            6: "Sabado",
+            7: "Domingo",
+        }
+        return mapping.get(int(weekday), "")
+
     def _update_edit_widgets(self) -> None:
         is_editing = self._editing and bool(self._current_state.member_id)
 
@@ -447,10 +610,52 @@ class MemberDetailCard(QWidget):
 
         if is_editing:
             self.name_input.setFocus()
+            self.scroll_area.ensureWidgetVisible(self.name_input)
             self._validate_inputs()
         else:
             self.save_button.setEnabled(False)
             self._clear_invalid_state()
+
+    def _setup_shortcuts(self) -> None:
+        self._cancel_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Escape), self)
+        self._cancel_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        self._cancel_shortcut.activated.connect(self._on_cancel_shortcut)
+
+        self._save_shortcut = QShortcut(QKeySequence.StandardKey.Save, self)
+        self._save_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        self._save_shortcut.activated.connect(self._on_save_shortcut)
+
+    def resizeEvent(self, event) -> None:
+        """Keep scroll content width in sync with viewport to avoid horizontal clipping."""
+        super().resizeEvent(event)
+        self._sync_scroll_content_width()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        self._sync_scroll_content_width()
+
+    def eventFilter(self, obj, event):
+        if obj is self.scroll_area.viewport() and event.type() == QEvent.Type.Resize:
+            self._sync_scroll_content_width()
+        return super().eventFilter(obj, event)
+
+    def _sync_scroll_content_width(self) -> None:
+        widget = self.scroll_area.widget()
+        if widget is None:
+            return
+        viewport_width = self.scroll_area.viewport().width()
+        if viewport_width > 0:
+            widget.setFixedWidth(viewport_width)
+
+    def _on_cancel_shortcut(self) -> None:
+        if self._editing and not self._loading:
+            logger.info("ESC shortcut triggered member edit cancel for member_id=%s", self._current_state.member_id)
+            self.cancel_edit()
+
+    def _on_save_shortcut(self) -> None:
+        if self._editing and not self._loading:
+            logger.info("Ctrl+S shortcut triggered member save for member_id=%s", self._current_state.member_id)
+            self.save_if_valid()
 
     def _update_actions(self) -> None:
         has_member = bool(self._current_state.member_id)
@@ -459,10 +664,24 @@ class MemberDetailCard(QWidget):
 
         self.set_actions_enabled(can_edit, can_delete)
         self.cancel_button.setEnabled(self._editing and not self._loading)
+        has_schedule = self._current_state.standing_booking is not None
+        membership_status = (self._current_state.membership.status or "").lower()
+        can_reschedule = (
+            has_schedule
+            and membership_status == "active"
+            and not self._editing
+            and not self._loading
+        )
+        self.change_schedule_button.setEnabled(can_reschedule)
         if self._editing:
             self._validate_inputs()
         else:
             self.save_button.setEnabled(False)
+
+    def _on_reschedule_clicked(self) -> None:
+        if self._loading or not self._current_state.member_id:
+            return
+        self.reschedule_requested.emit(self._current_state.member_id)
 
     def _set_invalid_state(self, widget: QLineEdit, invalid: bool) -> None:
         widget.setProperty("invalid", "true" if invalid else "false")
@@ -476,8 +695,48 @@ class MemberDetailCard(QWidget):
     def _load_icon(self, icon_name: str) -> QIcon:
         icon_path = Path(__file__).resolve().parents[3] / "assets" / "icons" / icon_name
         if icon_path.exists():
-            return QIcon(str(icon_path))
+            icon = QIcon(str(icon_path))
+            if self._icon_is_renderable(icon, QSize(16, 16)):
+                return icon
+
+        style = self.style()
+        if style is not None:
+            fallback_names = []
+            if "trash" in icon_name:
+                fallback_names = ["SP_TrashIcon", "SP_DialogDiscardButton"]
+            if "edit" in icon_name or "pencil" in icon_name:
+                # No hay icono "pencil" estandar; usar fallback legible.
+                fallback_names = [
+                    "SP_FileDialogDetailedView",
+                    "SP_FileDialogContentsView",
+                    "SP_DialogApplyButton",
+                ]
+
+            for pixmap_name in fallback_names:
+                pixmap = getattr(QStyle.StandardPixmap, pixmap_name, None)
+                if pixmap is not None:
+                    icon = style.standardIcon(pixmap)
+                    if self._icon_is_renderable(icon, QSize(16, 16)):
+                        return icon
+
         return QIcon()
+
+    def _icon_is_renderable(self, icon: QIcon, size: QSize) -> bool:
+        if icon.isNull():
+            return False
+        pixmap = icon.pixmap(size)
+        if pixmap.isNull():
+            return False
+        image = pixmap.toImage()
+        if image.isNull():
+            return False
+        if not image.hasAlphaChannel():
+            return True
+        for y in range(image.height()):
+            for x in range(image.width()):
+                if image.pixelColor(x, y).alpha() > 0:
+                    return True
+        return False
 
     def _on_avatar_changed(self, file_path: str) -> None:
         """Handle avatar change event."""

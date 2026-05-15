@@ -383,6 +383,19 @@ class RenewSubscriptionDialog(BaseSubscriptionDialog):
 
     def _on_renewal_success(self, result: Dict[str, Any]) -> None:
         """Handle successful subscription renewal from backend."""
+        result = result or {}
+
+        if not result.get("success") or not result.get("subscription") or not result.get("payment"):
+            cause = str(result.get("error_cause") or "").strip()
+            message = str(result.get("message") or "").strip()
+            if cause and message and cause.lower() not in message.lower():
+                message = f"{cause}. {message}"
+            elif cause and not message:
+                message = f"{cause}."
+
+            self._on_renewal_error(message or "No se pudo renovar la suscripcion")
+            return
+
         standing_booking_id = result.get("standing_booking_id")
         materialization_stats = result.get("materialization_stats")
 

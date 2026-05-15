@@ -265,30 +265,88 @@ class MembersController(BaseController):
 
     @Slot(int, dict, object)
     def _on_basic_info_update_success(self, member_id: int, payload: Dict[str, str], result: Any) -> None:
-        message = "Datos actualizados correctamente."
-        success = True
+        message = "No se guardaron los cambios. Causa: respuesta no confirmada por el servidor."
+        success = False
 
         if isinstance(result, dict):
-            if "success" in result:
-                success = bool(result.get("success"))
             message = result.get("message") or message
+            success_flag = result.get("success")
+            success = bool(success_flag) if isinstance(success_flag, bool) else False
 
         if not success:
             self.basic_info_update_failed.emit(message)
             return
 
-        summary = self._apply_basic_info_locally(member_id, payload)
-        if summary is None:
-            self.basic_info_update_failed.emit("No se pudo actualizar la informacion del socio.")
-            return
+        exists_locally = any(item.member_id == member_id for item in self._state.members)
+        summary: Optional[MemberSummary]
+        if exists_locally:
+            summary = self._apply_basic_info_locally(member_id, payload)
+            if summary is not None:
+                self._emit_state()
+            else:
+                logger.info(
+                    "Local update target missing unexpectedly for member_id=%s; using backend/payload summary.",
+                    member_id,
+                )
+                summary = self._build_summary_from_update_result(member_id, payload, result)
+        else:
+            logger.info(
+                "save success with member outside current dataset -> skipping local patch member_id=%s",
+                member_id,
+            )
+            summary = self._build_summary_from_update_result(member_id, payload, result)
 
         self.basic_info_update_succeeded.emit(summary, message)
-        self._emit_state()
 
     @Slot(str)
     def _on_basic_info_update_error(self, error_message: str) -> None:
         logger.error("Basic info update failed: %s", error_message)
         self.basic_info_update_failed.emit(error_message or "Ocurri un error al actualizar los datos.")
+
+    def _build_summary_from_update_result(
+        self,
+        member_id: int,
+        payload: Dict[str, str],
+        result: Any,
+    ) -> MemberSummary:
+        member_payload = None
+        if isinstance(result, dict):
+            member_payload = result.get("member")
+
+        if isinstance(member_payload, dict):
+            normalized_member = dict(member_payload)
+            if normalized_member.get("id") is None and normalized_member.get("member_id") is None:
+                normalized_member["id"] = member_id
+            if normalized_member.get("full_name") is None and normalized_member.get("name") is None:
+                normalized_member["full_name"] = normalized_member.get("fullName")
+            if normalized_member.get("phone_number") is None and normalized_member.get("phone") is None:
+                normalized_member["phone_number"] = normalized_member.get("phoneNumber")
+            if normalized_member.get("active_membership") is None and normalized_member.get("activeMembership") is not None:
+                normalized_member["active_membership"] = normalized_member.get("activeMembership")
+            if (
+                normalized_member.get("active_standing_booking") is None
+                and normalized_member.get("activeStandingBooking") is not None
+            ):
+                normalized_member["active_standing_booking"] = normalized_member.get("activeStandingBooking")
+            return MemberSummary.from_member(normalized_member)
+
+        if member_payload is not None:
+            try:
+                return MemberSummary.from_member(member_payload)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "Could not map backend member payload for member_id=%s. Falling back to request payload. error=%s",
+                    member_id,
+                    exc,
+                )
+
+        fallback_payload = {
+            "id": member_id,
+            "full_name": payload.get("name", ""),
+            "email": payload.get("email", ""),
+            "phone_number": payload.get("phone", ""),
+        }
+        return MemberSummary.from_member(fallback_payload)
 
     def _apply_basic_info_locally(self, member_id: int, payload: Dict[str, str]) -> Optional[MemberSummary]:
         updated_summary: Optional[MemberSummary] = None
@@ -321,7 +379,10 @@ class MembersController(BaseController):
             updated_members.append(updated_summary)
 
         if updated_summary is None:
-            logger.warning("Member with id %s not found for local update", member_id)
+            logger.info(
+                "Local member patch skipped; member_id=%s is not present in current dataset",
+                member_id,
+            )
             return None
 
         self._state = replace(self._state, members=tuple(updated_members))

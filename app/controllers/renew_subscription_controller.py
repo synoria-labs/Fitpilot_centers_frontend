@@ -6,7 +6,8 @@ from typing import Any, Dict, Optional
 from PySide6.QtCore import QObject, Signal, QTimer, Slot
 
 from ..core.logging import get_logger
-from ..models.base import ClassTemplate, MembershipPlan, Seat
+from ..models.base import ClassTemplate, MembershipPlan
+from ..threads.authenticated_operations import AuthenticatedOperation
 from .base_subscription_controller import BaseSubscriptionController
 
 logger = get_logger(__name__)
@@ -106,17 +107,65 @@ class RenewSubscriptionController(BaseSubscriptionController):
 
     @Slot(dict)
     def _on_renewal_operation_success(self, result: Dict[str, Any]) -> None:
-        """Handle successful renewal operation from backend."""
-        logger.info(f"Subscription renewed successfully via backend. Result keys: {list(result.keys()) if result else 'None'}")
+        """Handle renewal response from backend and enforce success contract."""
+        result = result or {}
+        logger.info(
+            "Renewal operation result received. Keys: %s",
+            list(result.keys()) if result else [],
+        )
 
-        # Log the subscription details if available
-        subscription = result.get('subscription')
-        if subscription:
-            sub_id = subscription.get('id') if isinstance(subscription, dict) else getattr(subscription, 'id', 'Unknown')
-            logger.info(f"New subscription created with ID: {sub_id}")
+        success = bool(result.get("success"))
+        subscription = result.get("subscription")
+        payment = result.get("payment")
+        has_entities = bool(subscription and payment)
+
+        if not success or not has_entities:
+            error_message = self._build_renewal_failure_message(result)
+            logger.warning(
+                "Renewal rejected as failure. success=%s has_entities=%s error=%s",
+                success,
+                has_entities,
+                error_message,
+            )
+            self._renewal_operation = None
+            self.renewal_error.emit(error_message)
+            return
+
+        sub_id = subscription.get('id') if isinstance(subscription, dict) else getattr(subscription, 'id', 'Unknown')
+        logger.info("New subscription created with ID: %s", sub_id)
 
         self._renewal_operation = None
         self.renewal_success.emit(result)
+
+    def _build_renewal_failure_message(self, result: Dict[str, Any]) -> str:
+        """Build a user-facing error message from normalized renewal payload."""
+        if not isinstance(result, dict):
+            return "No se pudo renovar la suscripcion."
+
+        cause = str(result.get("error_cause") or "").strip()
+        message = str(result.get("message") or "").strip()
+        error_code = str(result.get("error_code") or "").strip().upper()
+
+        if not cause:
+            if error_code == "NO_AVAILABILITY":
+                cause = "Falta de disponibilidad"
+            elif error_code == "MISSING_TEMPLATE":
+                cause = "Falta seleccionar horario"
+            elif error_code == "NETWORK_ERROR":
+                cause = "Error de comunicacion con el servidor"
+
+        if cause and message:
+            if cause.lower() in message.lower():
+                return message
+            return f"{cause}. {message}"
+
+        if cause:
+            return f"{cause}."
+
+        if message:
+            return message
+
+        return "No se pudo renovar la suscripcion."
 
     @Slot(str)
     def _on_renewal_operation_error(self, error: str) -> None:
@@ -350,35 +399,6 @@ class RenewSubscriptionController(BaseSubscriptionController):
 
     # Note: refresh_seats now inherited from BaseSubscriptionController with improved logic
 
-    def get_seats_for_class(self, class_id: int) -> list[Seat]:
-        """Return the cached seats associated to a class identifier."""
-        if not self._defaults:
-            return []
-
-        return list(self._defaults.seat_map.get(class_id, []))
-
-    def suggest_seat(
-        self, class_id: Optional[int], requested_seat_id: Optional[int]
-    ) -> Optional[int]:
-        """Return an available seat id honoring the previous selection when possible."""
-        if class_id is None:
-            return None
-
-        seats = self.get_seats_for_class(class_id)
-        if not seats:
-            return None
-
-        if requested_seat_id is not None:
-            for seat in seats:
-                if seat.id == requested_seat_id and seat.is_available:
-                    return seat.id
-
-        for seat in seats:
-            if seat.is_available:
-                return seat.id
-
-        return None
-
     def _validate_specific_fields(self, form_data: Dict[str, Any]) -> Optional[str]:
         """Validate fields specific to renewal operations."""
         try:
@@ -493,8 +513,6 @@ class RenewSubscriptionController(BaseSubscriptionController):
 
             # Clear renewal-specific data
             self._member_data = None
-            self._defaults = None
-
             # Clear group booking state
             self._group_booking_results = None
 
