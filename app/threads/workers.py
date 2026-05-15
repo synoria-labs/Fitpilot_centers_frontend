@@ -94,6 +94,7 @@ class TabLoader(BaseWorker):
             "memberships": ("app.views.tabs.memberships_tab", "MembershipsTab"),
             "dashboard": ("app.views.tabs.dashboard_tab", "DashboardTab"),
             "whatsapp": ("app.views.tabs.whatsapp_tab", "WhatsAppTab"),
+            "finances": ("app.views.tabs.finances_tab", "FinancesTab"),
         }
 
         if self.tab_id in tab_mapping:

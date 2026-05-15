@@ -101,10 +101,12 @@ class ClassSeatIcon(QWidget):
             color = self.COLOR_OCCUPIED
 
         # Create and set the icon
-        # Using 0.4 factor instead of 0.5 to give the bicycle wheels more space
+        # Use extra horizontal room for wide glyphs like the bicycle.
         icon = qta.icon(icon_name, color=color)
-        actual_size = int(self.icon_size * 0.4)
-        pixmap = icon.pixmap(QSize(actual_size, actual_size))
+        actual_size = max(1, int(self.icon_size * 0.4))
+        width_factor = 1.25 if icon_name == 'fa5s.bicycle' else 1.0
+        pixmap_width = max(actual_size, int(actual_size * width_factor))
+        pixmap = icon.pixmap(QSize(pixmap_width, actual_size))
         self.icon_label.setPixmap(pixmap)
 
     def _update_tooltip(self):

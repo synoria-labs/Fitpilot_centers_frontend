@@ -19,7 +19,7 @@ class Config:
     
     # JWT Configuration
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv('ACCESS_TOKEN_EXPIRE_MINUTES', '15'))
-    REFRESH_TOKEN_EXPIRE_DAYS: int = int(os.getenv('ACCESS_TOKEN_EXPIRE_DAYS', '7'))
+    REFRESH_TOKEN_EXPIRE_DAYS: int = int(os.getenv('REFRESH_TOKEN_EXPIRE_DAYS', '7'))
     
     # Environment
     ENVIRONMENT: str = os.getenv('ENVIRONMENT', 'development')

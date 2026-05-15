@@ -79,6 +79,7 @@ class Member(BaseModel):
     wa_id: Optional[str] = None
     registration_date: datetime = field(default_factory=datetime.now)
     active_membership: Optional['MembershipInfo'] = None
+    active_standing_booking: Optional['ActiveStandingBookingInfo'] = None
     total_payments: float = 0.0
     last_activity: Optional[datetime] = None
 
@@ -117,6 +118,39 @@ class MembershipInfo(BaseModel):
     price: Optional[float] = None
     duration_value: Optional[int] = None
     duration_unit: Optional[str] = None
+
+
+@dataclass
+class ActiveStandingBookingInfo(BaseModel):
+    template_id: int
+    template_name: Optional[str] = None
+    class_type_name: Optional[str] = None
+    weekday: Optional[int] = None
+    start_time_local: Optional[str] = None
+    venue_name: Optional[str] = None
+    instructor_name: Optional[str] = None
+
+    def display_label(self) -> str:
+        name = self.template_name or self.class_type_name or "Clase"
+        time_label = self.start_time_local or ""
+        venue_label = self.venue_name or ""
+        parts = [name, time_label, venue_label]
+        return " - ".join([part for part in parts if part])
+
+    def weekday_label(self) -> str:
+        mapping = {
+            0: "Dom",
+            1: "Lun",
+            2: "Mar",
+            3: "Mie",
+            4: "Jue",
+            5: "Vie",
+            6: "Sab",
+            7: "Dom",
+        }
+        if self.weekday is None:
+            return ""
+        return mapping.get(self.weekday, str(self.weekday))
 
 @dataclass
 class MembershipSubscription(BaseModel):
