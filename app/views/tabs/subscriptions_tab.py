@@ -1,5 +1,6 @@
 """Subscriptions tab view."""
 
+import time
 from typing import Any, Dict, List, Optional
 
 from PySide6.QtWidgets import (
@@ -14,8 +15,8 @@ from ...core import container
 
 from ...core import get_logger
 
-from ...threads import ThreadPoolManager
 from ...threads.authenticated_operations import start_authenticated_operation
+from ...utils.dialog_helpers import show_error, show_info
 from ..dialogs.new_subscription_dialog import NewSubscriptionDialog
 
 logger = get_logger(__name__)
@@ -75,9 +76,6 @@ class SubscriptionsTab(QWidget):
             logger.error(f"Failed to get services: {e}")
             raise
 
-        self.thread_pool = ThreadPoolManager()
-        logger.info("Thread pool manager created")
-
         self.current_subscriptions: List[Any] = []  # List of MembershipSubscription objects
         self.total_subscriptions: int = 0
         self.loading: bool = False
@@ -94,6 +92,11 @@ class SubscriptionsTab(QWidget):
         self._current_card_animation: Optional[QParallelAnimationGroup] = None
         self._active_card_subscription: Optional[Any] = None
         self._edit_mode = False
+        self._card_edit_snapshot: Optional[Dict[str, str]] = None
+        self._card_save_in_progress = False
+        self._card_save_started_at: Optional[float] = None
+        self._card_save_context: Optional[Dict[str, Any]] = None
+        self._card_save_operation: Optional[Any] = None
 
         self.search_timer = QTimer(self)
         self.search_timer.setSingleShot(True)
@@ -383,18 +386,16 @@ class SubscriptionsTab(QWidget):
     def on_subscriptions_error(self, error: str) -> None:
         """Handles data loading errors."""
         logger.error("Error loading subscriptions: %s", error)
-        print(f"ERROR CARGA SUSCRIPCIONES: {error}")  # Print para debug
         self.status_label.setText("Error al cargar suscripciones")
 
     def populate_table(self) -> None:
         """Fills the table with the current subscriptions list."""
-        # DEBUG: Si no hay datos, crear datos de prueba
-        if not self.current_subscriptions:
-            logger.info("No subscriptions data found, creating test data for debugging")
-            self._create_test_data()
-
         self.table.setSortingEnabled(False)
         self.table.setRowCount(len(self.current_subscriptions))
+        if not self.current_subscriptions:
+            self.table.setSortingEnabled(True)
+            self.update_status()
+            return
 
         for row, subscription in enumerate(self.current_subscriptions):
             subscription_id = subscription.id if hasattr(subscription, 'id') else ''
@@ -562,48 +563,6 @@ class SubscriptionsTab(QWidget):
         """Triggers a manual refresh from external callers."""
         self.load_subscriptions(self.current_search, self.current_status_filter)
 
-    def _create_test_data(self) -> None:
-        """Crea datos de prueba para debugging."""
-        from ...models.base import Person, MembershipSubscription, MembershipPlan
-        from datetime import datetime, timedelta
-
-        estados = ["active", "expired", "pending", "canceled", "active"]
-
-        for i in range(5):
-            # Create test person
-            person = Person(
-                id=i + 1,
-                full_name=f'Persona {i+1:03d}',
-                email=f'persona{i+1}@gmail.com',
-                phone_number=f'528711{i:06d}'
-            )
-
-            # Create test plan
-            plan = MembershipPlan(
-                id=i + 1,
-                name=["Mensual", "Trimestral", "Anual"][i % 3],
-                price=500.0 + (i * 100),
-                duration_value=30 if i % 3 == 0 else (90 if i % 3 == 1 else 365),
-                duration_unit="day"
-            )
-
-            # Create test subscription
-            subscription = MembershipSubscription(
-                id=i + 1,
-                person_id=i + 1,
-                plan_id=i + 1,
-                start_at=datetime.now() - timedelta(days=30),
-                end_at=datetime.now() + timedelta(days=30 - i*10),
-                status=estados[i % len(estados)],
-                person=person,
-                plan=plan,
-                total_payments=1500.0 + (i * 200),
-                remaining_days=30 - i*10
-            )
-            self.current_subscriptions.append(subscription)
-
-        self.total_subscriptions = len(self.current_subscriptions)
-
     def _set_loading(self, is_loading: bool) -> None:
         """Updates loading flag and handles queued searches."""
         self.loading = is_loading
@@ -626,11 +585,203 @@ class SubscriptionsTab(QWidget):
             # Usar un QTimer para evitar recursión inmediata
             QTimer.singleShot(100, lambda: self.load_subscriptions(self.requested_search, self.requested_status_filter))
 
+    def _capture_card_snapshot(self) -> Dict[str, str]:
+        """Captures card editable fields so failed saves can be reverted."""
+        return {
+            "name": self.card_name_input.text().strip(),
+            "phone": self.card_phone_input.text().strip(),
+            "email": self.card_email_input.text().strip(),
+        }
+
+    def _restore_card_snapshot(self) -> None:
+        """Restores card fields from the latest snapshot."""
+        if not self._card_edit_snapshot:
+            return
+        self.card_name_input.setText(self._card_edit_snapshot.get("name", ""))
+        self.card_phone_input.setText(self._card_edit_snapshot.get("phone", ""))
+        self.card_email_input.setText(self._card_edit_snapshot.get("email", ""))
+
+    def _set_card_saving_state(self, saving: bool) -> None:
+        """Toggles only contact-card edit controls while a save is in progress."""
+        self._card_save_in_progress = saving
+        self._card_save_started_at = time.perf_counter() if saving else None
+
+        self.card_name_input.setEnabled(not saving)
+        self.card_phone_input.setEnabled(not saving)
+        self.card_email_input.setEnabled(not saving)
+        self.card_close_button.setEnabled(not saving)
+        self.card_edit_button.setEnabled(
+            (self._active_card_subscription is not None) and (not saving) and (not self._edit_mode)
+        )
+        self.card_cancel_button.setEnabled(self._edit_mode and (not saving))
+        self.card_save_button.setEnabled(self._edit_mode and (not saving))
+        self.card_save_button.setText("Guardando..." if saving else "Guardar cambios")
+
+    def _member_id_from_subscription(self, subscription: Any) -> Optional[int]:
+        """Resolve member id from subscription.person.id with safe fallbacks."""
+        person = getattr(subscription, "person", None)
+        candidates = [
+            getattr(person, "id", None),
+            getattr(subscription, "person_id", None),
+            getattr(subscription, "personId", None),
+        ]
+        for candidate in candidates:
+            if candidate in (None, ""):
+                continue
+            try:
+                return int(candidate)
+            except (TypeError, ValueError):
+                continue
+        return None
+
+    def _subscription_id_from_subscription(self, subscription: Any) -> Optional[int]:
+        value = getattr(subscription, "id", None)
+        if value in (None, ""):
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _apply_subscription_contact(self, subscription: Any, result_payload: Dict[str, Any], fallback_payload: Dict[str, str]) -> None:
+        """Apply backend-confirmed contact data to local subscription object."""
+        if not hasattr(subscription, "person") or subscription.person is None:
+            return
+
+        member = result_payload.get("member")
+        person = subscription.person
+        if member is not None:
+            if hasattr(person, "full_name"):
+                person.full_name = getattr(member, "full_name", None) or fallback_payload.get("name", "")
+            if hasattr(person, "phone_number"):
+                person.phone_number = getattr(member, "phone_number", None) or fallback_payload.get("phone", "")
+            if hasattr(person, "email"):
+                person.email = getattr(member, "email", None) or fallback_payload.get("email", "")
+            return
+
+        if hasattr(person, "full_name"):
+            person.full_name = fallback_payload.get("name", "")
+        if hasattr(person, "phone_number"):
+            person.phone_number = fallback_payload.get("phone", "")
+        if hasattr(person, "email"):
+            person.email = fallback_payload.get("email", "")
+
+    def _update_subscription_row_contact(self, subscription: Any) -> None:
+        """Updates only the selected subscription row contact cells (no full repaints)."""
+        subscription_id = self._subscription_id_from_subscription(subscription)
+        if subscription_id is None:
+            return
+
+        person = getattr(subscription, "person", None)
+        name = getattr(person, "full_name", None) or "Sin nombre"
+        phone = getattr(person, "phone_number", None) or "N/A"
+        email = getattr(person, "email", None) or "N/A"
+
+        for row in range(self.table.rowCount()):
+            if self._subscription_id_from_row(row) != subscription_id:
+                continue
+            name_item = self.table.item(row, 0)
+            phone_item = self.table.item(row, 1)
+            email_item = self.table.item(row, 2)
+            if name_item:
+                name_item.setText(str(name))
+            if phone_item:
+                phone_item.setText(str(phone))
+            if email_item:
+                email_item.setText(str(email))
+            break
+
+    def _build_member_save_error_message(self, result: Any) -> str:
+        if isinstance(result, dict):
+            message = str(result.get("message") or "").strip()
+            cause = str(result.get("error_cause") or "").strip()
+            if message:
+                return message
+            if cause:
+                return f"No se guardaron los cambios. Causa: {cause}."
+        return "No se guardaron los cambios. Causa: Error al actualizar socio."
+
+    def _on_save_subscription_edits_success(self, result: Any) -> None:
+        """Handles update_member completion with explicit success semantics."""
+        started_at = self._card_save_started_at
+        self._set_card_saving_state(False)
+        context = self._card_save_context or {}
+        subscription = context.get("subscription")
+        member_id = context.get("member_id")
+        subscription_id = context.get("subscription_id")
+        payload = context.get("payload") or {}
+        duration_ms = ((time.perf_counter() - started_at) * 1000) if started_at else 0.0
+
+        success = False
+        if isinstance(result, dict) and isinstance(result.get("success"), bool):
+            success = bool(result.get("success"))
+
+        if not success or subscription is None:
+            message = self._build_member_save_error_message(result)
+            error_code = ""
+            if isinstance(result, dict):
+                error_code = str(result.get("error_code") or "").strip().upper()
+            logger.warning(
+                "subscription_contact_save member_id=%s subscription_id=%s success=%s error_code=%s duration_ms=%.2f",
+                member_id,
+                subscription_id,
+                False,
+                error_code or "UPDATE_FAILED",
+                duration_ms,
+            )
+            self._restore_card_snapshot()
+            show_error(self, message, title="Editar socio")
+            return
+
+        self._apply_subscription_contact(subscription, result, payload)
+        self._update_subscription_row_contact(subscription)
+        self._card_edit_snapshot = self._capture_card_snapshot()
+        logger.info(
+            "subscription_contact_save member_id=%s subscription_id=%s success=%s duration_ms=%.2f",
+            member_id,
+            subscription_id,
+            True,
+            duration_ms,
+        )
+        self._cancel_edit_mode()
+        success_message = str(result.get("message") or "").strip() if isinstance(result, dict) else ""
+        if success_message:
+            show_info(self, success_message, title="Editar socio")
+
+    def _on_save_subscription_edits_error(self, error: str) -> None:
+        started_at = self._card_save_started_at
+        self._set_card_saving_state(False)
+        context = self._card_save_context or {}
+        member_id = context.get("member_id")
+        subscription_id = context.get("subscription_id")
+        duration_ms = ((time.perf_counter() - started_at) * 1000) if started_at else 0.0
+        logger.error(
+            "subscription_contact_save member_id=%s subscription_id=%s success=%s error_code=%s duration_ms=%.2f error=%s",
+            member_id,
+            subscription_id,
+            False,
+            "NETWORK_ERROR",
+            duration_ms,
+            error,
+        )
+        self._restore_card_snapshot()
+        show_error(
+            self,
+            "No se guardaron los cambios. Causa: Error de comunicacion con el servidor.",
+            detailed_text=error or "",
+            title="Editar socio",
+        )
+
+    def _on_save_subscription_edits_finished(self) -> None:
+        if self._card_save_in_progress:
+            self._set_card_saving_state(False)
+        self._card_save_operation = None
+        self._card_save_context = None
+
     def _show_subscription_contact_card(self, subscription: Any) -> None:
         """Populates and reveals the side contact card for the selected subscription."""
         self._active_card_subscription = subscription
 
-        self.card_edit_button.setEnabled(True)
 
         # Get person data
         if hasattr(subscription, 'person') and subscription.person:
@@ -674,6 +825,8 @@ class SubscriptionsTab(QWidget):
         else:
             self.card_dates_label.setText("Período: Sin datos")
 
+        self._set_card_saving_state(self._card_save_in_progress)
+
         if not self._card_visible:
             self._animate_subscription_card(True)
         else:
@@ -684,6 +837,10 @@ class SubscriptionsTab(QWidget):
 
     def _hide_subscription_contact_card(self) -> None:
         """Hides the side contact card with animation."""
+        if self._card_save_in_progress:
+            logger.debug("Hide requested while contact save is in progress")
+            return
+
         if not self._card_visible and self.side_card_container.maximumWidth() == 0:
             self._active_card_subscription = None
             self.card_edit_button.setEnabled(False)
@@ -707,6 +864,8 @@ class SubscriptionsTab(QWidget):
         self.card_status_label.setText("Estado: Sin datos")
         self.card_dates_label.setText("Período: Sin datos")
         self.card_title_label.setText("Información de la suscripción")
+
+        self._card_edit_snapshot = None
 
         # Reset edit mode
         if self._edit_mode:
@@ -785,23 +944,31 @@ class SubscriptionsTab(QWidget):
 
     def _toggle_edit_mode(self) -> None:
         """Toggles between view and edit mode for contact fields."""
+        if self._card_save_in_progress:
+            logger.debug("Edit toggle ignored while contact save is in progress")
+            return
+
         if not self._edit_mode:
-            # Enable edit mode
             self._edit_mode = True
+            self._card_edit_snapshot = self._capture_card_snapshot()
             self.card_name_input.setReadOnly(False)
             self.card_phone_input.setReadOnly(False)
             self.card_email_input.setReadOnly(False)
 
             self.card_edit_button.setVisible(False)
             self.card_save_button.setVisible(True)
-            self.card_save_button.setEnabled(True)
             self.card_cancel_button.setVisible(True)
-            self.card_cancel_button.setEnabled(True)
-        else:
-            self._cancel_edit_mode()
+            self._set_card_saving_state(False)
+            return
+
+        self._cancel_edit_mode()
 
     def _cancel_edit_mode(self) -> None:
         """Cancels edit mode and reverts to view mode."""
+        if self._card_save_in_progress:
+            logger.debug("Cancel edit ignored while contact save is in progress")
+            return
+
         if self._edit_mode:
             self._edit_mode = False
             self.card_name_input.setReadOnly(True)
@@ -810,16 +977,19 @@ class SubscriptionsTab(QWidget):
 
             self.card_edit_button.setVisible(True)
             self.card_save_button.setVisible(False)
-            self.card_save_button.setEnabled(False)
             self.card_cancel_button.setVisible(False)
-            self.card_cancel_button.setEnabled(False)
+            self._set_card_saving_state(False)
 
-            # Restore original values
             if self._active_card_subscription:
                 self._show_subscription_contact_card(self._active_card_subscription)
+            self._card_edit_snapshot = None
 
     def _save_subscription_edits(self) -> None:
-        """Saves edits made in the side card to the subscription's person data."""
+        """Persist contact edits through backend and avoid optimistic false positives."""
+        if self._card_save_in_progress:
+            logger.debug("Save ignored because another contact save is already running")
+            return
+
         subscription = self._active_card_subscription
         if subscription is None:
             logger.debug("Save requested without an active subscription")
@@ -827,28 +997,101 @@ class SubscriptionsTab(QWidget):
 
         if not hasattr(subscription, 'person') or subscription.person is None:
             logger.debug("Save requested but subscription has no person data")
+            show_error(self, "No se guardaron los cambios. Causa: Socio no encontrado.", title="Editar socio")
+            return
+
+        member_id = self._member_id_from_subscription(subscription)
+        subscription_id = self._subscription_id_from_subscription(subscription)
+        if member_id is None:
+            logger.warning(
+                "Contact save requested without valid member id for subscription_id=%s",
+                subscription_id,
+            )
+            show_error(self, "No se guardaron los cambios. Causa: Socio no encontrado.", title="Editar socio")
             return
 
         nombre = self.card_name_input.text().strip()
         telefono = self.card_phone_input.text().strip()
         email = self.card_email_input.text().strip()
 
-        # Update person data
         person = subscription.person
-        if hasattr(person, 'full_name'):
-            person.full_name = nombre
-        if hasattr(person, 'phone_number'):
-            person.phone_number = telefono
-        if hasattr(person, 'email'):
-            person.email = email
+        current_name = (getattr(person, "full_name", None) or "").strip()
+        current_phone = (getattr(person, "phone_number", None) or "").strip()
+        current_email = (getattr(person, "email", None) or "").strip()
 
-        # Refresh table to show changes
-        self.populate_table()
+        payload = {
+            "name": nombre,
+            "phone": telefono,
+            "email": email,
+        }
+        changed_fields = [
+            field
+            for field, values in {
+                "name": (nombre, current_name),
+                "phone": (telefono, current_phone),
+                "email": (email, current_email),
+            }.items()
+            if values[0] != values[1]
+        ]
 
-        # Exit edit mode
-        self._cancel_edit_mode()
+        if not changed_fields:
+            logger.info(
+                "subscription_contact_save skipped member_id=%s subscription_id=%s reason=no_changes",
+                member_id,
+                subscription_id,
+            )
+            self._cancel_edit_mode()
+            return
 
-        subscription_id = subscription.id if hasattr(subscription, 'id') else None
-        logger.info("Subscription %s person data updated from contact card", subscription_id if subscription_id is not None else '<sin id>')
+        if not self._card_edit_snapshot:
+            self._card_edit_snapshot = {
+                "name": current_name,
+                "phone": current_phone,
+                "email": current_email,
+            }
+
+        self._card_save_context = {
+            "member_id": member_id,
+            "subscription_id": subscription_id,
+            "subscription": subscription,
+            "payload": payload,
+        }
+
+        logger.info(
+            "subscription_contact_save requested member_id=%s subscription_id=%s changed_fields=%s",
+            member_id,
+            subscription_id,
+            changed_fields,
+        )
+        if not callable(getattr(self.members_service, "update_member", None)):
+            self._card_save_context = None
+            show_error(self, "No se guardaron los cambios. Causa: Servicio no disponible.", title="Editar socio")
+            return
+
+        self._set_card_saving_state(True)
+        try:
+            self._card_save_operation = start_authenticated_operation(
+                service=self.members_service,
+                method_name="update_member",
+                parent=self,
+                on_success=self._on_save_subscription_edits_success,
+                on_error=self._on_save_subscription_edits_error,
+                on_finished=self._on_save_subscription_edits_finished,
+                member_id=member_id,
+                payload=payload,
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            self._set_card_saving_state(False)
+            self._card_save_context = None
+            logger.error(
+                "subscription_contact_save member_id=%s subscription_id=%s success=%s error_code=%s error=%s",
+                member_id,
+                subscription_id,
+                False,
+                "UPDATE_FAILED",
+                exc,
+            )
+            self._restore_card_snapshot()
+            show_error(self, "No se guardaron los cambios. Causa: Error al actualizar socio.", title="Editar socio")
 
     
