@@ -83,6 +83,19 @@ class GraphQLClient:
             logger.error(f"Failed to restore refresh token to cookies: {e}")
 
     @classmethod
+    def current_access_token(cls) -> Optional[str]:
+        """Devuelve el access_token actual del jar compartido (para auth del WebSocket).
+
+        El backend setea la cookie ``access_token`` (y el header x-access-token) al
+        autenticar/refrescar; el cookie hook la propaga al jar compartido.
+        """
+        try:
+            with cls._cookies_lock:
+                return cls._shared_cookies.get("access_token")
+        except Exception:
+            return None
+
+    @classmethod
     def clear_cookies(cls) -> None:
         """Limpia todas las cookies del jar compartido."""
         try:

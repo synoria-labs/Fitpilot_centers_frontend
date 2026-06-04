@@ -132,10 +132,11 @@ class AsyncioExecutor(QThread):
 
     async def _process_tasks(self) -> None:
         """
-        Process tasks from queue until shutdown is requested.
+        Drain submitted work until shutdown is requested.
 
-        This coroutine runs in the persistent event loop and processes
-        submitted tasks one by one.
+        This coroutine runs in the persistent event loop and schedules each
+        submitted coroutine as its own asyncio task. The loop stays single, but
+        long-lived operations do not block later requests from starting.
         """
         logger.info("AsyncioExecutor started processing tasks")
 
@@ -165,8 +166,9 @@ class AsyncioExecutor(QThread):
                 logger.info("AsyncioExecutor received shutdown sentinel")
                 break
 
-            # Execute task
-            await self._execute_task(task)
+            # Schedule the submitted coroutine and keep draining the queue. Some
+            # tasks, such as WebSocket subscriptions, are intentionally long-lived.
+            asyncio.create_task(self._execute_task(task))
 
     async def _execute_task(self, task: AsyncTask) -> None:
         """

@@ -116,7 +116,8 @@ class MainWindow(QMainWindow):
         tab_configs = [
             ("Socios", "members", True),
             ("Clases", "classes", True),
-            ("WhatsApp", "whatsapp", False),  # Solo admin
+            ("Chats", "whatsapp_chat", False),  # Solo admin
+            ("WhatsApp", "whatsapp", False),  # Solo admin (plantillas)
             ("Membresías", "memberships", True),
             ("Dashboard", "dashboard", True),
             ("Finanzas", "finances", False),  # Solo admin
@@ -275,10 +276,11 @@ class MainWindow(QMainWindow):
     
     def update_tabs_visibility(self, role: str):
         """Actualiza la visibilidad de las pestañas según el rol."""
-        # WhatsApp solo para admin
+        # WhatsApp y Chats solo para admin
         if role != 'admin':
+            admin_only_tabs = {"WhatsApp", "Chats", "Finanzas"}
             for i in range(self.tab_widget.count()):
-                if self.tab_widget.tabText(i) == "WhatsApp":
+                if self.tab_widget.tabText(i) in admin_only_tabs:
                     self.tab_widget.setTabEnabled(i, False)
     
     def load_tab_content(self, tab_id: str, widget: QWidget):
