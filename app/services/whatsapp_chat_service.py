@@ -10,6 +10,9 @@ from ..models.chat import ChatConversation, ChatMessage
 
 logger = get_logger(__name__)
 
+# Shared page size for the conversation list (infinite scroll).
+PAGE_SIZE = 40
+
 _MESSAGE_FIELDS = """
     id
     conversationId
@@ -48,6 +51,32 @@ CONVERSATIONS_COMPAT_QUERY = """
     }
 """ % _MESSAGE_FIELDS
 
+CONVERSATION_QUERY = """
+    query GetConversation($id: Int!) {
+        conversation(id: $id) {
+            id
+            status
+            lastActivity
+            unreadCount
+            contact { id waId phoneNumber name profileName memberId memberName }
+            lastMessage { %s }
+        }
+    }
+""" % _MESSAGE_FIELDS
+
+CONVERSATION_COMPAT_QUERY = """
+    query GetConversation($id: Int!) {
+        conversation(id: $id) {
+            id
+            status
+            lastActivity
+            unreadCount
+            contact { id waId phoneNumber name profileName }
+            lastMessage { %s }
+        }
+    }
+""" % _MESSAGE_FIELDS
+
 MESSAGES_QUERY = """
     query GetMessages($conversationId: Int!, $limit: Int! = 50, $offset: Int! = 0) {
         conversationMessages(conversationId: $conversationId, limit: $limit, offset: $offset) {
@@ -75,7 +104,7 @@ class WhatsAppChatService:
         self._use_member_contact_fields = True
 
     async def get_conversations(
-        self, limit: int = 50, offset: int = 0, search: Optional[str] = None
+        self, limit: int = PAGE_SIZE, offset: int = 0, search: Optional[str] = None
     ) -> List[ChatConversation]:
         variables = {"limit": limit, "offset": offset, "search": search}
         try:
@@ -97,6 +126,28 @@ class WhatsAppChatService:
         except Exception as exc:  # noqa: BLE001
             logger.error("Error fetching conversations: %s", exc)
             return []
+
+    async def get_conversation(
+        self, conversation_id: int
+    ) -> Optional[ChatConversation]:
+        """Fetch a single conversation enriched like the list (incremental inserts)."""
+        variables = {"id": conversation_id}
+        try:
+            query = (
+                CONVERSATION_QUERY
+                if self._use_member_contact_fields
+                else CONVERSATION_COMPAT_QUERY
+            )
+            result = await self.client.execute(query, variables)
+            if result is None and self._use_member_contact_fields:
+                result = await self.client.execute(CONVERSATION_COMPAT_QUERY, variables)
+                if result is not None:
+                    self._use_member_contact_fields = False
+            item = (result or {}).get("conversation")
+            return ChatConversation.from_dict(item) if item else None
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Error fetching conversation %s: %s", conversation_id, exc)
+            return None
 
     async def get_messages(
         self, conversation_id: int, limit: int = 50, offset: int = 0

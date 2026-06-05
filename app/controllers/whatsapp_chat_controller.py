@@ -12,6 +12,7 @@ from PySide6.QtCore import QObject, Signal, Qt
 from .base_controller import BaseController
 from ..core.logging import get_logger
 from ..models.chat import ChatConversation, ChatMessage
+from ..services.whatsapp_chat_service import PAGE_SIZE
 from ..threads.asyncio_executor import get_global_executor
 from ..graphql.client import GraphQLClient
 from ..graphql.ws_client import ChatSubscriptionClient
@@ -25,7 +26,9 @@ class _WsBridge(QObject):
 
 
 class WhatsAppChatController(BaseController):
-    conversations_loaded = Signal(object)   # List[ChatConversation]
+    # (conversations, reset, has_more): reset -> replace list; else append page
+    conversations_page_loaded = Signal(object, bool, bool)
+    single_conversation_loaded = Signal(object)  # ChatConversation (incremental upsert)
     messages_loaded = Signal(object)        # List[ChatMessage]
     message_sent = Signal(object)           # ChatMessage
     send_failed = Signal(str)
@@ -47,13 +50,35 @@ class WhatsAppChatController(BaseController):
     # ------------------------------------------------------------------
     # Data operations
     # ------------------------------------------------------------------
-    def load_conversations(self, search: Optional[str] = None) -> None:
+    def load_conversations(
+        self,
+        search: Optional[str] = None,
+        limit: int = PAGE_SIZE,
+        offset: int = 0,
+        reset: bool = True,
+    ) -> None:
+        def _on_loaded(conversations: List[ChatConversation]) -> None:
+            convs = conversations or []
+            has_more = len(convs) >= limit
+            self.conversations_page_loaded.emit(convs, reset, has_more)
+
         self._execute_authenticated_operation(
             self._service,
             "get_conversations",
-            self._on_conversations_loaded,
+            _on_loaded,
             self._on_error,
+            limit=limit,
+            offset=offset,
             search=search,
+        )
+
+    def load_single_conversation(self, conversation_id: int) -> None:
+        self._execute_authenticated_operation(
+            self._service,
+            "get_conversation",
+            self._on_single_conversation_loaded,
+            self._on_error,
+            conversation_id=conversation_id,
         )
 
     def load_messages(self, conversation_id: int) -> None:
@@ -84,8 +109,9 @@ class WhatsAppChatController(BaseController):
     # ------------------------------------------------------------------
     # Result handlers
     # ------------------------------------------------------------------
-    def _on_conversations_loaded(self, conversations: List[ChatConversation]) -> None:
-        self.conversations_loaded.emit(conversations or [])
+    def _on_single_conversation_loaded(self, conversation: Optional[ChatConversation]) -> None:
+        if conversation is not None:
+            self.single_conversation_loaded.emit(conversation)
 
     def _on_messages_loaded(self, messages: List[ChatMessage]) -> None:
         self.messages_loaded.emit(messages or [])

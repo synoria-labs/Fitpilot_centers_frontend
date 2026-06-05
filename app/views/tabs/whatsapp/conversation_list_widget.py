@@ -1,24 +1,31 @@
-"""Left-hand conversation list (chats), WhatsApp-style."""
-from typing import List
+"""Left-hand conversation list (chats), WhatsApp-style.
+
+Backed by a ``QListView`` + ``ConversationListModel`` + ``ConversationItemDelegate``
+(paint-based rendering), so the list scales to thousands of rows and supports
+incremental updates and infinite scroll without rebuilding per-row widgets.
+"""
+from typing import List, Optional
 
 import qtawesome as qta
-from PySide6.QtCore import Qt, Signal, QTimer, QSize
+from PySide6.QtCore import Qt, Signal, QTimer, QSize, QModelIndex
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QLabel,
     QHBoxLayout,
     QLineEdit,
-    QListWidget,
-    QListWidgetItem,
+    QListView,
     QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
-from ....models.chat import ChatConversation
+from ....models.chat import ChatConversation, ChatMessage
 from . import theme
-from .avatar import Avatar
-from .message_formatter import snippet_for_message
+from .conversation_list_model import CONVERSATION_ROLE, ConversationListModel
+from .conversation_item_delegate import ConversationItemDelegate
+
+# How close to the bottom (px) before requesting the next page.
+_LOAD_MORE_THRESHOLD = 240
 
 
 def _style() -> str:
@@ -70,40 +77,10 @@ def _style() -> str:
     background-color: palette(highlight);
     border-color: palette(highlight);
 }}
-QListWidget {{
+QListView {{
     background-color: palette(window);
     border: none;
     outline: 0;
-}}
-QListWidget::item {{
-    border-bottom: 1px solid palette(mid);
-    padding: 0;
-}}
-QListWidget::item:hover {{ background-color: palette(alternate-base); }}
-QListWidget::item:selected {{
-    background-color: palette(highlight);
-    color: palette(highlighted-text);
-}}
-#convItem {{ background-color: transparent; }}
-#convItem[selected="true"] {{ background-color: palette(highlight); }}
-QLabel#convName {{ color: palette(text); font-weight: bold; font-size: 14px; background: transparent; }}
-QLabel#convIdentity {{ color: {theme.secondary_text_hex()}; font-size: 11px; background: transparent; }}
-QLabel#convSnippet {{ color: {theme.secondary_text_hex()}; font-size: 12px; background: transparent; }}
-QLabel#convTime {{ color: {theme.secondary_text_hex()}; font-size: 10px; background: transparent; }}
-#convItem[selected="true"] QLabel#convName,
-#convItem[selected="true"] QLabel#convIdentity,
-#convItem[selected="true"] QLabel#convSnippet,
-#convItem[selected="true"] QLabel#convTime {{
-    color: palette(highlighted-text);
-}}
-QLabel#convUnread {{
-    color: #0b141a;
-    background-color: {theme.ACCENT};
-    border-radius: 9px;
-    min-width: 18px;
-    min-height: 18px;
-    font-size: 10px;
-    font-weight: 700;
 }}
 """
 
@@ -128,119 +105,10 @@ def _make_chip(label: str, active: bool = False) -> QLabel:
     return chip
 
 
-class _ElidedLabel(QLabel):
-    def __init__(self, text: str = "", parent=None) -> None:
-        super().__init__(parent)
-        self._full_text = ""
-        self.set_full_text(text)
-
-    def set_full_text(self, text: str) -> None:
-        self._full_text = text or ""
-        self.setToolTip(self._full_text)
-        self._apply_elide()
-
-    def resizeEvent(self, event) -> None:
-        super().resizeEvent(event)
-        self._apply_elide()
-
-    def _apply_elide(self) -> None:
-        width = max(0, self.width())
-        text = self.fontMetrics().elidedText(
-            self._full_text,
-            Qt.TextElideMode.ElideRight,
-            width,
-        )
-        super().setText(text)
-
-
-class _ConversationItem(QWidget):
-    def __init__(self, conversation: ChatConversation, parent=None) -> None:
-        super().__init__(parent)
-        self.setObjectName("convItem")
-        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self._has_member_name = bool(conversation.contact.member_name)
-
-        row = QHBoxLayout(self)
-        row.setContentsMargins(12, 8, 14, 8)
-        row.setSpacing(12)
-
-        row.addWidget(Avatar(conversation.display_name, size=48), 0, Qt.AlignmentFlag.AlignVCenter)
-
-        center = QVBoxLayout()
-        center.setSpacing(3)
-        center.setContentsMargins(0, 0, 0, 0)
-
-        top = QHBoxLayout()
-        top.setContentsMargins(0, 0, 0, 0)
-        name = _ElidedLabel(conversation.display_name)
-        name.setObjectName("convName")
-        top.addWidget(name, 1)
-        time = QLabel(self._fmt_time(conversation))
-        time.setObjectName("convTime")
-        top.addWidget(time, 0, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
-        center.addLayout(top)
-
-        identity_text = conversation.contact.secondary_identity if self._has_member_name else ""
-        if identity_text:
-            identity = _ElidedLabel(identity_text)
-            identity.setObjectName("convIdentity")
-            identity.setMaximumHeight(16)
-            center.addWidget(identity)
-
-        bottom = QHBoxLayout()
-        bottom.setContentsMargins(0, 0, 0, 0)
-        bottom.setSpacing(8)
-        snippet = _ElidedLabel(self._snippet(conversation))
-        snippet.setObjectName("convSnippet")
-        snippet.setMaximumHeight(18)
-        bottom.addWidget(snippet, 1)
-
-        if conversation.unread_count > 0:
-            unread = QLabel(str(conversation.unread_count))
-            unread.setObjectName("convUnread")
-            unread.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            bottom.addWidget(unread, 0, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-
-        center.addLayout(bottom)
-        row.addLayout(center, 1)
-
-    @property
-    def item_height(self) -> int:
-        return 88 if self._has_member_name else 72
-
-    def set_selected(self, selected: bool) -> None:
-        self.setProperty("selected", selected)
-        self.style().unpolish(self)
-        self.style().polish(self)
-        for label in self.findChildren(QLabel):
-            label.style().unpolish(label)
-            label.style().polish(label)
-            label.update()
-        self.update()
-
-    @staticmethod
-    def _snippet(conversation: ChatConversation) -> str:
-        lm = conversation.last_message
-        if not lm:
-            return ""
-        prefix = "" if lm.is_inbound else "Tu: "
-        body = snippet_for_message(lm)
-        return f"{prefix}{body}"
-
-    @staticmethod
-    def _fmt_time(conversation: ChatConversation) -> str:
-        ts = conversation.last_activity
-        if not ts:
-            return ""
-        try:
-            return ts.strftime("%d/%m %H:%M")
-        except Exception:  # noqa: BLE001
-            return ""
-
-
 class ConversationListWidget(QWidget):
     conversation_selected = Signal(int)
     search_changed = Signal(str)
+    load_more_requested = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -296,9 +164,17 @@ class ConversationListWidget(QWidget):
         filter_layout.addStretch()
         layout.addWidget(filters)
 
-        self.list_widget = QListWidget()
-        self.list_widget.setVerticalScrollMode(QListWidget.ScrollMode.ScrollPerPixel)
-        layout.addWidget(self.list_widget, 1)
+        self._model = ConversationListModel(self)
+        self.list_view = QListView()
+        self.list_view.setModel(self._model)
+        self.list_view.setItemDelegate(ConversationItemDelegate(self.list_view))
+        self.list_view.setVerticalScrollMode(QListView.ScrollMode.ScrollPerPixel)
+        self.list_view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.list_view.setSelectionMode(QListView.SelectionMode.SingleSelection)
+        self.list_view.setEditTriggers(QListView.EditTrigger.NoEditTriggers)
+        self.list_view.setUniformItemSizes(False)
+        self.list_view.setMouseTracking(True)
+        layout.addWidget(self.list_view, 1)
 
         self._search_timer = QTimer(self)
         self._search_timer.setSingleShot(True)
@@ -306,44 +182,74 @@ class ConversationListWidget(QWidget):
         self._search_timer.timeout.connect(self._emit_search)
 
         self.search_input.textChanged.connect(self._on_search_text)
-        self.list_widget.itemClicked.connect(self._on_item_clicked)
-        self.list_widget.itemSelectionChanged.connect(self._refresh_item_selection)
+        self.list_view.clicked.connect(self._on_item_clicked)
+        self.list_view.verticalScrollBar().valueChanged.connect(self._on_scrolled)
 
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
     def current_search(self) -> str:
         return self._search_text
 
-    def set_conversations(self, conversations: List[ChatConversation]) -> None:
+    def reset_conversations(self, conversations: List[ChatConversation]) -> None:
+        """Replace the whole list (first page / new search), preserving selection."""
         selected_id = self.selected_conversation_id()
-        self.list_widget.clear()
-        for conv in conversations:
-            item = QListWidgetItem(self.list_widget)
-            item.setData(Qt.ItemDataRole.UserRole, conv.id)
-            widget = _ConversationItem(conv)
-            item.setSizeHint(QSize(0, widget.item_height))
-            self.list_widget.addItem(item)
-            self.list_widget.setItemWidget(item, widget)
-            if conv.id == selected_id:
-                item.setSelected(True)
-                self.list_widget.setCurrentItem(item)
-        self._refresh_item_selection()
+        self._model.reset(conversations)
+        if selected_id is not None:
+            self._select_conversation(selected_id)
 
-    def selected_conversation_id(self):
-        item = self.list_widget.currentItem()
-        if item is not None:
-            return item.data(Qt.ItemDataRole.UserRole)
+    # Backwards-compatible alias.
+    def set_conversations(self, conversations: List[ChatConversation]) -> None:
+        self.reset_conversations(conversations)
+
+    def append_conversations(self, conversations: List[ChatConversation]) -> None:
+        self._model.append(conversations)
+
+    def upsert_conversation(self, conversation: ChatConversation) -> None:
+        selected_id = self.selected_conversation_id()
+        self._model.upsert(conversation, promote=True)
+        if selected_id is not None:
+            self._select_conversation(selected_id)
+
+    def apply_message(self, message: ChatMessage) -> bool:
+        selected_id = self.selected_conversation_id()
+        moved = self._model.apply_message(message)
+        if moved and selected_id is not None:
+            self._select_conversation(selected_id)
+        return moved
+
+    def get_conversation(self, conversation_id: int) -> Optional[ChatConversation]:
+        return self._model.get(conversation_id)
+
+    def selected_conversation_id(self) -> Optional[int]:
+        index = self.list_view.currentIndex()
+        if index.isValid():
+            conv = index.data(CONVERSATION_ROLE)
+            if conv is not None:
+                return conv.id
         return None
 
-    def _on_item_clicked(self, item: QListWidgetItem) -> None:
-        conv_id = item.data(Qt.ItemDataRole.UserRole)
-        if conv_id is not None:
-            self.conversation_selected.emit(int(conv_id))
+    # ------------------------------------------------------------------
+    # Internal
+    # ------------------------------------------------------------------
+    def _select_conversation(self, conversation_id: int) -> None:
+        row = self._model.index_of(conversation_id)
+        if row is not None:
+            self.list_view.setCurrentIndex(self._model.index(row))
 
-    def _refresh_item_selection(self) -> None:
-        for row in range(self.list_widget.count()):
-            item = self.list_widget.item(row)
-            widget = self.list_widget.itemWidget(item)
-            if hasattr(widget, "set_selected"):
-                widget.set_selected(item.isSelected())
+    def _on_item_clicked(self, index: QModelIndex) -> None:
+        if not index.isValid():
+            return
+        conv = index.data(CONVERSATION_ROLE)
+        if conv is not None:
+            self.conversation_selected.emit(int(conv.id))
+
+    def _on_scrolled(self, value: int) -> None:
+        bar = self.list_view.verticalScrollBar()
+        if bar.maximum() <= 0:
+            return
+        if value >= bar.maximum() - _LOAD_MORE_THRESHOLD:
+            self.load_more_requested.emit()
 
     def _on_search_text(self, text: str) -> None:
         self._search_text = text
