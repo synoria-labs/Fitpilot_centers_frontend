@@ -1,254 +1,100 @@
+"""GraphQL adapter for the Dashboard tab.
+
+Single ``get_dashboard_metrics`` method that fetches all 6 KPIs + the 4 chart
+series in one round trip. Caches by (start, end) for 60 s via ``CacheService``.
+
+The previous version of this file held 8 GraphQL queries (GetDashboardMetrics,
+GetRevenueChart, GetOccupancyChart, etc.) that referenced operations the
+backend never implemented; that dead code is replaced.
 """
-Servicio para métricas y dashboard.
-"""
-from typing import Dict, Any, List, Optional
-from datetime import datetime, timedelta
+from typing import Any, Dict, Optional
+
 from ..core.logging import get_logger
+from ..graphql.client import GraphQLClient
+from .cache_service import CacheService
 
 logger = get_logger(__name__)
 
+
+_DASHBOARD_METRICS_TTL = 60  # seconds
+
+
+def _none_token(value: Any) -> str:
+    return "-" if value in (None, "") else str(value)
+
+
 class DashboardService:
-    """Servicio para obtener métricas del dashboard."""
-    
-    def __init__(self, graphql_client):
+    def __init__(
+        self,
+        graphql_client: GraphQLClient,
+        cache_service: Optional[CacheService] = None,
+    ):
         self.client = graphql_client
-    
-    async def get_general_metrics(self) -> Dict[str, Any]:
-        """Obtiene métricas generales del negocio."""
-        try:
-            query = """
-                query GetDashboardMetrics {
-                    dashboardMetrics {
-                        total_socios
-                        socios_activos
-                        ingresos_mes_actual
-                        ingresos_mes_anterior
-                        reservas_hoy
-                        reservas_semana
-                        ocupacion_promedio
-                        nuevos_socios_mes
-                        tasa_renovacion
-                        clases_mas_populares {
-                            clase
-                            promedio_asistencia
-                        }
-                    }
-                }
-            """
-            
-            result = await self.client.execute(query)
-            
-            if result and 'dashboardMetrics' in result:
-                return result['dashboardMetrics']
-            
-            return {}
-            
-        except Exception as e:
-            logger.error(f"Error getting dashboard metrics: {e}")
-            return {}
-    
-    async def get_revenue_chart(
+        self._cache = cache_service or CacheService()
+
+    @staticmethod
+    def _metrics_cache_key(
+        *, start_date: Optional[str], end_date: Optional[str]
+    ) -> str:
+        return (
+            "dashboard_metrics:"
+            f"start={_none_token(start_date)}:end={_none_token(end_date)}"
+        )
+
+    def invalidate(self) -> None:
+        """Drop every cached dashboard metrics result.
+
+        Public hook for upstream services that mutate domain data the dashboard
+        summarizes (payments, subscriptions, members). Wiring is left to the
+        consumers.
+        """
+        self._cache.invalidate_pattern("dashboard_metrics:")
+
+    async def get_dashboard_metrics(
         self,
-        period: str = "monthly",
-        months: int = 6
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Obtiene datos para gráfica de ingresos."""
-        try:
-            query = """
-                query GetRevenueChart($period: String!, $months: Int!) {
-                    revenueChart(period: $period, months: $months) {
-                        labels
-                        datasets {
-                            label
-                            data
-                            backgroundColor
-                            borderColor
-                        }
-                    }
-                }
-            """
-            
-            variables = {
-                'period': period,
-                'months': months
+        """Fetch all dashboard KPIs + chart series.
+
+        Returns the inner ``dashboardMetrics`` object as a dict. Cached
+        in-memory for 60 s.
+        """
+        cache_key = self._metrics_cache_key(start_date=start_date, end_date=end_date)
+        cached = self._cache.get(cache_key, max_age=_DASHBOARD_METRICS_TTL)
+        if cached is not None:
+            return cached
+
+        query = """
+        query GetDashboardMetrics(
+            $startDate: DateTime,
+            $endDate: DateTime
+        ) {
+            dashboardMetrics(
+                startDate: $startDate,
+                endDate: $endDate
+            ) {
+                totalMembers
+                activeMembers
+                newMembers
+                periodReservations
+                periodRevenue
+                avgOccupancy
+                totalMembersPrev
+                activeMembersPrev
+                newMembersPrev
+                reservationsPrev
+                revenuePrev
+                avgOccupancyPrev
+                revenueByDay { day count total }
+                occupancyByClass { className capacity reserved occupancyPct }
+                newMembersByDay { day count total }
+                membershipDistribution { planId planName count total }
             }
-            
-            result = await self.client.execute(query, variables)
-            
-            if result and 'revenueChart' in result:
-                return result['revenueChart']
-            
-            return {'labels': [], 'datasets': []}
-            
-        except Exception as e:
-            logger.error(f"Error getting revenue chart: {e}")
-            return {'labels': [], 'datasets': []}
-    
-    async def get_occupancy_chart(
-        self,
-        days: int = 7
-    ) -> Dict[str, Any]:
-        """Obtiene datos de ocupación por clase."""
-        try:
-            query = """
-                query GetOccupancyChart($days: Int!) {
-                    occupancyChart(days: $days) {
-                        labels
-                        datasets {
-                            label
-                            data
-                            backgroundColor
-                            borderColor
-                        }
-                    }
-                }
-            """
-            
-            variables = {'days': days}
-            result = await self.client.execute(query, variables)
-            
-            if result and 'occupancyChart' in result:
-                return result['occupancyChart']
-            
-            return {'labels': [], 'datasets': []}
-            
-        except Exception as e:
-            logger.error(f"Error getting occupancy chart: {e}")
-            return {'labels': [], 'datasets': []}
-    
-    async def get_members_distribution(self) -> Dict[str, Any]:
-        """Obtiene distribución de membresías."""
-        try:
-            query = """
-                query GetMembersDistribution {
-                    membersDistribution {
-                        labels
-                        data
-                        colors
-                    }
-                }
-            """
-            
-            result = await self.client.execute(query)
-            
-            if result and 'membersDistribution' in result:
-                return result['membersDistribution']
-            
-            return {'labels': [], 'data': [], 'colors': []}
-            
-        except Exception as e:
-            logger.error(f"Error getting members distribution: {e}")
-            return {'labels': [], 'data': [], 'colors': []}
-    
-    async def get_attendance_trends(
-        self,
-        weeks: int = 4
-    ) -> Dict[str, Any]:
-        """Obtiene tendencias de asistencia."""
-        try:
-            query = """
-                query GetAttendanceTrends($weeks: Int!) {
-                    attendanceTrends(weeks: $weeks) {
-                        week_labels
-                        by_day {
-                            day
-                            attendances
-                        }
-                        by_hour {
-                            hour
-                            average_attendance
-                        }
-                    }
-                }
-            """
-            
-            variables = {'weeks': weeks}
-            result = await self.client.execute(query, variables)
-            
-            if result and 'attendanceTrends' in result:
-                return result['attendanceTrends']
-            
-            return {}
-            
-        except Exception as e:
-            logger.error(f"Error getting attendance trends: {e}")
-            return {}
-    
-    async def get_payment_methods_summary(self) -> List[Dict[str, Any]]:
-        """Obtiene resumen de métodos de pago."""
-        try:
-            query = """
-                query GetPaymentMethodsSummary {
-                    paymentMethodsSummary {
-                        method
-                        count
-                        total_amount
-                        percentage
-                    }
-                }
-            """
-            
-            result = await self.client.execute(query)
-            
-            if result and 'paymentMethodsSummary' in result:
-                return result['paymentMethodsSummary']
-            
-            return []
-            
-        except Exception as e:
-            logger.error(f"Error getting payment methods summary: {e}")
-            return []
-    
-    async def get_alerts(self) -> List[Dict[str, Any]]:
-        """Obtiene alertas y notificaciones importantes."""
-        try:
-            query = """
-                query GetAlerts {
-                    alerts {
-                        id
-                        type
-                        severity
-                        title
-                        message
-                        created_at
-                        action_required
-                    }
-                }
-            """
-            
-            result = await self.client.execute(query)
-            
-            if result and 'alerts' in result:
-                return result['alerts']
-            
-            return []
-            
-        except Exception as e:
-            logger.error(f"Error getting alerts: {e}")
-            return []
-    
-    async def get_quick_stats(self) -> Dict[str, Any]:
-        """Obtiene estadísticas rápidas para el header."""
-        try:
-            query = """
-                query GetQuickStats {
-                    quickStats {
-                        active_now
-                        next_class_time
-                        next_class_occupancy
-                        pending_payments
-                        expiring_members
-                    }
-                }
-            """
-            
-            result = await self.client.execute(query)
-            
-            if result and 'quickStats' in result:
-                return result['quickStats']
-            
-            return {}
-            
-        except Exception as e:
-            logger.error(f"Error getting quick stats: {e}")
-            return {}
+        }
+        """
+        variables = {"startDate": start_date, "endDate": end_date}
+        result = await self.client.execute(query, variables)
+        metrics = (result or {}).get("dashboardMetrics") or {}
+        self._cache.set(cache_key, metrics, persist=False)
+        return metrics
