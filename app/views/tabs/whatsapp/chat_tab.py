@@ -7,6 +7,7 @@ from typing import Dict, Optional
 
 import qtawesome as qta
 from PySide6.QtCore import Qt, QSize
+from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QSplitter, QLabel, QStackedWidget, QFrame,
     QToolButton,
@@ -24,30 +25,35 @@ from .composer_widget import ComposerWidget
 
 logger = get_logger(__name__)
 
-_STYLE = f"""
+
+def _style() -> str:
+    return f"""
 #chatTab {{ background-color: palette(window); }}
 #chatTab QSplitter::handle {{ background-color: palette(mid); width: 1px; }}
-#chatHeader {{ background-color: {theme.BG_PANEL}; }}
-QLabel#headerName {{ color: {theme.TEXT_PRIMARY}; font-weight: bold; font-size: 14px; background: transparent; }}
-QLabel#headerSub {{ color: {theme.TEXT_SECONDARY}; font-size: 11px; background: transparent; }}
+#chatHeader {{
+    background-color: palette(alternate-base);
+    border-bottom: 1px solid palette(mid);
+}}
+QLabel#headerName {{ color: palette(text); font-weight: bold; font-size: 14px; background: transparent; }}
+QLabel#headerSub {{ color: {theme.secondary_text_hex(background_role=QPalette.ColorRole.AlternateBase)}; font-size: 11px; background: transparent; }}
 #chatActionButton {{
     background: transparent;
     border: none;
     border-radius: 17px;
     padding: 7px;
 }}
-#chatActionButton:hover {{ background-color: {theme.ITEM_HOVER}; }}
+#chatActionButton:hover {{ background-color: palette(base); }}
 #emptyState {{ background-color: palette(window); }}
 QLabel#emptyIcon {{ font-size: 64px; background: transparent; }}
-QLabel#emptyTitle {{ color: {theme.TEXT_PRIMARY}; font-size: 20px; background: transparent; }}
-QLabel#emptySub {{ color: {theme.TEXT_SECONDARY}; font-size: 13px; background: transparent; }}
+QLabel#emptyTitle {{ color: palette(text); font-size: 20px; background: transparent; }}
+QLabel#emptySub {{ color: {theme.secondary_text_hex()}; font-size: 13px; background: transparent; }}
 """
 
 
 def _make_header_action(icon_name: str, tooltip: str) -> QToolButton:
     button = QToolButton()
     button.setObjectName("chatActionButton")
-    button.setIcon(qta.icon(icon_name, color=theme.TEXT_PRIMARY))
+    button.setIcon(qta.icon(icon_name, color=theme.palette_hex()))
     button.setIconSize(QSize(18, 18))
     button.setFixedSize(36, 36)
     button.setToolTip(tooltip)
@@ -63,7 +69,7 @@ class ChatTab(QWidget):
         super().__init__()
         logger.info("Initializing ChatTab")
         self.setObjectName("chatTab")
-        self.setStyleSheet(_STYLE)
+        self.setStyleSheet(_style())
 
         chat_service = container.get("whatsapp_chat_service")
         self.controller = WhatsAppChatController(chat_service, self)
@@ -190,6 +196,7 @@ class ChatTab(QWidget):
 
     def _on_conversation_selected(self, conversation_id: int) -> None:
         self._current_conversation_id = conversation_id
+        self.thread.clear_new_message_indicator()
         conv = self._conversations.get(conversation_id)
         if conv:
             self._update_header(conv)
@@ -199,8 +206,8 @@ class ChatTab(QWidget):
     def _update_header(self, conv: ChatConversation) -> None:
         self._header_avatar.set_name(conv.display_name, size=40)
         self._header_name.setText(conv.display_name)
-        phone = conv.contact.phone_number or conv.contact.wa_id
-        self._header_sub.setText(phone)
+        identity = conv.contact.secondary_identity or conv.contact.phone_number or conv.contact.wa_id
+        self._header_sub.setText(identity)
 
     def _on_search(self, query: str) -> None:
         self.controller.load_conversations(search=query or None)
@@ -212,7 +219,11 @@ class ChatTab(QWidget):
 
     def _on_message_sent(self, message: ChatMessage) -> None:
         if message.conversation_id == self._current_conversation_id:
-            self.thread.append_message(message)
+            self.thread.append_message(
+                message,
+                force_scroll=True,
+                show_new_message_button=False,
+            )
         self._refresh_conversations()
 
     def _on_send_failed(self, error: str) -> None:
@@ -220,7 +231,11 @@ class ChatTab(QWidget):
 
     def _on_new_message(self, message: ChatMessage) -> None:
         if message.conversation_id == self._current_conversation_id:
-            self.thread.append_message(message)
+            self.thread.append_message(
+                message,
+                force_scroll=False,
+                show_new_message_button=True,
+            )
         self._refresh_conversations()
 
     def _on_error(self, error: str) -> None:

@@ -1,347 +1,410 @@
 """
-Vista de la pestaña WhatsApp - Gestión de plantillas.
+Vista de la pestaña WhatsApp - Gestión de plantillas (Meta Cloud API).
+
+Administra las plantillas almacenadas en ``app.whatsapp_templates`` con sincronización
+bidireccional a Meta: crear/editar/eliminar llama a la Business Management API y refleja el
+estado de aprobación. El editor es simplificado (cuerpo con placeholders {{1}}, {{2}}... +
+valores de ejemplo + footer opcional); la app arma los ``components`` en el backend.
 """
+import re
+from typing import Any, Dict, List, Optional
+
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, 
-    QTableWidgetItem, QPushButton, QLabel, QTextEdit,
-    QLineEdit, QGroupBox, QSplitter, QListWidget,
-    QAbstractItemView, QHeaderView
+    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QTextEdit,
+    QLineEdit, QGroupBox, QSplitter, QListWidget, QListWidgetItem, QComboBox,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
-from ...core import get_logger
-from ...utils.dialog_helpers import show_confirmation
+
+from ...core import container, get_logger
+from ...controllers.whatsapp_controller import WhatsAppController
+from ...utils.dialog_helpers import show_confirmation, show_error, show_info
 
 logger = get_logger(__name__)
 
+_PLACEHOLDER_RE = re.compile(r"\{\{\s*(\d+)\s*\}\}")
+_CATEGORIES = ["UTILITY", "MARKETING", "AUTHENTICATION"]
+_STATUS_COLORS = {
+    "APPROVED": "#2ecc71",
+    "PENDING": "#f39c12",
+    "REJECTED": "#e74c3c",
+}
+
+
+def _parse_components(components: Optional[List[Any]]):
+    """Extrae (body_text, body_examples, footer_text) de un array de components Meta."""
+    body_text = ""
+    body_examples: List[str] = []
+    footer_text = ""
+    for comp in components or []:
+        if not isinstance(comp, dict):
+            continue
+        ctype = str(comp.get("type") or "").upper()
+        text = comp.get("text")
+        if ctype == "BODY" and isinstance(text, str):
+            body_text = text
+            example = comp.get("example")
+            if isinstance(example, dict):
+                rows = example.get("body_text")
+                if isinstance(rows, list) and rows and isinstance(rows[0], list):
+                    body_examples = [str(v) for v in rows[0]]
+        elif ctype == "FOOTER" and isinstance(text, str):
+            footer_text = text
+    return body_text, body_examples, footer_text
+
+
 class WhatsAppTab(QWidget):
     """Vista para gestión de plantillas de WhatsApp."""
-    
-    # Señales
+
+    # Señales (compatibilidad / observabilidad externa)
     template_selected = Signal(int)
-    create_template_requested = Signal(dict)
-    update_template_requested = Signal(int, dict)
-    delete_template_requested = Signal(int)
-    send_message_requested = Signal(str, str)  # phone, message
-    
+
     def __init__(self):
         super().__init__()
-        self.current_template = None
+        self.current: Optional[Dict[str, Any]] = None  # plantilla seleccionada (None = nueva)
+        self._templates: List[Dict[str, Any]] = []
+
+        try:
+            service = container.get("whatsapp_service")
+        except Exception as exc:  # pragma: no cover - defensivo
+            logger.error("No se pudo obtener whatsapp_service del contenedor: %s", exc)
+            raise
+        self.controller = WhatsAppController(service, self)
+
         self.setup_ui()
-        self.load_templates()
-    
+        self._connect_controller()
+        self.controller.load_templates()
+
+    # ------------------------------------------------------------------
+    # UI
+    # ------------------------------------------------------------------
     def setup_ui(self):
-        """Configura la interfaz de usuario."""
         layout = QVBoxLayout(self)
-        
+
         # Header
         header_layout = QHBoxLayout()
-        
         title = QLabel("Gestión de Plantillas WhatsApp")
-        title_font = QFont("Arial", 14, QFont.Weight.Bold)
-        title.setFont(title_font)
+        title.setFont(QFont("Arial", 14, QFont.Weight.Bold))
         header_layout.addWidget(title)
-        
         header_layout.addStretch()
-        
-        # Botones de acción
+
+        self.sync_btn = QPushButton("🔄 Sincronizar")
+        self.sync_btn.clicked.connect(self.on_sync)
+        header_layout.addWidget(self.sync_btn)
+
         self.new_btn = QPushButton("+ Nueva Plantilla")
         self.new_btn.clicked.connect(self.on_new_template)
         header_layout.addWidget(self.new_btn)
-        
+
         self.save_btn = QPushButton("💾 Guardar")
         self.save_btn.setEnabled(False)
         self.save_btn.clicked.connect(self.on_save_template)
         header_layout.addWidget(self.save_btn)
-        
+
         self.delete_btn = QPushButton("🗑️ Eliminar")
         self.delete_btn.setEnabled(False)
         self.delete_btn.clicked.connect(self.on_delete_template)
         header_layout.addWidget(self.delete_btn)
-        
+
         layout.addLayout(header_layout)
-        
+
         # Splitter principal
         splitter = QSplitter(Qt.Orientation.Horizontal)
-        
-        # Panel izquierdo - Lista de plantillas
+
+        # Panel izquierdo - Lista
         left_panel = QGroupBox("Plantillas")
         left_layout = QVBoxLayout(left_panel)
-        
         self.templates_list = QListWidget()
         self.templates_list.itemClicked.connect(self.on_template_selected)
         left_layout.addWidget(self.templates_list)
-        
         splitter.addWidget(left_panel)
-        
-        # Panel derecho - Editor de plantilla
+
+        # Panel derecho - Editor
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
-        
+
         # Información de plantilla
         info_group = QGroupBox("Información de Plantilla")
         info_layout = QVBoxLayout(info_group)
-        
-        # Nombre
+
         name_layout = QHBoxLayout()
         name_layout.addWidget(QLabel("Nombre:"))
         self.name_input = QLineEdit()
-        self.name_input.setPlaceholderText("Ej: Bienvenida_Nuevo_Socio")
-        self.name_input.textChanged.connect(self.on_template_changed)
+        self.name_input.setPlaceholderText("Ej: bienvenida_nuevo_socio")
+        self.name_input.textChanged.connect(self.update_preview)
         name_layout.addWidget(self.name_input)
         info_layout.addLayout(name_layout)
-        
-        # Estado
-        status_layout = QHBoxLayout()
-        status_layout.addWidget(QLabel("Estado:"))
+
+        meta_layout = QHBoxLayout()
+        meta_layout.addWidget(QLabel("Idioma:"))
+        self.language_input = QLineEdit("es_MX")
+        self.language_input.setMaximumWidth(100)
+        meta_layout.addWidget(self.language_input)
+        meta_layout.addWidget(QLabel("Categoría:"))
+        self.category_combo = QComboBox()
+        self.category_combo.addItems(_CATEGORIES)
+        meta_layout.addWidget(self.category_combo)
+        meta_layout.addWidget(QLabel("Estado:"))
         self.status_label = QLabel("No guardado")
         self.status_label.setStyleSheet("color: orange;")
-        status_layout.addWidget(self.status_label)
-        status_layout.addStretch()
-        info_layout.addLayout(status_layout)
-        
+        meta_layout.addWidget(self.status_label)
+        meta_layout.addStretch()
+        info_layout.addLayout(meta_layout)
+
         right_layout.addWidget(info_group)
-        
-        # Editor de contenido
+
+        # Contenido
         content_group = QGroupBox("Contenido de la Plantilla")
         content_layout = QVBoxLayout(content_group)
-        
-        # Variables disponibles
-        vars_label = QLabel("Variables disponibles: {{nombre}}, {{telefono}}, {{membresia}}, {{fecha}}")
+
+        vars_label = QLabel(
+            "Usa marcadores posicionales: {{1}}, {{2}}, {{3}}... (deben coincidir con la "
+            "plantilla aprobada en Meta)"
+        )
         vars_label.setStyleSheet("color: #3498db; font-size: 11px;")
+        vars_label.setWordWrap(True)
         content_layout.addWidget(vars_label)
-        
-        # Editor de texto
-        self.content_editor = QTextEdit()
-        self.content_editor.setPlaceholderText(
-            "Hola {{nombre}}! 👋\n\n"
-            "Bienvenido a FitPilot. Tu membresía {{membresia}} está activa.\n\n"
+
+        content_layout.addWidget(QLabel("Cuerpo (BODY):"))
+        self.body_editor = QTextEdit()
+        self.body_editor.setPlaceholderText(
+            "Hola {{1}}! 👋\n\nBienvenido a FitPilot. Tu membresía {{2}} está activa.\n\n"
             "¡Nos vemos en el gym! 💪"
         )
-        self.content_editor.textChanged.connect(self.on_template_changed)
-        content_layout.addWidget(self.content_editor)
-        
-        # Vista previa
+        self.body_editor.textChanged.connect(self.update_preview)
+        content_layout.addWidget(self.body_editor)
+
+        examples_layout = QHBoxLayout()
+        examples_layout.addWidget(QLabel("Valores de ejemplo:"))
+        self.examples_input = QLineEdit()
+        self.examples_input.setPlaceholderText("Para {{1}}, {{2}}... separados por |  →  Juan | Mensual Libre")
+        self.examples_input.textChanged.connect(self.update_preview)
+        examples_layout.addWidget(self.examples_input)
+        content_layout.addLayout(examples_layout)
+
+        footer_layout = QHBoxLayout()
+        footer_layout.addWidget(QLabel("Footer (opcional):"))
+        self.footer_input = QLineEdit()
+        self.footer_input.setPlaceholderText("Ej: FitPilot")
+        self.footer_input.textChanged.connect(self.update_preview)
+        footer_layout.addWidget(self.footer_input)
+        content_layout.addLayout(footer_layout)
+
         preview_label = QLabel("Vista Previa:")
         preview_label.setStyleSheet("font-weight: bold;")
         content_layout.addWidget(preview_label)
-        
         self.preview_text = QTextEdit()
         self.preview_text.setReadOnly(True)
-        self.preview_text.setMaximumHeight(100)
+        self.preview_text.setMaximumHeight(120)
         self.preview_text.setStyleSheet("background-color: #f8f9fa; border: 1px solid #dee2e6;")
         content_layout.addWidget(self.preview_text)
-        
+
         right_layout.addWidget(content_group)
-        
-        # Sección de prueba
-        test_group = QGroupBox("Enviar Prueba")
+
+        # Enviar prueba
+        test_group = QGroupBox("Enviar Prueba (envía la plantilla aprobada a un número)")
         test_layout = QHBoxLayout(test_group)
-        
         test_layout.addWidget(QLabel("Teléfono:"))
         self.test_phone = QLineEdit()
         self.test_phone.setPlaceholderText("+52 XXX XXX XXXX")
         test_layout.addWidget(self.test_phone)
-        
         self.send_test_btn = QPushButton("📤 Enviar Prueba")
+        self.send_test_btn.setEnabled(False)
         self.send_test_btn.clicked.connect(self.on_send_test)
         test_layout.addWidget(self.send_test_btn)
-        
         right_layout.addWidget(test_group)
-        
+
         splitter.addWidget(right_panel)
-        
-        # Configurar proporciones del splitter
         splitter.setSizes([300, 700])
-        
         layout.addWidget(splitter)
-    
-    def load_templates(self):
-        """Carga las plantillas disponibles."""
-        # Plantillas mock
-        templates = [
-            "Bienvenida_Nuevo_Socio",
-            "Recordatorio_Pago",
-            "Confirmacion_Reserva",
-            "Cancelacion_Reserva",
-            "Promocion_Mensual",
-            "Membresia_Por_Vencer",
-            "Felicitacion_Cumpleanos"
-        ]
-        
+
+    def _connect_controller(self):
+        self.controller.templates_loaded.connect(self._on_templates_loaded)
+        self.controller.synced.connect(self._on_synced)
+        self.controller.template_saved.connect(self._on_template_saved)
+        self.controller.template_deleted.connect(self._on_template_deleted)
+        self.controller.test_sent.connect(self._on_test_sent)
+        self.controller.error_occurred.connect(self._on_error)
+        self.controller.loading_changed.connect(self._on_loading_changed)
+
+    # ------------------------------------------------------------------
+    # Helpers de estado de plantilla
+    # ------------------------------------------------------------------
+    def _example_values(self) -> List[str]:
+        raw = self.examples_input.text().strip()
+        if not raw:
+            return []
+        return [part.strip() for part in raw.split("|")]
+
+    def _set_status(self, status: Optional[str]):
+        text = status or "No guardado"
+        color = _STATUS_COLORS.get((status or "").upper(), "orange")
+        self.status_label.setText(text)
+        self.status_label.setStyleSheet(f"color: {color};")
+
+    def _set_identity_editable(self, editable: bool):
+        """Nombre/idioma/categoría son inmutables en Meta tras crear."""
+        self.name_input.setReadOnly(not editable)
+        self.language_input.setReadOnly(not editable)
+        self.category_combo.setEnabled(editable)
+
+    def _populate_list(self, keep_id: Optional[int] = None):
         self.templates_list.clear()
-        for template in templates:
-            self.templates_list.addItem(template)
-        
-        logger.info(f"Loaded {len(templates)} templates")
-    
-    def on_template_selected(self, item):
-        """Maneja la selección de una plantilla."""
-        template_name = item.text()
-        
-        # Cargar contenido mock
-        self.name_input.setText(template_name)
-        
-        # Contenido de ejemplo según plantilla
-        contents = {
-            "Bienvenida_Nuevo_Socio": (
-                "¡Hola {{nombre}}! 🎉\n\n"
-                "¡Bienvenido a FitPilot! 💪\n\n"
-                "Tu membresía {{membresia}} está activa desde hoy.\n"
-                "Recuerda que puedes reservar tus clases desde nuestra app.\n\n"
-                "¿Necesitas ayuda? Escríbenos por aquí.\n\n"
-                "¡Nos vemos en el gym! 🏋️‍♀️"
-            ),
-            "Recordatorio_Pago": (
-                "Hola {{nombre}} 👋\n\n"
-                "Te recordamos que tu membresía vence el {{fecha}}.\n"
-                "Para continuar disfrutando de nuestros servicios, "
-                "puedes renovar en recepción o por este medio.\n\n"
-                "¡Gracias por ser parte de FitPilot! 💙"
-            ),
-            "Confirmacion_Reserva": (
-                "✅ Reserva Confirmada\n\n"
-                "Hola {{nombre}}, tu reserva está lista:\n"
-                "📅 Fecha: {{fecha}}\n"
-                "⏰ Hora: {{hora}}\n"
-                "🚴 Bicicleta: {{bicicleta}}\n\n"
-                "¡Te esperamos!"
-            )
-        }
-        
-        content = contents.get(
-            template_name,
-            f"Plantilla: {template_name}\n\nContenido de ejemplo..."
-        )
-        
-        self.content_editor.setPlainText(content)
-        self.status_label.setText("Guardado")
-        self.status_label.setStyleSheet("color: green;")
-        
-        # Habilitar botones
+        for tpl in self._templates:
+            item = QListWidgetItem(tpl.get("template_name") or f"#{tpl.get('id')}")
+            item.setData(Qt.ItemDataRole.UserRole, tpl.get("id"))
+            status = (tpl.get("template_status") or "").upper()
+            if status and status != "APPROVED":
+                item.setText(f"{item.text()}  ({status})")
+            self.templates_list.addItem(item)
+            if keep_id is not None and tpl.get("id") == keep_id:
+                self.templates_list.setCurrentItem(item)
+
+    # ------------------------------------------------------------------
+    # Acciones de usuario
+    # ------------------------------------------------------------------
+    def on_template_selected(self, item: QListWidgetItem):
+        template_id = item.data(Qt.ItemDataRole.UserRole)
+        tpl = next((t for t in self._templates if t.get("id") == template_id), None)
+        if not tpl:
+            return
+        self.current = tpl
+        body, examples, footer = _parse_components(tpl.get("components"))
+
+        self.name_input.setText(tpl.get("template_name") or "")
+        self.language_input.setText(tpl.get("template_language") or "")
+        category = (tpl.get("category") or "").upper()
+        if category in _CATEGORIES:
+            self.category_combo.setCurrentText(category)
+        self.body_editor.setPlainText(body)
+        self.examples_input.setText(" | ".join(examples))
+        self.footer_input.setText(footer)
+        self._set_status(tpl.get("template_status"))
+        self._set_identity_editable(False)
+
+        approved = (tpl.get("template_status") or "").upper() == "APPROVED"
         self.save_btn.setEnabled(True)
         self.delete_btn.setEnabled(True)
-        
-        # Actualizar preview
+        self.send_test_btn.setEnabled(approved)
         self.update_preview()
-        
-        # Guardar referencia
-        self.current_template = template_name
-        
-        # Emitir señal
         self.template_selected.emit(self.templates_list.currentRow())
-    
-    def on_template_changed(self):
-        """Maneja cambios en la plantilla."""
-        if self.current_template:
-            self.status_label.setText("Sin guardar")
-            self.status_label.setStyleSheet("color: orange;")
-            self.save_btn.setEnabled(True)
-        
-        self.update_preview()
-    
-    def update_preview(self):
-        """Actualiza la vista previa con valores de ejemplo."""
-        content = self.content_editor.toPlainText()
-        
-        # Reemplazar variables con valores de ejemplo
-        preview = content.replace("{{nombre}}", "Juan Pérez")
-        preview = preview.replace("{{telefono}}", "+52 123 456 7890")
-        preview = preview.replace("{{membresia}}", "Mensual Libre")
-        preview = preview.replace("{{fecha}}", "15/01/2025")
-        preview = preview.replace("{{hora}}", "07:00 AM")
-        preview = preview.replace("{{bicicleta}}", "#5")
-        
-        self.preview_text.setPlainText(preview)
-    
+
     def on_new_template(self):
-        """Crea una nueva plantilla."""
+        self.current = None
         self.templates_list.clearSelection()
         self.name_input.clear()
-        self.content_editor.clear()
+        self.language_input.setText("es_MX")
+        self.category_combo.setCurrentText("UTILITY")
+        self.body_editor.clear()
+        self.examples_input.clear()
+        self.footer_input.clear()
         self.preview_text.clear()
-        self.status_label.setText("Nueva plantilla")
-        self.status_label.setStyleSheet("color: blue;")
-        
+        self._set_status("Nueva plantilla")
+        self._set_identity_editable(True)
         self.name_input.setFocus()
         self.save_btn.setEnabled(True)
         self.delete_btn.setEnabled(False)
-        
-        self.current_template = None
-    
+        self.send_test_btn.setEnabled(False)
+
     def on_save_template(self):
-        """Guarda la plantilla actual."""
-        name = self.name_input.text().strip()
-        content = self.content_editor.toPlainText().strip()
-        
-        if not name:
-            logger.warning("Template name is required")
+        body = self.body_editor.toPlainText().strip()
+        if not body:
+            show_error(self, "El cuerpo de la plantilla es obligatorio.")
             return
-        
-        if not content:
-            logger.warning("Template content is required")
-            return
-        
-        template_data = {
-            'name': name,
-            'content': content,
-            'status': 'active'
+
+        data = {
+            "body_text": body,
+            "body_examples": self._example_values(),
+            "footer_text": self.footer_input.text().strip() or None,
         }
-        
-        if self.current_template:
-            # Actualizar
-            self.update_template_requested.emit(
-                self.templates_list.currentRow(),
-                template_data
-            )
-            logger.info(f"Template updated: {name}")
+
+        if self.current is None:
+            name = self.name_input.text().strip()
+            if not name:
+                show_error(self, "El nombre es obligatorio.")
+                return
+            data.update({
+                "name": name,
+                "language": self.language_input.text().strip() or "es_MX",
+                "category": self.category_combo.currentText(),
+            })
+            self.controller.save_template(None, data)
         else:
-            # Crear nueva
-            self.create_template_requested.emit(template_data)
-            self.templates_list.addItem(name)
-            logger.info(f"Template created: {name}")
-        
-        self.status_label.setText("Guardado")
-        self.status_label.setStyleSheet("color: green;")
-        self.current_template = name
-    
+            self.controller.save_template(self.current.get("id"), data)
+
     def on_delete_template(self):
-        """Elimina la plantilla actual."""
-        if not self.current_template:
+        if not self.current:
             return
-        
+        name = self.current.get("template_name")
         if show_confirmation(
             self,
-            f"¿Está seguro de eliminar la plantilla '{self.current_template}'?",
+            f"¿Eliminar la plantilla '{name}' en Meta y localmente?",
             title="Confirmar Eliminación",
             ok_text="Sí",
             cancel_text="No",
         ):
-            row = self.templates_list.currentRow()
-            self.delete_template_requested.emit(row)
-            self.templates_list.takeItem(row)
-            
-            # Limpiar editor
-            self.name_input.clear()
-            self.content_editor.clear()
-            self.preview_text.clear()
-            self.save_btn.setEnabled(False)
-            self.delete_btn.setEnabled(False)
-            
-            logger.info(f"Template deleted: {self.current_template}")
-            self.current_template = None
-    
+            self.controller.delete_template(self.current.get("id"))
+
+    def on_sync(self):
+        self.controller.sync_templates()
+
     def on_send_test(self):
-        """Envía una prueba de la plantilla."""
+        if not self.current:
+            show_error(self, "Selecciona una plantilla aprobada para enviar.")
+            return
         phone = self.test_phone.text().strip()
         if not phone:
-            logger.warning("Phone number is required for test")
+            show_error(self, "Ingresa un número de teléfono.")
             return
-        
-        message = self.preview_text.toPlainText()
-        if not message:
-            logger.warning("No message to send")
-            return
-        
-        self.send_message_requested.emit(phone, message)
-        logger.info(f"Test message sent to {phone}")
+        self.controller.send_test(phone, self.current.get("id"), self._example_values())
+
+    def update_preview(self):
+        body = self.body_editor.toPlainText()
+        values = self._example_values()
+
+        def repl(match: "re.Match") -> str:
+            idx = int(match.group(1)) - 1
+            if 0 <= idx < len(values) and values[idx]:
+                return values[idx]
+            return match.group(0)
+
+        preview = _PLACEHOLDER_RE.sub(repl, body)
+        footer = self.footer_input.text().strip()
+        if footer:
+            preview = f"{preview}\n\n{footer}"
+        self.preview_text.setPlainText(preview)
+
+    # ------------------------------------------------------------------
+    # Callbacks del controller
+    # ------------------------------------------------------------------
+    def _on_templates_loaded(self, templates: List[Dict[str, Any]]):
+        self._templates = templates or []
+        keep = self.current.get("id") if self.current else None
+        self._populate_list(keep_id=keep)
+        logger.info("Plantillas cargadas: %d", len(self._templates))
+
+    def _on_synced(self, templates: List[Dict[str, Any]]):
+        self._templates = templates or []
+        self._populate_list()
+        show_info(self, f"Sincronización completa: {len(self._templates)} plantillas.")
+
+    def _on_template_saved(self, template: Optional[Dict[str, Any]], message: str):
+        show_info(self, f"{message}. Meta revisará la plantilla (estado PENDING hasta aprobación).")
+        self.current = template
+        self.controller.load_templates()
+
+    def _on_template_deleted(self, template_id: int):
+        show_info(self, "Plantilla eliminada.")
+        self.current = None
+        self.on_new_template()
+        self.controller.load_templates()
+
+    def _on_test_sent(self, message: str):
+        show_info(self, message)
+
+    def _on_error(self, message: str):
+        show_error(self, message)
+
+    def _on_loading_changed(self, loading: bool):
+        self.sync_btn.setEnabled(not loading)
+        self.save_btn.setEnabled(not loading and (self.current is not None or self.name_input.text().strip() != ""))

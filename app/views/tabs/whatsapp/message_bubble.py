@@ -1,10 +1,11 @@
 """A single chat message bubble (WhatsApp-style)."""
 import qtawesome as qta
 from PySide6.QtCore import Qt, QSize
-from PySide6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel, QFrame
+from PySide6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel, QFrame, QSizePolicy
 
 from ....models.chat import ChatMessage
 from . import theme
+from .message_formatter import display_text_for_message
 
 _STYLE = f"""
 #bubbleIn {{
@@ -35,19 +36,24 @@ class MessageBubble(QWidget):
 
     def _build(self, message: ChatMessage) -> None:
         outer = QHBoxLayout(self)
-        outer.setContentsMargins(10, 3, 10, 3)
+        outer.setContentsMargins(16, 4, 16, 4)
+        outer.setSpacing(0)
 
         bubble = QFrame()
         bubble.setObjectName("bubbleIn" if message.is_inbound else "bubbleOut")
-        bubble.setMaximumWidth(520)
+        bubble.setMaximumWidth(560)
+        bubble.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Preferred)
 
         v = QVBoxLayout(bubble)
-        v.setContentsMargins(10, 6, 10, 5)
-        v.setSpacing(2)
+        v.setContentsMargins(10, 7, 10, 6)
+        v.setSpacing(3)
 
         text_label = QLabel(self._render_text(message))
         text_label.setObjectName("bubbleText")
+        text_label.setTextFormat(Qt.TextFormat.PlainText)
         text_label.setWordWrap(True)
+        text_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        text_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         text_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         v.addWidget(text_label)
 
@@ -78,12 +84,7 @@ class MessageBubble(QWidget):
 
     @staticmethod
     def _render_text(message: ChatMessage) -> str:
-        if message.message_type and message.message_type != "text":
-            placeholder = theme.MEDIA_LABELS.get(message.message_type, f"[{message.message_type}]")
-            if message.text_content:
-                return f"{placeholder}\n{message.text_content}"
-            return placeholder
-        return message.text_content or ""
+        return display_text_for_message(message)
 
     @staticmethod
     def _fmt_time(message: ChatMessage) -> str:
