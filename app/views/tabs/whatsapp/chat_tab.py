@@ -190,6 +190,7 @@ class ChatTab(QWidget):
 
     def _on_conversation_selected(self, conversation_id: int) -> None:
         self._current_conversation_id = conversation_id
+        self.thread.clear_new_message_indicator()
         conv = self._conversations.get(conversation_id)
         if conv:
             self._update_header(conv)
@@ -212,7 +213,11 @@ class ChatTab(QWidget):
 
     def _on_message_sent(self, message: ChatMessage) -> None:
         if message.conversation_id == self._current_conversation_id:
-            self.thread.append_message(message)
+            self.thread.append_message(
+                message,
+                force_scroll=True,
+                show_new_message_button=False,
+            )
         self._refresh_conversations()
 
     def _on_send_failed(self, error: str) -> None:
@@ -220,7 +225,11 @@ class ChatTab(QWidget):
 
     def _on_new_message(self, message: ChatMessage) -> None:
         if message.conversation_id == self._current_conversation_id:
-            self.thread.append_message(message)
+            self.thread.append_message(
+                message,
+                force_scroll=False,
+                show_new_message_button=True,
+            )
         self._refresh_conversations()
 
     def _on_error(self, error: str) -> None:

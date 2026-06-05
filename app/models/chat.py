@@ -1,9 +1,29 @@
 """DTOs for the WhatsApp chat feature."""
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from ..core.config import Config
 from ..utils.datetime_helpers import parse_iso_datetime
+
+
+def _chat_local_timezone():
+    try:
+        return ZoneInfo(Config.TIMEZONE)
+    except ZoneInfoNotFoundError:
+        return datetime.now().astimezone().tzinfo
+
+
+def _parse_chat_timestamp(value: Optional[str]) -> Optional[datetime]:
+    timestamp = parse_iso_datetime(value)
+    if timestamp is None:
+        return None
+
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.replace(tzinfo=timezone.utc)
+
+    return timestamp.astimezone(_chat_local_timezone())
 
 
 @dataclass
@@ -56,7 +76,7 @@ class ChatMessage:
             direction=d.get("direction") or "inbound",
             message_type=d.get("messageType") or "text",
             text_content=d.get("textContent"),
-            timestamp=parse_iso_datetime(d.get("timestamp")),
+            timestamp=_parse_chat_timestamp(d.get("timestamp")),
             wa_message_id=d.get("waMessageId"),
             media_url=d.get("mediaUrl"),
         )
@@ -84,6 +104,6 @@ class ChatConversation:
             status=d.get("status") or "active",
             contact=ChatContact.from_dict(d.get("contact") or {}),
             last_message=ChatMessage.from_dict(last_message) if last_message else None,
-            last_activity=parse_iso_datetime(d.get("lastActivity")),
+            last_activity=_parse_chat_timestamp(d.get("lastActivity")),
             unread_count=int(d.get("unreadCount") or 0),
         )

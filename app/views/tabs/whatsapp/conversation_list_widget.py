@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 from ....models.chat import ChatConversation
 from . import theme
 from .avatar import Avatar
+from .message_formatter import snippet_for_message
 
 _STYLE = f"""
 #convPanel {{ background-color: palette(window); }}
@@ -150,13 +151,7 @@ class _ConversationItem(QWidget):
         if not lm:
             return ""
         prefix = "" if lm.is_inbound else "Tu: "
-        if lm.message_type and lm.message_type != "text":
-            body = theme.MEDIA_LABELS.get(lm.message_type, f"[{lm.message_type}]")
-        else:
-            body = lm.text_content or ""
-        body = body.replace("\n", " ")
-        if len(body) > 48:
-            body = body[:48] + "..."
+        body = snippet_for_message(lm)
         return f"{prefix}{body}"
 
     @staticmethod
