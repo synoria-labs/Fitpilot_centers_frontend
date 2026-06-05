@@ -3,7 +3,7 @@
 Mirrors the official WhatsApp layout (chats on the left, conversation on the right).
 Realtime updates arrive via the controller's WebSocket subscription.
 """
-from typing import Dict, Optional
+from typing import Optional
 
 import qtawesome as qta
 from PySide6.QtCore import Qt, QSize
@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 from ....controllers.whatsapp_chat_controller import WhatsAppChatController
 from ....core import container, get_logger
 from ....models.chat import ChatConversation, ChatMessage
+from ....services.whatsapp_chat_service import PAGE_SIZE
 from ....utils.dialog_helpers import show_error
 from . import theme
 from .avatar import Avatar
@@ -74,13 +75,19 @@ class ChatTab(QWidget):
         chat_service = container.get("whatsapp_chat_service")
         self.controller = WhatsAppChatController(chat_service, self)
 
-        self._conversations: Dict[int, ChatConversation] = {}
         self._current_conversation_id: Optional[int] = None
+
+        # Pagination state for the infinite-scroll conversation list.
+        self._page_size: int = PAGE_SIZE
+        self._offset: int = 0
+        self._has_more: bool = True
+        self._loading: bool = False
+        self._current_search: Optional[str] = None
 
         self._build_ui()
         self._connect_signals()
 
-        self.controller.load_conversations()
+        self._load_first_page()
         self.controller.start_realtime()
 
     # ------------------------------------------------------------------
@@ -175,9 +182,11 @@ class ChatTab(QWidget):
     def _connect_signals(self) -> None:
         self.conversation_list.conversation_selected.connect(self._on_conversation_selected)
         self.conversation_list.search_changed.connect(self._on_search)
+        self.conversation_list.load_more_requested.connect(self._on_load_more)
         self.composer.send_requested.connect(self._on_send)
 
-        self.controller.conversations_loaded.connect(self._on_conversations_loaded)
+        self.controller.conversations_page_loaded.connect(self._on_conversations_page_loaded)
+        self.controller.single_conversation_loaded.connect(self._on_single_conversation_loaded)
         self.controller.messages_loaded.connect(self.thread.set_messages)
         self.controller.message_sent.connect(self._on_message_sent)
         self.controller.send_failed.connect(self._on_send_failed)
@@ -187,17 +196,56 @@ class ChatTab(QWidget):
     # ------------------------------------------------------------------
     # Slots
     # ------------------------------------------------------------------
-    def _on_conversations_loaded(self, conversations) -> None:
-        self._conversations = {c.id: c for c in conversations}
-        self.conversation_list.set_conversations(conversations)
-        # Refresh header if the open conversation's name/snippet changed.
-        if self._current_conversation_id in self._conversations:
-            self._update_header(self._conversations[self._current_conversation_id])
+    # ------------------------------------------------------------------
+    # Pagination
+    # ------------------------------------------------------------------
+    def _load_first_page(self) -> None:
+        self._offset = 0
+        self._has_more = True
+        self._loading = True
+        self.controller.load_conversations(
+            search=self._current_search,
+            limit=self._page_size,
+            offset=0,
+            reset=True,
+        )
+
+    def _on_load_more(self) -> None:
+        if self._loading or not self._has_more:
+            return
+        self._loading = True
+        self._offset += self._page_size
+        self.controller.load_conversations(
+            search=self._current_search,
+            limit=self._page_size,
+            offset=self._offset,
+            reset=False,
+        )
+
+    def _on_conversations_page_loaded(self, conversations, reset: bool, has_more: bool) -> None:
+        self._loading = False
+        self._has_more = has_more
+        if reset:
+            self.conversation_list.reset_conversations(conversations)
+        else:
+            self.conversation_list.append_conversations(conversations)
+        self._refresh_open_header()
+
+    def _on_single_conversation_loaded(self, conversation: ChatConversation) -> None:
+        self.conversation_list.upsert_conversation(conversation)
+        self._refresh_open_header()
+
+    def _refresh_open_header(self) -> None:
+        if self._current_conversation_id is None:
+            return
+        conv = self.conversation_list.get_conversation(self._current_conversation_id)
+        if conv:
+            self._update_header(conv)
 
     def _on_conversation_selected(self, conversation_id: int) -> None:
         self._current_conversation_id = conversation_id
         self.thread.clear_new_message_indicator()
-        conv = self._conversations.get(conversation_id)
+        conv = self.conversation_list.get_conversation(conversation_id)
         if conv:
             self._update_header(conv)
         self.right_stack.setCurrentIndex(1)
@@ -210,7 +258,8 @@ class ChatTab(QWidget):
         self._header_sub.setText(identity)
 
     def _on_search(self, query: str) -> None:
-        self.controller.load_conversations(search=query or None)
+        self._current_search = query or None
+        self._load_first_page()
 
     def _on_send(self, text: str) -> None:
         if self._current_conversation_id is None:
@@ -224,7 +273,7 @@ class ChatTab(QWidget):
                 force_scroll=True,
                 show_new_message_button=False,
             )
-        self._refresh_conversations()
+        self._apply_message_to_list(message)
 
     def _on_send_failed(self, error: str) -> None:
         show_error(self, error, title="No se pudo enviar")
@@ -236,14 +285,20 @@ class ChatTab(QWidget):
                 force_scroll=False,
                 show_new_message_button=True,
             )
-        self._refresh_conversations()
+        self._apply_message_to_list(message)
 
     def _on_error(self, error: str) -> None:
         logger.error("ChatTab error: %s", error)
 
-    def _refresh_conversations(self) -> None:
-        search = self.conversation_list.current_search() or None
-        self.controller.load_conversations(search=search)
+    def _apply_message_to_list(self, message: ChatMessage) -> None:
+        """Update the list incrementally: bump the conversation, or fetch it if new.
+
+        Avoids reloading the whole list on every message. When the conversation is
+        not currently loaded (new chat, or beyond the loaded pages), fetch just that
+        one conversation and insert it at the top.
+        """
+        if not self.conversation_list.apply_message(message):
+            self.controller.load_single_conversation(message.conversation_id)
 
     # ------------------------------------------------------------------
     # Lifecycle
