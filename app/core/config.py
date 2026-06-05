@@ -15,6 +15,8 @@ class Config:
     # API Configuration
     API_BASE_URL: str = os.getenv('API_BASE_URL', 'http://127.0.0.1:8000')
     GRAPHQL_URL: str = os.getenv('GRAPHQL_URL', 'http://127.0.0.1:8000/graphql')
+    # WebSocket endpoint for GraphQL subscriptions (Strawberry serves it on /graphql)
+    GRAPHQL_WS_URL: str = os.getenv('GRAPHQL_WS_URL', 'ws://127.0.0.1:8000/graphql')
     REST_USERS_URL: str = os.getenv('REST_USERS_URL', 'http://127.0.0.1:8000/users')
     
     # JWT Configuration

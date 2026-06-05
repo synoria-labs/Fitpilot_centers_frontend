@@ -380,6 +380,7 @@ class MainController(QObject):
                 "Membresias": "memberships",
                 "Dashboard": "dashboard",
                 "WhatsApp": "whatsapp",
+                "Chats": "whatsapp_chat",
             }
 
             tab_id = tab_mapping.get(tab_name)
