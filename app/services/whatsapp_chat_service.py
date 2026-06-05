@@ -29,6 +29,19 @@ CONVERSATIONS_QUERY = """
             status
             lastActivity
             unreadCount
+            contact { id waId phoneNumber name profileName memberId memberName }
+            lastMessage { %s }
+        }
+    }
+""" % _MESSAGE_FIELDS
+
+CONVERSATIONS_COMPAT_QUERY = """
+    query GetConversations($limit: Int = 50, $offset: Int! = 0, $search: String) {
+        conversations(limit: $limit, offset: $offset, search: $search) {
+            id
+            status
+            lastActivity
+            unreadCount
             contact { id waId phoneNumber name profileName }
             lastMessage { %s }
         }
@@ -59,13 +72,26 @@ class WhatsAppChatService:
 
     def __init__(self, graphql_client) -> None:
         self.client = graphql_client
+        self._use_member_contact_fields = True
 
     async def get_conversations(
         self, limit: int = 50, offset: int = 0, search: Optional[str] = None
     ) -> List[ChatConversation]:
         variables = {"limit": limit, "offset": offset, "search": search}
         try:
-            result = await self.client.execute(CONVERSATIONS_QUERY, variables)
+            query = (
+                CONVERSATIONS_QUERY
+                if self._use_member_contact_fields
+                else CONVERSATIONS_COMPAT_QUERY
+            )
+            result = await self.client.execute(query, variables)
+            if result is None and self._use_member_contact_fields:
+                logger.warning(
+                    "Conversation query with member fields failed; retrying with base schema"
+                )
+                result = await self.client.execute(CONVERSATIONS_COMPAT_QUERY, variables)
+                if result is not None:
+                    self._use_member_contact_fields = False
             items = (result or {}).get("conversations") or []
             return [ChatConversation.from_dict(item) for item in items]
         except Exception as exc:  # noqa: BLE001

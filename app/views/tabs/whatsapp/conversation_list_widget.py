@@ -20,42 +20,55 @@ from . import theme
 from .avatar import Avatar
 from .message_formatter import snippet_for_message
 
-_STYLE = f"""
+
+def _style() -> str:
+    return f"""
 #convPanel {{ background-color: palette(window); }}
 #convHeader {{ background-color: palette(window); }}
-#convTitle {{ color: {theme.TEXT_PRIMARY}; font-size: 22px; font-weight: 700; background: transparent; }}
+#convTitle {{ color: palette(text); font-size: 22px; font-weight: 700; background: transparent; }}
 #convSearchBar {{ background-color: palette(window); }}
 #convFilterBar {{ background-color: palette(window); }}
 #convSearch {{
-    background-color: {theme.INPUT_BG};
-    color: {theme.TEXT_PRIMARY};
-    border: none;
+    background-color: palette(base);
+    color: palette(text);
+    border: 1px solid transparent;
     border-radius: 20px;
-    padding: 9px 16px;
+    padding: 0 16px;
+    min-height: 40px;
+    max-height: 40px;
     font-size: 13px;
+    selection-background-color: palette(highlight);
+    selection-color: palette(highlighted-text);
+    placeholder-text-color: palette(placeholder-text);
 }}
-#convSearch::placeholder {{ color: {theme.TEXT_SECONDARY}; }}
+#convSearch:focus {{ border: 1px solid palette(highlight); }}
+#convSearch:disabled {{
+    background-color: palette(window);
+    color: palette(mid);
+}}
+#convSearch::placeholder {{ color: palette(placeholder-text); }}
 #convIconButton {{
     background: transparent;
     border: none;
     border-radius: 16px;
     padding: 6px;
 }}
-#convIconButton:hover {{ background-color: {theme.ITEM_HOVER}; }}
+#convIconButton:hover {{ background-color: palette(alternate-base); }}
 #convChip, #convChipActive {{
-    border: 1px solid {theme.DIVIDER};
+    border: 1px solid palette(mid);
     border-radius: 15px;
     padding: 5px 12px;
     font-size: 12px;
     font-weight: 600;
 }}
 #convChip {{
-    color: {theme.TEXT_SECONDARY};
+    color: palette(text);
     background-color: transparent;
 }}
 #convChipActive {{
-    color: {theme.TEXT_PRIMARY};
-    background-color: {theme.ITEM_SELECTED};
+    color: palette(highlighted-text);
+    background-color: palette(highlight);
+    border-color: palette(highlight);
 }}
 QListWidget {{
     background-color: palette(window);
@@ -63,14 +76,26 @@ QListWidget {{
     outline: 0;
 }}
 QListWidget::item {{
-    border-bottom: 1px solid {theme.DIVIDER};
+    border-bottom: 1px solid palette(mid);
     padding: 0;
 }}
-QListWidget::item:hover {{ background-color: {theme.ITEM_HOVER}; }}
-QListWidget::item:selected {{ background-color: {theme.ITEM_SELECTED}; }}
-QLabel#convName {{ color: {theme.TEXT_PRIMARY}; font-weight: bold; font-size: 14px; background: transparent; }}
-QLabel#convSnippet {{ color: {theme.TEXT_SECONDARY}; font-size: 12px; background: transparent; }}
-QLabel#convTime {{ color: {theme.TEXT_SECONDARY}; font-size: 10px; background: transparent; }}
+QListWidget::item:hover {{ background-color: palette(alternate-base); }}
+QListWidget::item:selected {{
+    background-color: palette(highlight);
+    color: palette(highlighted-text);
+}}
+#convItem {{ background-color: transparent; }}
+#convItem[selected="true"] {{ background-color: palette(highlight); }}
+QLabel#convName {{ color: palette(text); font-weight: bold; font-size: 14px; background: transparent; }}
+QLabel#convIdentity {{ color: {theme.secondary_text_hex()}; font-size: 11px; background: transparent; }}
+QLabel#convSnippet {{ color: {theme.secondary_text_hex()}; font-size: 12px; background: transparent; }}
+QLabel#convTime {{ color: {theme.secondary_text_hex()}; font-size: 10px; background: transparent; }}
+#convItem[selected="true"] QLabel#convName,
+#convItem[selected="true"] QLabel#convIdentity,
+#convItem[selected="true"] QLabel#convSnippet,
+#convItem[selected="true"] QLabel#convTime {{
+    color: palette(highlighted-text);
+}}
 QLabel#convUnread {{
     color: #0b141a;
     background-color: {theme.ACCENT};
@@ -86,7 +111,7 @@ QLabel#convUnread {{
 def _make_icon_button(icon_name: str, tooltip: str) -> QToolButton:
     button = QToolButton()
     button.setObjectName("convIconButton")
-    button.setIcon(qta.icon(icon_name, color=theme.TEXT_PRIMARY))
+    button.setIcon(qta.icon(icon_name, color=theme.palette_hex()))
     button.setIconSize(QSize(18, 18))
     button.setFixedSize(34, 34)
     button.setToolTip(tooltip)
@@ -103,10 +128,37 @@ def _make_chip(label: str, active: bool = False) -> QLabel:
     return chip
 
 
+class _ElidedLabel(QLabel):
+    def __init__(self, text: str = "", parent=None) -> None:
+        super().__init__(parent)
+        self._full_text = ""
+        self.set_full_text(text)
+
+    def set_full_text(self, text: str) -> None:
+        self._full_text = text or ""
+        self.setToolTip(self._full_text)
+        self._apply_elide()
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._apply_elide()
+
+    def _apply_elide(self) -> None:
+        width = max(0, self.width())
+        text = self.fontMetrics().elidedText(
+            self._full_text,
+            Qt.TextElideMode.ElideRight,
+            width,
+        )
+        super().setText(text)
+
+
 class _ConversationItem(QWidget):
     def __init__(self, conversation: ChatConversation, parent=None) -> None:
         super().__init__(parent)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setObjectName("convItem")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self._has_member_name = bool(conversation.contact.member_name)
 
         row = QHBoxLayout(self)
         row.setContentsMargins(12, 8, 14, 8)
@@ -120,7 +172,7 @@ class _ConversationItem(QWidget):
 
         top = QHBoxLayout()
         top.setContentsMargins(0, 0, 0, 0)
-        name = QLabel(conversation.display_name)
+        name = _ElidedLabel(conversation.display_name)
         name.setObjectName("convName")
         top.addWidget(name, 1)
         time = QLabel(self._fmt_time(conversation))
@@ -128,10 +180,17 @@ class _ConversationItem(QWidget):
         top.addWidget(time, 0, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
         center.addLayout(top)
 
+        identity_text = conversation.contact.secondary_identity if self._has_member_name else ""
+        if identity_text:
+            identity = _ElidedLabel(identity_text)
+            identity.setObjectName("convIdentity")
+            identity.setMaximumHeight(16)
+            center.addWidget(identity)
+
         bottom = QHBoxLayout()
         bottom.setContentsMargins(0, 0, 0, 0)
         bottom.setSpacing(8)
-        snippet = QLabel(self._snippet(conversation))
+        snippet = _ElidedLabel(self._snippet(conversation))
         snippet.setObjectName("convSnippet")
         snippet.setMaximumHeight(18)
         bottom.addWidget(snippet, 1)
@@ -144,6 +203,20 @@ class _ConversationItem(QWidget):
 
         center.addLayout(bottom)
         row.addLayout(center, 1)
+
+    @property
+    def item_height(self) -> int:
+        return 88 if self._has_member_name else 72
+
+    def set_selected(self, selected: bool) -> None:
+        self.setProperty("selected", selected)
+        self.style().unpolish(self)
+        self.style().polish(self)
+        for label in self.findChildren(QLabel):
+            label.style().unpolish(label)
+            label.style().polish(label)
+            label.update()
+        self.update()
 
     @staticmethod
     def _snippet(conversation: ChatConversation) -> str:
@@ -172,7 +245,7 @@ class ConversationListWidget(QWidget):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setObjectName("convPanel")
-        self.setStyleSheet(_STYLE)
+        self.setStyleSheet(_style())
         self._search_text = ""
 
         layout = QVBoxLayout(self)
@@ -234,6 +307,7 @@ class ConversationListWidget(QWidget):
 
         self.search_input.textChanged.connect(self._on_search_text)
         self.list_widget.itemClicked.connect(self._on_item_clicked)
+        self.list_widget.itemSelectionChanged.connect(self._refresh_item_selection)
 
     def current_search(self) -> str:
         return self._search_text
@@ -245,12 +319,13 @@ class ConversationListWidget(QWidget):
             item = QListWidgetItem(self.list_widget)
             item.setData(Qt.ItemDataRole.UserRole, conv.id)
             widget = _ConversationItem(conv)
-            item.setSizeHint(QSize(0, 72))
+            item.setSizeHint(QSize(0, widget.item_height))
             self.list_widget.addItem(item)
             self.list_widget.setItemWidget(item, widget)
             if conv.id == selected_id:
                 item.setSelected(True)
                 self.list_widget.setCurrentItem(item)
+        self._refresh_item_selection()
 
     def selected_conversation_id(self):
         item = self.list_widget.currentItem()
@@ -262,6 +337,13 @@ class ConversationListWidget(QWidget):
         conv_id = item.data(Qt.ItemDataRole.UserRole)
         if conv_id is not None:
             self.conversation_selected.emit(int(conv_id))
+
+    def _refresh_item_selection(self) -> None:
+        for row in range(self.list_widget.count()):
+            item = self.list_widget.item(row)
+            widget = self.list_widget.itemWidget(item)
+            if hasattr(widget, "set_selected"):
+                widget.set_selected(item.isSelected())
 
     def _on_search_text(self, text: str) -> None:
         self._search_text = text

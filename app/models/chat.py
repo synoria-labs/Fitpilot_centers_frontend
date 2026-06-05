@@ -33,20 +33,41 @@ class ChatContact:
     phone_number: str
     name: Optional[str] = None
     profile_name: Optional[str] = None
+    member_id: Optional[int] = None
+    member_name: Optional[str] = None
 
     @property
     def display_name(self) -> str:
-        return self.name or self.profile_name or self.phone_number or self.wa_id
+        return self.member_name or self.name or self.profile_name or self.phone_number or self.wa_id
+
+    @property
+    def secondary_identity(self) -> str:
+        primary = (self.display_name or "").strip()
+        number = (self.phone_number or self.wa_id or "").strip()
+        whatsapp_name = (self.name or self.profile_name or "").strip()
+
+        if whatsapp_name and whatsapp_name != primary:
+            if number and number != whatsapp_name:
+                return f"{whatsapp_name} - {number}"
+            return whatsapp_name
+
+        if number and number != primary:
+            return number
+
+        return ""
 
     @classmethod
     def from_dict(cls, d: dict) -> "ChatContact":
         d = d or {}
+        raw_member_id = d.get("memberId")
         return cls(
             id=int(d.get("id") or 0),
             wa_id=d.get("waId") or "",
             phone_number=d.get("phoneNumber") or "",
             name=d.get("name"),
             profile_name=d.get("profileName"),
+            member_id=int(raw_member_id) if raw_member_id is not None else None,
+            member_name=d.get("memberName"),
         )
 
 

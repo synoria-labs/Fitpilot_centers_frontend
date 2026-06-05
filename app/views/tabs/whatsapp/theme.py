@@ -1,4 +1,6 @@
 """Shared WhatsApp-style palette and small helpers for the chat UI."""
+from PySide6.QtGui import QColor, QPalette
+from PySide6.QtWidgets import QApplication
 
 # WhatsApp dark palette
 BG_APP = "#111B21"
@@ -30,6 +32,34 @@ MEDIA_LABELS = {
     "document": "📎 Documento",
     "sticker": "🟢 Sticker",
 }
+
+
+def palette_hex(role: QPalette.ColorRole = QPalette.ColorRole.Text) -> str:
+    app = QApplication.instance()
+    palette = app.palette() if app else QPalette()
+    return palette.color(role).name()
+
+
+def secondary_text_hex(
+    *,
+    foreground_role: QPalette.ColorRole = QPalette.ColorRole.Text,
+    background_role: QPalette.ColorRole = QPalette.ColorRole.Window,
+    foreground_weight: float = 0.68,
+) -> str:
+    app = QApplication.instance()
+    palette = app.palette() if app else QPalette()
+    foreground = palette.color(foreground_role)
+    background = palette.color(background_role)
+    weight = max(0.0, min(1.0, foreground_weight))
+
+    def channel(getter) -> int:
+        return round(getter(background) * (1.0 - weight) + getter(foreground) * weight)
+
+    return QColor(
+        channel(lambda color: color.red()),
+        channel(lambda color: color.green()),
+        channel(lambda color: color.blue()),
+    ).name()
 
 
 def avatar_color(key: str) -> str:
