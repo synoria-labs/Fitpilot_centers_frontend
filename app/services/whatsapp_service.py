@@ -157,6 +157,7 @@ class WhatsAppService:
         phone: str,
         template_id: int,
         body_params: Optional[List[str]] = None,
+        header_media_url: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Envía una plantilla aprobada al número indicado."""
         mutation = """
@@ -173,6 +174,7 @@ class WhatsAppService:
                 "phone": phone,
                 "templateId": template_id,
                 "bodyParams": body_params or [],
+                "headerMediaUrl": header_media_url,
             }
         }
         result = await self.client.execute(mutation, variables)

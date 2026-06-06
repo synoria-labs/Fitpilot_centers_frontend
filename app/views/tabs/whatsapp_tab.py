@@ -53,6 +53,23 @@ def _parse_components(components: Optional[List[Any]]):
     return body_text, body_examples, footer_text
 
 
+def _media_header_info(components: Optional[List[Any]]) -> tuple[Optional[str], str]:
+    """Return (media_format, example_url) for IMAGE/VIDEO/DOCUMENT headers."""
+    for comp in components or []:
+        if not isinstance(comp, dict):
+            continue
+        ctype = str(comp.get("type") or "").upper()
+        media_format = str(comp.get("format") or "").upper()
+        if ctype != "HEADER" or media_format not in {"IMAGE", "VIDEO", "DOCUMENT"}:
+            continue
+        example = comp.get("example")
+        handles = example.get("header_handle") if isinstance(example, dict) else None
+        if isinstance(handles, list) and handles:
+            return media_format, str(handles[0] or "").strip()
+        return media_format, ""
+    return None, ""
+
+
 class WhatsAppTab(QWidget):
     """Vista para gestión de plantillas de WhatsApp."""
 
@@ -203,15 +220,28 @@ class WhatsAppTab(QWidget):
 
         # Enviar prueba
         test_group = QGroupBox("Enviar Prueba (envía la plantilla aprobada a un número)")
-        test_layout = QHBoxLayout(test_group)
-        test_layout.addWidget(QLabel("Teléfono:"))
+        test_layout = QVBoxLayout(test_group)
+        test_row = QHBoxLayout()
+        test_row.addWidget(QLabel("Teléfono:"))
         self.test_phone = QLineEdit()
         self.test_phone.setPlaceholderText("+52 XXX XXX XXXX")
-        test_layout.addWidget(self.test_phone)
+        test_row.addWidget(self.test_phone)
         self.send_test_btn = QPushButton("📤 Enviar Prueba")
         self.send_test_btn.setEnabled(False)
         self.send_test_btn.clicked.connect(self.on_send_test)
-        test_layout.addWidget(self.send_test_btn)
+        test_row.addWidget(self.send_test_btn)
+        test_layout.addLayout(test_row)
+
+        self.header_media_row = QWidget()
+        header_media_layout = QHBoxLayout(self.header_media_row)
+        header_media_layout.setContentsMargins(0, 0, 0, 0)
+        self.header_media_label = QLabel("Media header:")
+        self.header_media_input = QLineEdit()
+        self.header_media_input.setPlaceholderText("URL pública de imagen/video/documento")
+        header_media_layout.addWidget(self.header_media_label)
+        header_media_layout.addWidget(self.header_media_input)
+        self.header_media_row.setVisible(False)
+        test_layout.addWidget(self.header_media_row)
         right_layout.addWidget(test_group)
 
         splitter.addWidget(right_panel)
@@ -279,6 +309,10 @@ class WhatsAppTab(QWidget):
         self.body_editor.setPlainText(body)
         self.examples_input.setText(" | ".join(examples))
         self.footer_input.setText(footer)
+        media_format, media_url = _media_header_info(tpl.get("components"))
+        self.header_media_row.setVisible(bool(media_format))
+        self.header_media_label.setText(f"{media_format or 'Media'} del header:")
+        self.header_media_input.setText(media_url)
         self._set_status(tpl.get("template_status"))
         self._set_identity_editable(False)
 
@@ -298,6 +332,8 @@ class WhatsAppTab(QWidget):
         self.body_editor.clear()
         self.examples_input.clear()
         self.footer_input.clear()
+        self.header_media_row.setVisible(False)
+        self.header_media_input.clear()
         self.preview_text.clear()
         self._set_status("Nueva plantilla")
         self._set_identity_editable(True)
@@ -356,7 +392,18 @@ class WhatsAppTab(QWidget):
         if not phone:
             show_error(self, "Ingresa un número de teléfono.")
             return
-        self.controller.send_test(phone, self.current.get("id"), self._example_values())
+        header_media_url = None
+        if self.header_media_row.isVisible():
+            header_media_url = self.header_media_input.text().strip()
+            if not header_media_url:
+                show_error(self, "Esta plantilla requiere una URL de media para el header.")
+                return
+        self.controller.send_test(
+            phone,
+            self.current.get("id"),
+            self._example_values(),
+            header_media_url=header_media_url,
+        )
 
     def update_preview(self):
         body = self.body_editor.toPlainText()

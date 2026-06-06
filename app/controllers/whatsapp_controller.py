@@ -110,7 +110,13 @@ class WhatsAppController(BaseController):
             template_id=template_id,
         )
 
-    def send_test(self, phone: str, template_id: int, body_params: List[str]) -> None:
+    def send_test(
+        self,
+        phone: str,
+        template_id: int,
+        body_params: List[str],
+        header_media_url: Optional[str] = None,
+    ) -> None:
         if not self._service:
             self.error_occurred.emit("Servicio de WhatsApp no disponible")
             return
@@ -123,6 +129,7 @@ class WhatsAppController(BaseController):
             phone=phone,
             template_id=template_id,
             body_params=body_params,
+            header_media_url=header_media_url,
         )
 
     # ------------------------------------------------------------------
