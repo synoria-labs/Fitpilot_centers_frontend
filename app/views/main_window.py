@@ -118,6 +118,7 @@ class MainWindow(QMainWindow):
             ("Clases", "classes", True),
             ("Chats", "whatsapp_chat", False),  # Solo admin
             ("WhatsApp", "whatsapp", False),  # Solo admin (plantillas)
+            ("Notificaciones", "whatsapp_notifications", False),  # Solo admin (config de envíos)
             ("Membresías", "memberships", True),
             ("Dashboard", "dashboard", True),
             ("Finanzas", "finances", False),  # Solo admin
