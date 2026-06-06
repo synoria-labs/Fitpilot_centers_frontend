@@ -94,6 +94,7 @@ class TabLoader(BaseWorker):
             "memberships": ("app.views.tabs.memberships_tab", "MembershipsTab"),
             "dashboard": ("app.views.tabs.dashboard_tab", "DashboardTab"),
             "whatsapp": ("app.views.tabs.whatsapp_tab", "WhatsAppTab"),
+            "whatsapp_notifications": ("app.views.tabs.whatsapp_notifications_tab", "WhatsAppNotificationsTab"),
             "whatsapp_chat": ("app.views.tabs.whatsapp.chat_tab", "ChatTab"),
             "finances": ("app.views.tabs.finances_tab", "FinancesTab"),
         }

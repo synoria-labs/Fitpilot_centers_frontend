@@ -380,6 +380,7 @@ class MainController(QObject):
                 "Membresias": "memberships",
                 "Dashboard": "dashboard",
                 "WhatsApp": "whatsapp",
+                "Notificaciones": "whatsapp_notifications",
                 "Chats": "whatsapp_chat",
             }
 
