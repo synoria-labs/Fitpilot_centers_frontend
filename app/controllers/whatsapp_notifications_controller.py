@@ -76,6 +76,7 @@ class WhatsAppNotificationsController(BaseController):
             enabled=data.get("enabled", False),
             template_id=data.get("template_id"),
             param_mapping=data.get("param_mapping") or [],
+            header_media_url=data.get("header_media_url"),
             offsets_days=data.get("offsets_days") or [],
         )
 
