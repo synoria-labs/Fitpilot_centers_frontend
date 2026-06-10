@@ -19,6 +19,7 @@ _TEMPLATE_FIELDS = """
     templateLanguage
     templateStatus
     category
+    metaTemplateId
     components
 """
 
@@ -29,6 +30,7 @@ _SETTING_FIELDS = f"""
     enabled
     templateId
     paramMapping
+    headerMediaUrl
     offsetsDays
     template {{ {_TEMPLATE_FIELDS} }}
 """
@@ -43,6 +45,7 @@ def _map_template(node: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         "template_language": node.get("templateLanguage"),
         "template_status": node.get("templateStatus"),
         "category": node.get("category"),
+        "meta_template_id": node.get("metaTemplateId"),
         "components": node.get("components"),
     }
 
@@ -57,6 +60,7 @@ def _map_setting(node: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         "enabled": bool(node.get("enabled")),
         "template_id": node.get("templateId"),
         "param_mapping": list(node.get("paramMapping") or []),
+        "header_media_url": node.get("headerMediaUrl"),
         "offsets_days": list(node.get("offsetsDays") or []),
         "template": _map_template(node.get("template")),
     }
@@ -129,7 +133,12 @@ class WhatsAppNotificationsService:
         result = await self.client.execute(query)
         nodes = (result or {}).get("whatsappTemplates") or []
         templates = [_map_template(n) for n in nodes]
-        return [t for t in templates if (t.get("template_status") or "").upper() == "APPROVED"]
+        return [
+            t
+            for t in templates
+            if (t.get("template_status") or "").upper() == "APPROVED"
+            and t.get("meta_template_id")
+        ]
 
     async def save_setting(
         self,
@@ -137,6 +146,7 @@ class WhatsAppNotificationsService:
         enabled: bool,
         template_id: Optional[int],
         param_mapping: List[str],
+        header_media_url: Optional[str] = None,
         offsets_days: Optional[List[int]] = None,
     ) -> Dict[str, Any]:
         """Crea o actualiza la configuración de un evento."""
@@ -155,6 +165,7 @@ class WhatsAppNotificationsService:
                 "enabled": enabled,
                 "templateId": template_id,
                 "paramMapping": param_mapping or [],
+                "headerMediaUrl": header_media_url,
                 "offsetsDays": offsets_days or [],
             }
         }
