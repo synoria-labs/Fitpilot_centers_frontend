@@ -366,9 +366,11 @@ class WhatsAppTab(QWidget):
     def _populate_list(self, keep_id: Optional[int] = None):
         self.templates_list.clear()
         for tpl in self._templates:
+            status = (tpl.get("template_status") or "").upper()
+            if status == "NOT_FOUND":
+                continue
             item = QListWidgetItem(tpl.get("template_name") or f"#{tpl.get('id')}")
             item.setData(Qt.ItemDataRole.UserRole, tpl.get("id"))
-            status = (tpl.get("template_status") or "").upper()
             if status and status != "APPROVED":
                 item.setText(f"{item.text()}  ({status})")
             self.templates_list.addItem(item)
