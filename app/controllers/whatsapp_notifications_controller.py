@@ -150,7 +150,9 @@ class WhatsAppNotificationsController(BaseController):
         if result and result.get("id"):
             self.media_asset_uploaded.emit(kind, result)
         else:
-            self.error_occurred.emit("No se pudo subir el archivo multimedia")
+            self.error_occurred.emit(
+                (result or {}).get("error") or "No se pudo subir el archivo multimedia"
+            )
 
     def _on_error(self, message: str) -> None:
         self.loading_changed.emit(False)

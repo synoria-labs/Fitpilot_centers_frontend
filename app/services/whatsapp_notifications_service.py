@@ -261,7 +261,16 @@ class WhatsAppNotificationsService:
             file_path=file_path,
             file_variable="file",
         )
-        return _map_asset((result or {}).get("uploadWhatsappMediaAsset"))
+        if not result:
+            return {
+                "error": getattr(
+                    self.client,
+                    "last_error",
+                    "No se pudo subir el archivo multimedia",
+                )
+            }
+        asset = _map_asset(result.get("uploadWhatsappMediaAsset"))
+        return asset or {"error": "No se pudo subir el archivo multimedia"}
 
     async def run_sweep(self) -> Dict[str, Any]:
         """Ejecuta el barrido de recordatorios/vencidos de inmediato."""
