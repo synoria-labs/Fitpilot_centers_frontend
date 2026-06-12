@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QTextEdit,
     QLineEdit, QGroupBox, QSplitter, QListWidget, QListWidgetItem, QComboBox,
+    QFileDialog,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
@@ -19,6 +20,7 @@ from PySide6.QtGui import QFont
 from ...core import container, get_logger
 from ...controllers.whatsapp_controller import WhatsAppController
 from ...utils.dialog_helpers import show_confirmation, show_error, show_info
+from .whatsapp.template_preview_widget import TemplatePreviewWidget
 
 logger = get_logger(__name__)
 
@@ -28,6 +30,11 @@ _STATUS_COLORS = {
     "APPROVED": "#2ecc71",
     "PENDING": "#f39c12",
     "REJECTED": "#e74c3c",
+}
+_HEADER_FORMATS = {
+    "IMAGE": ("Imagen", "image"),
+    "VIDEO": ("Video", "video"),
+    "DOCUMENT": ("Documento", "document"),
 }
 
 
@@ -80,6 +87,9 @@ class WhatsAppTab(QWidget):
         super().__init__()
         self.current: Optional[Dict[str, Any]] = None  # plantilla seleccionada (None = nueva)
         self._templates: List[Dict[str, Any]] = []
+        self._media_assets_by_kind: Dict[str, List[Dict[str, Any]]] = {}
+        self._media_assets_by_id: Dict[int, Dict[str, Any]] = {}
+        self._pending_header_asset_id: Optional[int] = None
 
         try:
             service = container.get("whatsapp_service")
@@ -207,14 +217,30 @@ class WhatsAppTab(QWidget):
         footer_layout.addWidget(self.footer_input)
         content_layout.addLayout(footer_layout)
 
+        header_format_layout = QHBoxLayout()
+        header_format_layout.addWidget(QLabel("Header media:"))
+        self.header_format_combo = QComboBox()
+        self.header_format_combo.addItem("Ninguno", None)
+        for fmt, (label, _kind) in _HEADER_FORMATS.items():
+            self.header_format_combo.addItem(label, fmt)
+        self.header_format_combo.currentIndexChanged.connect(self.on_header_format_changed)
+        header_format_layout.addWidget(self.header_format_combo)
+
+        self.header_asset_combo = QComboBox()
+        self.header_asset_combo.currentIndexChanged.connect(self.update_preview)
+        header_format_layout.addWidget(self.header_asset_combo, 1)
+
+        self.upload_asset_btn = QPushButton("Subir media")
+        self.upload_asset_btn.clicked.connect(self.on_upload_header_asset)
+        header_format_layout.addWidget(self.upload_asset_btn)
+        content_layout.addLayout(header_format_layout)
+
         preview_label = QLabel("Vista Previa:")
         preview_label.setStyleSheet("font-weight: bold;")
         content_layout.addWidget(preview_label)
-        self.preview_text = QTextEdit()
-        self.preview_text.setReadOnly(True)
-        self.preview_text.setMaximumHeight(120)
-        self.preview_text.setStyleSheet("background-color: #f8f9fa; border: 1px solid #dee2e6;")
-        content_layout.addWidget(self.preview_text)
+        self.preview_widget = TemplatePreviewWidget()
+        self.preview_widget.setMaximumHeight(260)
+        content_layout.addWidget(self.preview_widget)
 
         right_layout.addWidget(content_group)
 
@@ -243,6 +269,8 @@ class WhatsAppTab(QWidget):
         self.header_media_row.setVisible(False)
         test_layout.addWidget(self.header_media_row)
         right_layout.addWidget(test_group)
+        self.header_asset_combo.setVisible(False)
+        self.upload_asset_btn.setVisible(False)
 
         splitter.addWidget(right_panel)
         splitter.setSizes([300, 700])
@@ -254,6 +282,8 @@ class WhatsAppTab(QWidget):
         self.controller.template_saved.connect(self._on_template_saved)
         self.controller.template_deleted.connect(self._on_template_deleted)
         self.controller.test_sent.connect(self._on_test_sent)
+        self.controller.media_assets_loaded.connect(self._on_media_assets_loaded)
+        self.controller.media_asset_uploaded.connect(self._on_media_asset_uploaded)
         self.controller.error_occurred.connect(self._on_error)
         self.controller.loading_changed.connect(self._on_loading_changed)
 
@@ -277,6 +307,61 @@ class WhatsAppTab(QWidget):
         self.name_input.setReadOnly(not editable)
         self.language_input.setReadOnly(not editable)
         self.category_combo.setEnabled(editable)
+        self.header_format_combo.setEnabled(editable)
+
+    def _current_header_format(self) -> Optional[str]:
+        return self.header_format_combo.currentData()
+
+    def _current_header_kind(self) -> Optional[str]:
+        header_format = self._current_header_format()
+        if not header_format:
+            return None
+        return _HEADER_FORMATS.get(header_format, ("", ""))[1]
+
+    def _selected_header_asset_id(self) -> Optional[int]:
+        value = self.header_asset_combo.currentData()
+        return int(value) if value is not None else None
+
+    def _selected_header_asset(self) -> Optional[Dict[str, Any]]:
+        asset_id = self._selected_header_asset_id()
+        if asset_id is None:
+            return None
+        return self._media_assets_by_id.get(asset_id)
+
+    def _set_header_format(self, header_format: Optional[str]) -> None:
+        self.header_format_combo.blockSignals(True)
+        index = self.header_format_combo.findData(header_format)
+        self.header_format_combo.setCurrentIndex(index if index >= 0 else 0)
+        self.header_format_combo.blockSignals(False)
+        self._refresh_header_asset_controls()
+
+    def _refresh_header_asset_controls(self) -> None:
+        kind = self._current_header_kind()
+        visible = bool(kind)
+        self.header_asset_combo.setVisible(visible)
+        self.upload_asset_btn.setVisible(visible)
+        self.header_media_row.setVisible(False)
+        if not kind:
+            self.header_asset_combo.clear()
+            self._pending_header_asset_id = None
+            self.update_preview()
+            return
+        self._populate_asset_combo(kind, self._pending_header_asset_id)
+        self.controller.load_media_assets(kind)
+
+    def _populate_asset_combo(self, kind: str, selected_id: Optional[int] = None) -> None:
+        self.header_asset_combo.blockSignals(True)
+        self.header_asset_combo.clear()
+        self.header_asset_combo.addItem("(Selecciona media)", None)
+        selected_index = 0
+        for i, asset in enumerate(self._media_assets_by_kind.get(kind, []), start=1):
+            label = asset.get("display_name") or asset.get("original_filename") or f"Asset {asset.get('id')}"
+            self.header_asset_combo.addItem(label, asset.get("id"))
+            if selected_id is not None and asset.get("id") == selected_id:
+                selected_index = i
+        self.header_asset_combo.setCurrentIndex(selected_index)
+        self.header_asset_combo.blockSignals(False)
+        self.update_preview()
 
     def _populate_list(self, keep_id: Optional[int] = None):
         self.templates_list.clear()
@@ -309,10 +394,9 @@ class WhatsAppTab(QWidget):
         self.body_editor.setPlainText(body)
         self.examples_input.setText(" | ".join(examples))
         self.footer_input.setText(footer)
-        media_format, media_url = _media_header_info(tpl.get("components"))
-        self.header_media_row.setVisible(bool(media_format))
-        self.header_media_label.setText(f"{media_format or 'Media'} del header:")
-        self.header_media_input.setText(media_url)
+        media_format, _media_url = _media_header_info(tpl.get("components"))
+        self._pending_header_asset_id = tpl.get("default_header_media_asset_id")
+        self._set_header_format(media_format)
         self._set_status(tpl.get("template_status"))
         self._set_identity_editable(False)
 
@@ -334,7 +418,9 @@ class WhatsAppTab(QWidget):
         self.footer_input.clear()
         self.header_media_row.setVisible(False)
         self.header_media_input.clear()
-        self.preview_text.clear()
+        self._pending_header_asset_id = None
+        self._set_header_format(None)
+        self.preview_widget.set_preview(body="")
         self._set_status("Nueva plantilla")
         self._set_identity_editable(True)
         self.name_input.setFocus()
@@ -353,6 +439,14 @@ class WhatsAppTab(QWidget):
             "body_examples": self._example_values(),
             "footer_text": self.footer_input.text().strip() or None,
         }
+        header_format = self._current_header_format()
+        header_asset_id = self._selected_header_asset_id()
+        if header_format and not header_asset_id:
+            show_error(self, "Selecciona o sube un asset para el header de media.")
+            return
+        if header_format:
+            data["header_format"] = header_format
+            data["header_media_asset_id"] = header_asset_id
 
         if self.current is None:
             name = self.name_input.text().strip()
@@ -384,6 +478,19 @@ class WhatsAppTab(QWidget):
     def on_sync(self):
         self.controller.sync_templates()
 
+    def on_header_format_changed(self, _index: int):
+        self._pending_header_asset_id = None
+        self._refresh_header_asset_controls()
+
+    def on_upload_header_asset(self):
+        kind = self._current_header_kind()
+        if not kind:
+            return
+        path, _ = QFileDialog.getOpenFileName(self, "Seleccionar archivo multimedia")
+        if not path:
+            return
+        self.controller.upload_media_asset(path, kind)
+
     def on_send_test(self):
         if not self.current:
             show_error(self, "Selecciona una plantilla aprobada para enviar.")
@@ -392,17 +499,17 @@ class WhatsAppTab(QWidget):
         if not phone:
             show_error(self, "Ingresa un número de teléfono.")
             return
-        header_media_url = None
-        if self.header_media_row.isVisible():
-            header_media_url = self.header_media_input.text().strip()
-            if not header_media_url:
-                show_error(self, "Esta plantilla requiere una URL de media para el header.")
+        header_asset_id = None
+        if self._current_header_format():
+            header_asset_id = self._selected_header_asset_id()
+            if not header_asset_id:
+                show_error(self, "Esta plantilla requiere un asset de media para el header.")
                 return
         self.controller.send_test(
             phone,
             self.current.get("id"),
             self._example_values(),
-            header_media_url=header_media_url,
+            header_media_asset_id=header_asset_id,
         )
 
     def update_preview(self):
@@ -415,11 +522,15 @@ class WhatsAppTab(QWidget):
                 return values[idx]
             return match.group(0)
 
-        preview = _PLACEHOLDER_RE.sub(repl, body)
         footer = self.footer_input.text().strip()
-        if footer:
-            preview = f"{preview}\n\n{footer}"
-        self.preview_text.setPlainText(preview)
+        asset = self._selected_header_asset()
+        self.preview_widget.set_preview(
+            body=_PLACEHOLDER_RE.sub(repl, body),
+            footer=footer,
+            media_format=self._current_header_format(),
+            media_url=(asset or {}).get("public_url"),
+            media_name=(asset or {}).get("display_name") or (asset or {}).get("original_filename"),
+        )
 
     # ------------------------------------------------------------------
     # Callbacks del controller
@@ -448,6 +559,27 @@ class WhatsAppTab(QWidget):
 
     def _on_test_sent(self, message: str):
         show_info(self, message)
+
+    def _on_media_assets_loaded(self, kind: str, assets: List[Dict[str, Any]]):
+        self._media_assets_by_kind[kind] = assets or []
+        for asset in assets or []:
+            if asset.get("id") is not None:
+                self._media_assets_by_id[asset["id"]] = asset
+        if kind == self._current_header_kind():
+            self._populate_asset_combo(kind, self._pending_header_asset_id)
+
+    def _on_media_asset_uploaded(self, kind: str, asset: Dict[str, Any]):
+        if not asset:
+            return
+        assets = [a for a in self._media_assets_by_kind.get(kind, []) if a.get("id") != asset.get("id")]
+        assets.insert(0, asset)
+        self._media_assets_by_kind[kind] = assets
+        if asset.get("id") is not None:
+            self._media_assets_by_id[asset["id"]] = asset
+            self._pending_header_asset_id = asset["id"]
+        if kind == self._current_header_kind():
+            self._populate_asset_combo(kind, self._pending_header_asset_id)
+        show_info(self, "Media subida correctamente.")
 
     def _on_error(self, message: str):
         show_error(self, message)

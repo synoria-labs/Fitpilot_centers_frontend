@@ -6,6 +6,9 @@ GraphQL client (refactor seguro para entornos con múltiples hilos/loops).
 """
 
 import asyncio
+import json
+import mimetypes
+from pathlib import Path
 from typing import Any, Dict, Optional, ClassVar
 import threading
 import httpx
@@ -341,6 +344,61 @@ class GraphQLClient:
             return None
         except Exception as e:
             logger.error("Error en execute: %s", e)
+            return None
+
+    async def execute_multipart(
+        self,
+        query: str,
+        variables: Optional[Dict[str, Any]],
+        *,
+        file_path: str,
+        file_variable: str = "file",
+        use_auth: bool = True,
+    ) -> Optional[Dict[str, Any]]:
+        """Ejecuta una mutation GraphQL multipart con un solo archivo.
+
+        Sigue la GraphQL multipart request spec usada por Strawberry/FastAPI.
+        ``file_variable`` es el nombre dentro de ``variables`` que debe recibir el upload.
+        """
+        path = Path(file_path)
+        if not path.exists() or not path.is_file():
+            logger.error("Archivo no encontrado para upload GraphQL: %s", file_path)
+            return None
+
+        payload_variables = dict(variables or {})
+        payload_variables[file_variable] = None
+        operations = {"query": query, "variables": payload_variables}
+        upload_map = {"0": [f"variables.{file_variable}"]}
+        content_type = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
+        headers = self._build_headers(use_auth=use_auth)
+
+        try:
+            client = await self._get_client()
+            if use_auth:
+                with GraphQLClient._cookies_lock:
+                    client.cookies.update(self._cookies)
+
+            with path.open("rb") as handle:
+                files = {
+                    "operations": (None, json.dumps(operations), "application/json"),
+                    "map": (None, json.dumps(upload_map), "application/json"),
+                    "0": (path.name, handle, content_type),
+                }
+                resp = await client.post(self.url, data={}, files=files, headers=headers)
+
+            with GraphQLClient._cookies_lock:
+                self._cookies.update(client.cookies)
+
+            if resp.status_code != 200:
+                logger.error("Multipart GraphQL HTTP %s: %s", resp.status_code, resp.text)
+                return None
+            data = resp.json()
+            if "errors" in data:
+                logger.error("Multipart GraphQL errors: %s", data["errors"])
+                return None
+            return data.get("data")
+        except Exception as e:
+            logger.error("Error en execute_multipart: %s", e)
             return None
 
     # -------------------------------
