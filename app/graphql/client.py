@@ -19,6 +19,18 @@ from ..core.logging import get_logger
 logger = get_logger(__name__)
 
 
+def _format_graphql_errors(errors: Any) -> str:
+    messages = []
+    for error in errors if isinstance(errors, list) else [errors]:
+        if isinstance(error, dict):
+            message = str(error.get("message") or "").strip()
+        else:
+            message = str(error).strip()
+        if message:
+            messages.append(message)
+    return "; ".join(messages) or "Error GraphQL"
+
+
 class GraphQLClient:
     """
     Cliente para comunicar con la API GraphQL.
@@ -52,6 +64,7 @@ class GraphQLClient:
 
         # Inyectado externamente si tu app lo usa (unused for now)
         self.session_store: Optional[object] = None
+        self.last_error: Optional[str] = None
 
     def set_session_store(self, store: object) -> None:
         """Permite inyectar/persistir el SessionStore desde el contenedor DI."""
@@ -360,8 +373,10 @@ class GraphQLClient:
         Sigue la GraphQL multipart request spec usada por Strawberry/FastAPI.
         ``file_variable`` es el nombre dentro de ``variables`` que debe recibir el upload.
         """
+        self.last_error = None
         path = Path(file_path)
         if not path.exists() or not path.is_file():
+            self.last_error = f"Archivo no encontrado: {file_path}"
             logger.error("Archivo no encontrado para upload GraphQL: %s", file_path)
             return None
 
@@ -371,6 +386,7 @@ class GraphQLClient:
         upload_map = {"0": [f"variables.{file_variable}"]}
         content_type = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
         headers = self._build_headers(use_auth=use_auth)
+        headers.pop("Content-Type", None)
 
         try:
             client = await self._get_client()
@@ -390,14 +406,17 @@ class GraphQLClient:
                 self._cookies.update(client.cookies)
 
             if resp.status_code != 200:
+                self.last_error = f"HTTP {resp.status_code}: {resp.text}"
                 logger.error("Multipart GraphQL HTTP %s: %s", resp.status_code, resp.text)
                 return None
             data = resp.json()
             if "errors" in data:
+                self.last_error = _format_graphql_errors(data["errors"])
                 logger.error("Multipart GraphQL errors: %s", data["errors"])
                 return None
             return data.get("data")
         except Exception as e:
+            self.last_error = str(e)
             logger.error("Error en execute_multipart: %s", e)
             return None
 
