@@ -258,16 +258,29 @@ class WhatsAppTab(QWidget):
         test_row.addWidget(self.send_test_btn)
         test_layout.addLayout(test_row)
 
-        self.header_media_row = QWidget()
-        header_media_layout = QHBoxLayout(self.header_media_row)
-        header_media_layout.setContentsMargins(0, 0, 0, 0)
-        self.header_media_label = QLabel("Media header:")
-        self.header_media_input = QLineEdit()
-        self.header_media_input.setPlaceholderText("URL pública de imagen/video/documento")
-        header_media_layout.addWidget(self.header_media_label)
-        header_media_layout.addWidget(self.header_media_input)
-        self.header_media_row.setVisible(False)
-        test_layout.addWidget(self.header_media_row)
+        self.test_media_row = QWidget()
+        test_media_layout = QHBoxLayout(self.test_media_row)
+        test_media_layout.setContentsMargins(0, 0, 0, 0)
+        test_media_layout.addWidget(QLabel("Media para prueba:"))
+        self.test_media_mode = QComboBox()
+        self.test_media_mode.addItem("Usar media por defecto", "default")
+        self.test_media_mode.addItem("Usar otro asset", "asset")
+        self.test_media_mode.addItem("Usar URL externa HTTPS", "url")
+        self.test_media_mode.currentIndexChanged.connect(self._refresh_test_media_controls)
+        test_media_layout.addWidget(self.test_media_mode)
+        self.test_default_media_label = QLabel("")
+        test_media_layout.addWidget(self.test_default_media_label, 1)
+        self.test_asset_combo = QComboBox()
+        self.test_asset_combo.currentIndexChanged.connect(self.update_preview)
+        test_media_layout.addWidget(self.test_asset_combo, 1)
+        self.test_media_input = QLineEdit()
+        self.test_media_input.setPlaceholderText("https://...")
+        self.test_media_input.textChanged.connect(self.update_preview)
+        test_media_layout.addWidget(self.test_media_input, 1)
+        self.test_media_row.setVisible(False)
+        self.test_asset_combo.setVisible(False)
+        self.test_media_input.setVisible(False)
+        test_layout.addWidget(self.test_media_row)
         right_layout.addWidget(test_group)
         self.header_asset_combo.setVisible(False)
         self.upload_asset_btn.setVisible(False)
@@ -328,6 +341,32 @@ class WhatsAppTab(QWidget):
             return None
         return self._media_assets_by_id.get(asset_id)
 
+    def _default_header_asset_id(self) -> Optional[int]:
+        if not self.current:
+            return None
+        value = self.current.get("default_header_media_asset_id")
+        return int(value) if value is not None else None
+
+    def _default_header_asset(self) -> Optional[Dict[str, Any]]:
+        asset_id = self._default_header_asset_id()
+        if asset_id is None:
+            return None
+        return self._media_assets_by_id.get(asset_id)
+
+    def _selected_test_asset_id(self) -> Optional[int]:
+        value = self.test_asset_combo.currentData()
+        return int(value) if value is not None else None
+
+    def _selected_test_asset(self) -> Optional[Dict[str, Any]]:
+        asset_id = self._selected_test_asset_id()
+        if asset_id is None:
+            return None
+        return self._media_assets_by_id.get(asset_id)
+
+    @staticmethod
+    def _asset_label(asset: Dict[str, Any]) -> str:
+        return asset.get("display_name") or asset.get("original_filename") or f"Asset {asset.get('id')}"
+
     def _set_header_format(self, header_format: Optional[str]) -> None:
         self.header_format_combo.blockSignals(True)
         index = self.header_format_combo.findData(header_format)
@@ -340,14 +379,15 @@ class WhatsAppTab(QWidget):
         visible = bool(kind)
         self.header_asset_combo.setVisible(visible)
         self.upload_asset_btn.setVisible(visible)
-        self.header_media_row.setVisible(False)
         if not kind:
             self.header_asset_combo.clear()
             self._pending_header_asset_id = None
+            self._refresh_test_media_controls()
             self.update_preview()
             return
         self._populate_asset_combo(kind, self._pending_header_asset_id)
         self.controller.load_media_assets(kind)
+        self._refresh_test_media_controls()
 
     def _populate_asset_combo(self, kind: str, selected_id: Optional[int] = None) -> None:
         self.header_asset_combo.blockSignals(True)
@@ -355,13 +395,77 @@ class WhatsAppTab(QWidget):
         self.header_asset_combo.addItem("(Selecciona media)", None)
         selected_index = 0
         for i, asset in enumerate(self._media_assets_by_kind.get(kind, []), start=1):
-            label = asset.get("display_name") or asset.get("original_filename") or f"Asset {asset.get('id')}"
-            self.header_asset_combo.addItem(label, asset.get("id"))
+            self.header_asset_combo.addItem(self._asset_label(asset), asset.get("id"))
             if selected_id is not None and asset.get("id") == selected_id:
                 selected_index = i
         self.header_asset_combo.setCurrentIndex(selected_index)
         self.header_asset_combo.blockSignals(False)
+        self._populate_test_asset_combo(kind, self._selected_test_asset_id())
+        self._refresh_default_media_label()
         self.update_preview()
+
+    def _populate_test_asset_combo(self, kind: str, selected_id: Optional[int] = None) -> None:
+        self.test_asset_combo.blockSignals(True)
+        self.test_asset_combo.clear()
+        self.test_asset_combo.addItem("(Selecciona override)", None)
+        selected_index = 0
+        for i, asset in enumerate(self._media_assets_by_kind.get(kind, []), start=1):
+            self.test_asset_combo.addItem(self._asset_label(asset), asset.get("id"))
+            if selected_id is not None and asset.get("id") == selected_id:
+                selected_index = i
+        self.test_asset_combo.setCurrentIndex(selected_index)
+        self.test_asset_combo.blockSignals(False)
+
+    def _refresh_default_media_label(self) -> None:
+        default_id = self._default_header_asset_id()
+        if default_id is None:
+            self.test_default_media_label.setText("Sin media por defecto")
+            return
+        asset = self._default_header_asset()
+        if asset:
+            self.test_default_media_label.setText(f"Default: {self._asset_label(asset)}")
+        else:
+            self.test_default_media_label.setText(f"Default: asset #{default_id}")
+
+    def _refresh_test_media_controls(self) -> None:
+        has_media_header = bool(self.current and self._current_header_format())
+        self.test_media_row.setVisible(has_media_header)
+        if not has_media_header:
+            self.test_asset_combo.setVisible(False)
+            self.test_media_input.setVisible(False)
+            self.test_default_media_label.setVisible(False)
+            self.update_preview()
+            return
+        mode = self.test_media_mode.currentData() or "default"
+        self._refresh_default_media_label()
+        self.test_default_media_label.setVisible(mode == "default")
+        self.test_asset_combo.setVisible(mode == "asset")
+        self.test_media_input.setVisible(mode == "url")
+        kind = self._current_header_kind()
+        if kind and mode == "asset":
+            self._populate_test_asset_combo(kind, self._selected_test_asset_id())
+        self.update_preview()
+
+    def _test_preview_media(self) -> tuple[Optional[str], Optional[str]]:
+        if not (self.current and self._current_header_format()):
+            return None, None
+        mode = self.test_media_mode.currentData() or "default"
+        if mode == "asset":
+            asset = self._selected_test_asset()
+            return (
+                (asset or {}).get("public_url"),
+                (asset or {}).get("display_name") or (asset or {}).get("original_filename"),
+            )
+        if mode == "url":
+            return self.test_media_input.text().strip(), "URL externa"
+        asset = self._default_header_asset()
+        if asset:
+            return (
+                asset.get("public_url"),
+                asset.get("display_name") or asset.get("original_filename"),
+            )
+        default_id = self._default_header_asset_id()
+        return None, f"Asset default #{default_id}" if default_id is not None else None
 
     def _populate_list(self, keep_id: Optional[int] = None):
         self.templates_list.clear()
@@ -406,6 +510,11 @@ class WhatsAppTab(QWidget):
         self.save_btn.setEnabled(True)
         self.delete_btn.setEnabled(True)
         self.send_test_btn.setEnabled(approved)
+        self.test_media_mode.blockSignals(True)
+        self.test_media_mode.setCurrentIndex(0)
+        self.test_media_mode.blockSignals(False)
+        self.test_media_input.clear()
+        self._refresh_test_media_controls()
         self.update_preview()
         self.template_selected.emit(self.templates_list.currentRow())
 
@@ -418,8 +527,8 @@ class WhatsAppTab(QWidget):
         self.body_editor.clear()
         self.examples_input.clear()
         self.footer_input.clear()
-        self.header_media_row.setVisible(False)
-        self.header_media_input.clear()
+        self.test_media_row.setVisible(False)
+        self.test_media_input.clear()
         self._pending_header_asset_id = None
         self._set_header_format(None)
         self.preview_widget.set_preview(body="")
@@ -502,15 +611,24 @@ class WhatsAppTab(QWidget):
             show_error(self, "Ingresa un número de teléfono.")
             return
         header_asset_id = None
+        header_media_url = None
         if self._current_header_format():
-            header_asset_id = self._selected_header_asset_id()
-            if not header_asset_id:
-                show_error(self, "Esta plantilla requiere un asset de media para el header.")
-                return
+            mode = self.test_media_mode.currentData() or "default"
+            if mode == "asset":
+                header_asset_id = self._selected_test_asset_id()
+                if not header_asset_id:
+                    show_error(self, "Selecciona un asset para usarlo como override.")
+                    return
+            elif mode == "url":
+                header_media_url = self.test_media_input.text().strip()
+                if not header_media_url.startswith("https://"):
+                    show_error(self, "La URL de media debe ser pública y empezar con https://.")
+                    return
         self.controller.send_test(
             phone,
             self.current.get("id"),
             self._example_values(),
+            header_media_url=header_media_url,
             header_media_asset_id=header_asset_id,
         )
 
@@ -526,12 +644,16 @@ class WhatsAppTab(QWidget):
 
         footer = self.footer_input.text().strip()
         asset = self._selected_header_asset()
+        media_url = (asset or {}).get("public_url")
+        media_name = (asset or {}).get("display_name") or (asset or {}).get("original_filename")
+        if self.current is not None:
+            media_url, media_name = self._test_preview_media()
         self.preview_widget.set_preview(
             body=_PLACEHOLDER_RE.sub(repl, body),
             footer=footer,
             media_format=self._current_header_format(),
-            media_url=(asset or {}).get("public_url"),
-            media_name=(asset or {}).get("display_name") or (asset or {}).get("original_filename"),
+            media_url=media_url,
+            media_name=media_name,
         )
 
     # ------------------------------------------------------------------
@@ -569,6 +691,7 @@ class WhatsAppTab(QWidget):
                 self._media_assets_by_id[asset["id"]] = asset
         if kind == self._current_header_kind():
             self._populate_asset_combo(kind, self._pending_header_asset_id)
+            self._refresh_test_media_controls()
 
     def _on_media_asset_uploaded(self, kind: str, asset: Dict[str, Any]):
         if not asset:
@@ -581,6 +704,7 @@ class WhatsAppTab(QWidget):
             self._pending_header_asset_id = asset["id"]
         if kind == self._current_header_kind():
             self._populate_asset_combo(kind, self._pending_header_asset_id)
+            self._refresh_test_media_controls()
         show_info(self, "Media subida correctamente.")
 
     def _on_error(self, message: str):

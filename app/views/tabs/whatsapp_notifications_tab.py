@@ -362,6 +362,12 @@ class WhatsAppNotificationsTab(QWidget):
         header_media_layout.setContentsMargins(10, 10, 10, 10)
         header_media_layout.setHorizontalSpacing(10)
         header_media_layout.setVerticalSpacing(8)
+        self.default_header_media_label = QLabel("Sin media por defecto")
+        self.default_header_media_label.setWordWrap(True)
+        header_media_layout.addRow("Media por defecto:", self.default_header_media_label)
+        self.use_header_override_check = QCheckBox("Usar media diferente para este evento")
+        self.use_header_override_check.stateChanged.connect(self._on_header_override_toggled)
+        header_media_layout.addRow("", self.use_header_override_check)
         asset_row = QWidget()
         asset_row_layout = QHBoxLayout(asset_row)
         asset_row_layout.setContentsMargins(0, 0, 0, 0)
@@ -473,18 +479,62 @@ class WhatsAppNotificationsTab(QWidget):
             return None
         return self._media_assets_by_id.get(asset_id)
 
+    def _default_header_asset_id(self, tpl: Optional[Dict[str, Any]] = None) -> Optional[int]:
+        tpl = tpl if tpl is not None else self._current_template()
+        if not tpl:
+            return None
+        value = tpl.get("default_header_media_asset_id")
+        return int(value) if value is not None else None
+
+    def _default_header_asset(self, tpl: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+        asset_id = self._default_header_asset_id(tpl)
+        if asset_id is None:
+            return None
+        return self._media_assets_by_id.get(asset_id)
+
+    @staticmethod
+    def _asset_label(asset: Dict[str, Any]) -> str:
+        return asset.get("display_name") or asset.get("original_filename") or f"Asset {asset.get('id')}"
+
+    def _refresh_default_header_media_label(self) -> None:
+        default_id = self._default_header_asset_id()
+        if default_id is None:
+            self.default_header_media_label.setText("Esta plantilla no tiene media por defecto.")
+            return
+        asset = self._default_header_asset()
+        if asset:
+            self.default_header_media_label.setText(f"Esta plantilla tiene media por defecto: {self._asset_label(asset)}")
+        else:
+            self.default_header_media_label.setText(f"Esta plantilla tiene media por defecto: asset #{default_id}")
+
+    def _set_override_controls_enabled(self, enabled: bool, *, clear_when_disabled: bool = True) -> None:
+        self.header_asset_combo.setEnabled(enabled)
+        self.upload_asset_btn.setEnabled(enabled)
+        self.header_media_input.setEnabled(enabled)
+        if not enabled and clear_when_disabled:
+            self.header_asset_combo.blockSignals(True)
+            self.header_asset_combo.setCurrentIndex(0 if self.header_asset_combo.count() else -1)
+            self.header_asset_combo.blockSignals(False)
+            self.header_media_input.blockSignals(True)
+            self.header_media_input.clear()
+            self.header_media_input.blockSignals(False)
+        self._update_preview()
+
+    def _on_header_override_toggled(self, _state: int) -> None:
+        self._set_override_controls_enabled(self.use_header_override_check.isChecked())
+
     def _populate_asset_combo(self, kind: str, selected_id: Optional[int] = None) -> None:
         self.header_asset_combo.blockSignals(True)
         self.header_asset_combo.clear()
         self.header_asset_combo.addItem("(Selecciona media)", None)
         selected_index = 0
         for i, asset in enumerate(self._media_assets_by_kind.get(kind, []), start=1):
-            label = asset.get("display_name") or asset.get("original_filename") or f"Asset {asset.get('id')}"
-            self.header_asset_combo.addItem(label, asset.get("id"))
+            self.header_asset_combo.addItem(self._asset_label(asset), asset.get("id"))
             if selected_id is not None and asset.get("id") == selected_id:
                 selected_index = i
         self.header_asset_combo.setCurrentIndex(selected_index)
         self.header_asset_combo.blockSignals(False)
+        self._refresh_default_header_media_label()
         self._update_preview()
 
     # ------------------------------------------------------------------
@@ -533,6 +583,11 @@ class WhatsAppNotificationsTab(QWidget):
 
         self._pending_header_asset_id = setting.get("header_media_asset_id")
         self.header_media_input.setText(setting.get("header_media_url") or "")
+        self.use_header_override_check.blockSignals(True)
+        self.use_header_override_check.setChecked(
+            bool(setting.get("header_media_asset_id") or setting.get("header_media_url"))
+        )
+        self.use_header_override_check.blockSignals(False)
 
         # Offsets (solo eventos que lo soportan)
         supports_offsets = bool(setting.get("supports_offsets"))
@@ -552,12 +607,20 @@ class WhatsAppNotificationsTab(QWidget):
         self.header_media_group.setVisible(bool(media_format))
         if media_format:
             self.header_media_group.setTitle(f"Media del encabezado ({media_format})")
+            self._refresh_default_header_media_label()
             kind = self._media_kind_for_format(media_format)
             if kind:
                 self._populate_asset_combo(kind, self._pending_header_asset_id)
                 self.controller.load_media_assets(kind)
+            self._set_override_controls_enabled(
+                self.use_header_override_check.isChecked(),
+                clear_when_disabled=False,
+            )
         else:
             self._pending_header_asset_id = None
+            self.use_header_override_check.blockSignals(True)
+            self.use_header_override_check.setChecked(False)
+            self.use_header_override_check.blockSignals(False)
 
         count = _placeholder_count(_template_body_text(tpl.get("components"))) if tpl else 0
         variables = self._event_variables(self._current_event) if self._current_event else []
@@ -612,14 +675,32 @@ class WhatsAppNotificationsTab(QWidget):
             return match.group(0)
 
         media_format = _required_header_media_format(tpl.get("components"))
-        asset = self._selected_header_asset()
-        media_url = (asset or {}).get("public_url") or self.header_media_input.text().strip()
+        asset = None
+        media_url = None
+        media_name = None
+        if media_format:
+            if self.use_header_override_check.isChecked():
+                asset = self._selected_header_asset()
+                media_url = (asset or {}).get("public_url") or self.header_media_input.text().strip()
+                media_name = (asset or {}).get("display_name") or (asset or {}).get("original_filename")
+            else:
+                asset = self._default_header_asset(tpl)
+                media_url = (asset or {}).get("public_url")
+                media_name = (
+                    (asset or {}).get("display_name")
+                    or (asset or {}).get("original_filename")
+                    or (
+                        f"Asset default #{self._default_header_asset_id(tpl)}"
+                        if self._default_header_asset_id(tpl) is not None
+                        else None
+                    )
+                )
         self.preview_widget.set_preview(
             body=_PLACEHOLDER_RE.sub(repl, body),
             footer=footer,
             media_format=media_format,
             media_url=media_url,
-            media_name=(asset or {}).get("display_name") or (asset or {}).get("original_filename"),
+            media_name=media_name,
         )
 
     # ------------------------------------------------------------------
@@ -677,10 +758,20 @@ class WhatsAppNotificationsTab(QWidget):
 
         tpl = self._current_template()
         media_format = _required_header_media_format(tpl.get("components")) if tpl else None
-        header_media_asset_id = self._selected_header_asset_id() if media_format else None
-        header_media_url = self.header_media_input.text().strip() if media_format else None
-        if enabled and media_format and not header_media_asset_id and not header_media_url:
-            show_error(self, f"La plantilla requiere media de encabezado ({media_format}).")
+        header_media_asset_id = None
+        header_media_url = None
+        if media_format and self.use_header_override_check.isChecked():
+            header_media_asset_id = self._selected_header_asset_id()
+            header_media_url = self.header_media_input.text().strip()
+            if enabled and not header_media_asset_id and not header_media_url:
+                show_error(self, f"Selecciona un asset override o una URL HTTPS para {media_format}.")
+                return
+        elif enabled and media_format and self._default_header_asset_id(tpl) is None:
+            show_error(
+                self,
+                f"La plantilla requiere media de encabezado ({media_format}) y no tiene default; "
+                "activa un override para este evento.",
+            )
             return
         if header_media_url and not header_media_url.startswith("https://"):
             show_error(self, "La URL de media debe ser pública y empezar con https://.")
@@ -731,6 +822,7 @@ class WhatsAppNotificationsTab(QWidget):
         media_format = _required_header_media_format(tpl.get("components")) if tpl else None
         if kind == self._media_kind_for_format(media_format):
             self._populate_asset_combo(kind, self._pending_header_asset_id)
+            self._refresh_default_header_media_label()
 
     def _on_media_asset_uploaded(self, kind: str, asset: Dict[str, Any]) -> None:
         if not asset:
@@ -742,6 +834,7 @@ class WhatsAppNotificationsTab(QWidget):
             self._media_assets_by_id[asset["id"]] = asset
             self._pending_header_asset_id = asset["id"]
         self._populate_asset_combo(kind, self._pending_header_asset_id)
+        self._refresh_default_header_media_label()
         show_info(self, "Media subida correctamente.")
 
     def _on_setting_saved(self, setting: Optional[Dict[str, Any]]) -> None:
