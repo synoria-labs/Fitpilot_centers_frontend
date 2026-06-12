@@ -16,7 +16,7 @@ import qtawesome as qta
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QTextEdit,
     QLineEdit, QGroupBox, QSplitter, QListWidget, QListWidgetItem, QComboBox,
-    QCheckBox, QFormLayout,
+    QCheckBox, QFormLayout, QFileDialog,
 )
 from PySide6.QtCore import Qt, Signal, QSize
 from PySide6.QtGui import QFont, QColor
@@ -25,15 +25,26 @@ from ...core import container, get_logger
 from ...controllers.whatsapp_notifications_controller import WhatsAppNotificationsController
 from ...utils.dialog_helpers import show_error, show_info
 from .whatsapp import theme
+from .whatsapp.template_preview_widget import TemplatePreviewWidget
 
 logger = get_logger(__name__)
 
 _PLACEHOLDER_RE = re.compile(r"\{\{\s*(\d+)\s*\}\}")
+_HEADER_FORMAT_KIND = {"IMAGE": "image", "VIDEO": "video", "DOCUMENT": "document"}
 
 
 def _template_body_text(components: Optional[List[Any]]) -> str:
     for comp in components or []:
         if isinstance(comp, dict) and str(comp.get("type") or "").upper() == "BODY":
+            text = comp.get("text")
+            if isinstance(text, str):
+                return text
+    return ""
+
+
+def _template_footer_text(components: Optional[List[Any]]) -> str:
+    for comp in components or []:
+        if isinstance(comp, dict) and str(comp.get("type") or "").upper() == "FOOTER":
             text = comp.get("text")
             if isinstance(text, str):
                 return text
@@ -234,6 +245,9 @@ class WhatsAppNotificationsTab(QWidget):
         self._templates_by_id: Dict[int, Dict[str, Any]] = {}
         self._current_event: Optional[str] = None
         self._var_combos: List[QComboBox] = []
+        self._media_assets_by_kind: Dict[str, List[Dict[str, Any]]] = {}
+        self._media_assets_by_id: Dict[int, Dict[str, Any]] = {}
+        self._pending_header_asset_id: Optional[int] = None
 
         try:
             service = container.get("whatsapp_notifications_service")
@@ -348,9 +362,22 @@ class WhatsAppNotificationsTab(QWidget):
         header_media_layout.setContentsMargins(10, 10, 10, 10)
         header_media_layout.setHorizontalSpacing(10)
         header_media_layout.setVerticalSpacing(8)
+        asset_row = QWidget()
+        asset_row_layout = QHBoxLayout(asset_row)
+        asset_row_layout.setContentsMargins(0, 0, 0, 0)
+        asset_row_layout.setSpacing(8)
+        self.header_asset_combo = QComboBox()
+        self.header_asset_combo.currentIndexChanged.connect(self._update_preview)
+        asset_row_layout.addWidget(self.header_asset_combo, 1)
+        self.upload_asset_btn = QPushButton("Subir media")
+        self.upload_asset_btn.setObjectName("notifActionButton")
+        self.upload_asset_btn.clicked.connect(self.on_upload_header_asset)
+        asset_row_layout.addWidget(self.upload_asset_btn)
+        header_media_layout.addRow("Asset:", asset_row)
         self.header_media_input = QLineEdit()
         self.header_media_input.setPlaceholderText("https://...")
-        header_media_layout.addRow("URL pública HTTPS:", self.header_media_input)
+        self.header_media_input.textChanged.connect(self._update_preview)
+        header_media_layout.addRow("URL legacy HTTPS:", self.header_media_input)
         self.header_media_group.setVisible(False)
         right_layout.addWidget(self.header_media_group)
 
@@ -368,12 +395,10 @@ class WhatsAppNotificationsTab(QWidget):
         preview_label = QLabel("Vista previa (con valores de ejemplo):")
         preview_label.setObjectName("notifPreviewLabel")
         right_layout.addWidget(preview_label)
-        self.preview_text = QTextEdit()
-        self.preview_text.setObjectName("notifPreview")
-        self.preview_text.setReadOnly(True)
-        self.preview_text.setMinimumHeight(150)
-        self.preview_text.setMaximumHeight(190)
-        right_layout.addWidget(self.preview_text)
+        self.preview_widget = TemplatePreviewWidget()
+        self.preview_widget.setMinimumHeight(170)
+        self.preview_widget.setMaximumHeight(260)
+        right_layout.addWidget(self.preview_widget)
 
         actions = QHBoxLayout()
         actions.setContentsMargins(0, 0, 0, 0)
@@ -400,6 +425,8 @@ class WhatsAppNotificationsTab(QWidget):
         self.controller.settings_loaded.connect(self._on_settings_loaded)
         self.controller.catalog_loaded.connect(self._on_catalog_loaded)
         self.controller.templates_loaded.connect(self._on_templates_loaded)
+        self.controller.media_assets_loaded.connect(self._on_media_assets_loaded)
+        self.controller.media_asset_uploaded.connect(self._on_media_asset_uploaded)
         self.controller.setting_saved.connect(self._on_setting_saved)
         self.controller.sweep_done.connect(self._on_sweep_done)
         self.controller.error_occurred.connect(self._on_error)
@@ -432,6 +459,33 @@ class WhatsAppNotificationsTab(QWidget):
     def _event_variables(self, event_type: str) -> List[Dict[str, Any]]:
         cat = self._catalog.get(event_type) or {}
         return cat.get("variables") or []
+
+    def _media_kind_for_format(self, media_format: Optional[str]) -> Optional[str]:
+        return _HEADER_FORMAT_KIND.get((media_format or "").upper())
+
+    def _selected_header_asset_id(self) -> Optional[int]:
+        value = self.header_asset_combo.currentData()
+        return int(value) if value is not None else None
+
+    def _selected_header_asset(self) -> Optional[Dict[str, Any]]:
+        asset_id = self._selected_header_asset_id()
+        if asset_id is None:
+            return None
+        return self._media_assets_by_id.get(asset_id)
+
+    def _populate_asset_combo(self, kind: str, selected_id: Optional[int] = None) -> None:
+        self.header_asset_combo.blockSignals(True)
+        self.header_asset_combo.clear()
+        self.header_asset_combo.addItem("(Selecciona media)", None)
+        selected_index = 0
+        for i, asset in enumerate(self._media_assets_by_kind.get(kind, []), start=1):
+            label = asset.get("display_name") or asset.get("original_filename") or f"Asset {asset.get('id')}"
+            self.header_asset_combo.addItem(label, asset.get("id"))
+            if selected_id is not None and asset.get("id") == selected_id:
+                selected_index = i
+        self.header_asset_combo.setCurrentIndex(selected_index)
+        self.header_asset_combo.blockSignals(False)
+        self._update_preview()
 
     # ------------------------------------------------------------------
     # Render
@@ -477,6 +531,7 @@ class WhatsAppNotificationsTab(QWidget):
         self.template_combo.setCurrentIndex(selected_index)
         self.template_combo.blockSignals(False)
 
+        self._pending_header_asset_id = setting.get("header_media_asset_id")
         self.header_media_input.setText(setting.get("header_media_url") or "")
 
         # Offsets (solo eventos que lo soportan)
@@ -497,6 +552,12 @@ class WhatsAppNotificationsTab(QWidget):
         self.header_media_group.setVisible(bool(media_format))
         if media_format:
             self.header_media_group.setTitle(f"Media del encabezado ({media_format})")
+            kind = self._media_kind_for_format(media_format)
+            if kind:
+                self._populate_asset_combo(kind, self._pending_header_asset_id)
+                self.controller.load_media_assets(kind)
+        else:
+            self._pending_header_asset_id = None
 
         count = _placeholder_count(_template_body_text(tpl.get("components"))) if tpl else 0
         variables = self._event_variables(self._current_event) if self._current_event else []
@@ -536,9 +597,10 @@ class WhatsAppNotificationsTab(QWidget):
     def _update_preview(self) -> None:
         tpl = self._current_template()
         if tpl is None:
-            self.preview_text.setPlainText("(Selecciona una plantilla aprobada)")
+            self.preview_widget.set_preview(body="(Selecciona una plantilla aprobada)")
             return
         body = _template_body_text(tpl.get("components"))
+        footer = _template_footer_text(tpl.get("components"))
         # Mapa key -> sample para el evento actual
         samples = {v.get("key"): v.get("sample") for v in self._event_variables(self._current_event)}
         mapping = self._collect_param_mapping()
@@ -549,7 +611,16 @@ class WhatsAppNotificationsTab(QWidget):
                 return str(samples.get(mapping[idx], match.group(0)))
             return match.group(0)
 
-        self.preview_text.setPlainText(_PLACEHOLDER_RE.sub(repl, body))
+        media_format = _required_header_media_format(tpl.get("components"))
+        asset = self._selected_header_asset()
+        media_url = (asset or {}).get("public_url") or self.header_media_input.text().strip()
+        self.preview_widget.set_preview(
+            body=_PLACEHOLDER_RE.sub(repl, body),
+            footer=footer,
+            media_format=media_format,
+            media_url=media_url,
+            media_name=(asset or {}).get("display_name") or (asset or {}).get("original_filename"),
+        )
 
     # ------------------------------------------------------------------
     # Acciones de usuario
@@ -561,7 +632,20 @@ class WhatsAppNotificationsTab(QWidget):
         self.event_selected.emit(event_type or "")
 
     def on_template_changed(self, _index: int) -> None:
+        setting = self._settings.get(self._current_event, {})
+        self._pending_header_asset_id = setting.get("header_media_asset_id")
         self._rebuild_variable_rows()
+
+    def on_upload_header_asset(self) -> None:
+        tpl = self._current_template()
+        media_format = _required_header_media_format(tpl.get("components")) if tpl else None
+        kind = self._media_kind_for_format(media_format)
+        if not kind:
+            return
+        path, _ = QFileDialog.getOpenFileName(self, "Seleccionar archivo multimedia")
+        if not path:
+            return
+        self.controller.upload_media_asset(path, kind)
 
     def _parse_offsets(self) -> List[int]:
         raw = self.offsets_input.text().strip()
@@ -593,8 +677,9 @@ class WhatsAppNotificationsTab(QWidget):
 
         tpl = self._current_template()
         media_format = _required_header_media_format(tpl.get("components")) if tpl else None
+        header_media_asset_id = self._selected_header_asset_id() if media_format else None
         header_media_url = self.header_media_input.text().strip() if media_format else None
-        if enabled and media_format and not header_media_url:
+        if enabled and media_format and not header_media_asset_id and not header_media_url:
             show_error(self, f"La plantilla requiere media de encabezado ({media_format}).")
             return
         if header_media_url and not header_media_url.startswith("https://"):
@@ -607,6 +692,7 @@ class WhatsAppNotificationsTab(QWidget):
             "template_id": template_id,
             "param_mapping": self._collect_param_mapping(),
             "header_media_url": header_media_url,
+            "header_media_asset_id": header_media_asset_id,
             "offsets_days": self._parse_offsets() if setting.get("supports_offsets") else [],
         }
         self.controller.save_setting(data)
@@ -635,6 +721,28 @@ class WhatsAppNotificationsTab(QWidget):
         self._templates_by_id = {t["id"]: t for t in self._templates if t.get("id") is not None}
         if self._current_event:
             self._render_event(self._current_event)
+
+    def _on_media_assets_loaded(self, kind: str, assets: List[Dict[str, Any]]) -> None:
+        self._media_assets_by_kind[kind] = assets or []
+        for asset in assets or []:
+            if asset.get("id") is not None:
+                self._media_assets_by_id[asset["id"]] = asset
+        tpl = self._current_template()
+        media_format = _required_header_media_format(tpl.get("components")) if tpl else None
+        if kind == self._media_kind_for_format(media_format):
+            self._populate_asset_combo(kind, self._pending_header_asset_id)
+
+    def _on_media_asset_uploaded(self, kind: str, asset: Dict[str, Any]) -> None:
+        if not asset:
+            return
+        assets = [a for a in self._media_assets_by_kind.get(kind, []) if a.get("id") != asset.get("id")]
+        assets.insert(0, asset)
+        self._media_assets_by_kind[kind] = assets
+        if asset.get("id") is not None:
+            self._media_assets_by_id[asset["id"]] = asset
+            self._pending_header_asset_id = asset["id"]
+        self._populate_asset_combo(kind, self._pending_header_asset_id)
+        show_info(self, "Media subida correctamente.")
 
     def _on_setting_saved(self, setting: Optional[Dict[str, Any]]) -> None:
         if setting and setting.get("event_type"):

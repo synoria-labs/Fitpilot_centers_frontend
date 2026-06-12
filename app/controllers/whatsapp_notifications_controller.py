@@ -18,6 +18,8 @@ class WhatsAppNotificationsController(BaseController):
     settings_loaded = Signal(object)    # List[dict]
     catalog_loaded = Signal(object)     # List[dict]
     templates_loaded = Signal(object)   # List[dict] (aprobadas)
+    media_assets_loaded = Signal(str, object) # kind, List[dict]
+    media_asset_uploaded = Signal(str, object) # kind, asset dict
     setting_saved = Signal(object)      # setting dict
     sweep_done = Signal(object)         # {sent, skipped, failed}
     error_occurred = Signal(str)
@@ -77,7 +79,34 @@ class WhatsAppNotificationsController(BaseController):
             template_id=data.get("template_id"),
             param_mapping=data.get("param_mapping") or [],
             header_media_url=data.get("header_media_url"),
+            header_media_asset_id=data.get("header_media_asset_id"),
             offsets_days=data.get("offsets_days") or [],
+        )
+
+    def load_media_assets(self, kind: Optional[str]) -> None:
+        if not self._service or not kind:
+            return
+        self._execute_authenticated_operation(
+            self._service,
+            "get_media_assets",
+            lambda result, media_kind=kind: self.media_assets_loaded.emit(media_kind, result or []),
+            self._on_error,
+            kind=kind,
+        )
+
+    def upload_media_asset(self, file_path: str, kind: str, display_name: Optional[str] = None) -> None:
+        if not self._service:
+            self.error_occurred.emit("Servicio de notificaciones no disponible")
+            return
+        self.loading_changed.emit(True)
+        self._execute_authenticated_operation(
+            self._service,
+            "upload_media_asset",
+            lambda result, media_kind=kind: self._on_media_uploaded(media_kind, result),
+            self._on_error,
+            file_path=file_path,
+            kind=kind,
+            display_name=display_name,
         )
 
     def run_sweep(self) -> None:
@@ -115,6 +144,13 @@ class WhatsAppNotificationsController(BaseController):
             self.sweep_done.emit(result)
         else:
             self.error_occurred.emit((result or {}).get("error") or "No se pudo ejecutar el barrido")
+
+    def _on_media_uploaded(self, kind: str, result: Optional[Dict[str, Any]]) -> None:
+        self.loading_changed.emit(False)
+        if result and result.get("id"):
+            self.media_asset_uploaded.emit(kind, result)
+        else:
+            self.error_occurred.emit("No se pudo subir el archivo multimedia")
 
     def _on_error(self, message: str) -> None:
         self.loading_changed.emit(False)

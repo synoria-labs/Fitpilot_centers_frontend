@@ -12,7 +12,6 @@ from ..core.logging import get_logger
 logger = get_logger(__name__)
 
 
-# Campos comunes que pedimos para una plantilla.
 _TEMPLATE_FIELDS = """
     id
     templateName
@@ -21,9 +20,29 @@ _TEMPLATE_FIELDS = """
     templateStatus
     category
     metaTemplateId
+    defaultHeaderMediaAssetId
     components
     createdAt
     updatedAt
+"""
+
+_MEDIA_ASSET_FIELDS = """
+    id
+    mediaKind
+    displayName
+    originalFilename
+    mimeType
+    fileExt
+    fileSize
+    sha256
+    storageKey
+    publicUrl
+    status
+    sampleHeaderHandle
+    sampleHandleGeneratedAt
+    createdAt
+    updatedAt
+    lastValidatedAt
 """
 
 
@@ -39,9 +58,33 @@ def _map_template(node: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         "template_status": node.get("templateStatus"),
         "category": node.get("category"),
         "meta_template_id": node.get("metaTemplateId"),
+        "default_header_media_asset_id": node.get("defaultHeaderMediaAssetId"),
         "components": node.get("components"),
         "created_at": node.get("createdAt"),
         "updated_at": node.get("updatedAt"),
+    }
+
+
+def _map_asset(node: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not node:
+        return None
+    return {
+        "id": node.get("id"),
+        "media_kind": node.get("mediaKind"),
+        "display_name": node.get("displayName"),
+        "original_filename": node.get("originalFilename"),
+        "mime_type": node.get("mimeType"),
+        "file_ext": node.get("fileExt"),
+        "file_size": node.get("fileSize"),
+        "sha256": node.get("sha256"),
+        "storage_key": node.get("storageKey"),
+        "public_url": node.get("publicUrl"),
+        "status": node.get("status"),
+        "sample_header_handle": node.get("sampleHeaderHandle"),
+        "sample_handle_generated_at": node.get("sampleHandleGeneratedAt"),
+        "created_at": node.get("createdAt"),
+        "updated_at": node.get("updatedAt"),
+        "last_validated_at": node.get("lastValidatedAt"),
     }
 
 
@@ -87,6 +130,8 @@ class WhatsAppService:
         body_text: str,
         body_examples: Optional[List[str]] = None,
         footer_text: Optional[str] = None,
+        header_format: Optional[str] = None,
+        header_media_asset_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Crea una plantilla en Meta y la guarda localmente."""
         mutation = f"""
@@ -106,6 +151,8 @@ class WhatsAppService:
                 "bodyText": body_text,
                 "bodyExamples": body_examples or [],
                 "footerText": footer_text,
+                "headerFormat": header_format,
+                "headerMediaAssetId": header_media_asset_id,
             }
         }
         result = await self.client.execute(mutation, variables)
@@ -117,6 +164,7 @@ class WhatsAppService:
         body_text: str,
         body_examples: Optional[List[str]] = None,
         footer_text: Optional[str] = None,
+        header_media_asset_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Edita los components de una plantilla (Meta vuelve a revisar -> PENDING)."""
         mutation = f"""
@@ -134,6 +182,7 @@ class WhatsAppService:
                 "bodyText": body_text,
                 "bodyExamples": body_examples or [],
                 "footerText": footer_text,
+                "headerMediaAssetId": header_media_asset_id,
             }
         }
         result = await self.client.execute(mutation, variables)
@@ -158,6 +207,7 @@ class WhatsAppService:
         template_id: int,
         body_params: Optional[List[str]] = None,
         header_media_url: Optional[str] = None,
+        header_media_asset_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Envía una plantilla aprobada al número indicado."""
         mutation = """
@@ -175,12 +225,55 @@ class WhatsAppService:
                 "templateId": template_id,
                 "bodyParams": body_params or [],
                 "headerMediaUrl": header_media_url,
+                "headerMediaAssetId": header_media_asset_id,
             }
         }
         result = await self.client.execute(mutation, variables)
         if result and result.get("sendTemplateTest") is not None:
             return result["sendTemplateTest"]
         return {"success": False, "error": "Error al enviar la plantilla"}
+
+    async def get_media_assets(
+        self,
+        kind: Optional[str] = None,
+        search: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        query = f"""
+            query GetWhatsappMediaAssets($kind: String, $search: String) {{
+                whatsappMediaAssets(kind: $kind, search: $search, status: "active") {{
+                    {_MEDIA_ASSET_FIELDS}
+                }}
+            }}
+        """
+        result = await self.client.execute(query, {"kind": kind, "search": search})
+        nodes = (result or {}).get("whatsappMediaAssets") or []
+        return [_map_asset(n) for n in nodes if n]
+
+    async def upload_media_asset(
+        self,
+        file_path: str,
+        kind: str,
+        display_name: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        mutation = f"""
+            mutation UploadWhatsappMediaAsset(
+                $file: Upload!,
+                $kind: WhatsAppMediaKind!,
+                $displayName: String
+            ) {{
+                uploadWhatsappMediaAsset(file: $file, kind: $kind, displayName: $displayName) {{
+                    {_MEDIA_ASSET_FIELDS}
+                }}
+            }}
+        """
+        variables = {"kind": (kind or "").upper(), "displayName": display_name}
+        result = await self.client.execute_multipart(
+            mutation,
+            variables,
+            file_path=file_path,
+            file_variable="file",
+        )
+        return _map_asset((result or {}).get("uploadWhatsappMediaAsset"))
 
     @staticmethod
     def _map_result(result: Optional[Dict[str, Any]], key: str) -> Dict[str, Any]:
