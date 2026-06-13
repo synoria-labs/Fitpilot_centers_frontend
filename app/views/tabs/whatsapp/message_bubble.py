@@ -1,11 +1,12 @@
 """A single chat message bubble (WhatsApp-style)."""
 import qtawesome as qta
-from PySide6.QtCore import Qt, QSize
+from PySide6.QtCore import Qt, QSize, Signal
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel, QFrame, QSizePolicy
 
 from ....models.chat import ChatMessage
 from . import theme
-from .message_formatter import display_text_for_message
+from .media_widgets import FailedMediaWidget, create_media_widget
+from .message_formatter import display_text_for_message, extract_useful_text
 
 _STYLE = f"""
 #bubbleIn {{
@@ -29,8 +30,11 @@ QLabel#bubbleTime {{ color: {theme.TEXT_SECONDARY}; font-size: 10px; }}
 
 
 class MessageBubble(QWidget):
+    retry_requested = Signal(int)  # message id (failed media download)
+
     def __init__(self, message: ChatMessage, parent=None) -> None:
         super().__init__(parent)
+        self.message_id = message.id
         self.setStyleSheet(_STYLE)
         self._build(message)
 
@@ -48,14 +52,22 @@ class MessageBubble(QWidget):
         v.setContentsMargins(10, 7, 10, 6)
         v.setSpacing(3)
 
-        text_label = QLabel(self._render_text(message))
-        text_label.setObjectName("bubbleText")
-        text_label.setTextFormat(Qt.TextFormat.PlainText)
-        text_label.setWordWrap(True)
-        text_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        text_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
-        text_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        v.addWidget(text_label)
+        media_widget = create_media_widget(message, bubble)
+        if media_widget is not None:
+            if isinstance(media_widget, FailedMediaWidget):
+                media_widget.retry_requested.connect(self.retry_requested.emit)
+            v.addWidget(media_widget)
+
+        text = self._render_text(message, has_media=media_widget is not None)
+        if text:
+            text_label = QLabel(text)
+            text_label.setObjectName("bubbleText")
+            text_label.setTextFormat(Qt.TextFormat.PlainText)
+            text_label.setWordWrap(True)
+            text_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+            text_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+            text_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            v.addWidget(text_label)
 
         meta = QHBoxLayout()
         meta.setContentsMargins(0, 0, 0, 0)
@@ -83,7 +95,11 @@ class MessageBubble(QWidget):
             outer.addWidget(bubble, 0, Qt.AlignmentFlag.AlignRight)
 
     @staticmethod
-    def _render_text(message: ChatMessage) -> str:
+    def _render_text(message: ChatMessage, *, has_media: bool) -> str:
+        if has_media:
+            # The attachment is rendered visually; only show the caption text
+            # (never the "[image]" style placeholder).
+            return extract_useful_text(message.text_content, message.message_type)
         return display_text_for_message(message)
 
     @staticmethod

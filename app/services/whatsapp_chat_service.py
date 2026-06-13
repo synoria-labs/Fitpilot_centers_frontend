@@ -23,6 +23,17 @@ _MESSAGE_FIELDS = """
     timestamp
     waMessageId
     mediaUrl
+    media {
+        id
+        mediaType
+        mimeType
+        filename
+        caption
+        fileSize
+        mediaUrl
+        downloaded
+        downloadFailed
+    }
 """
 
 CONVERSATIONS_QUERY = """
@@ -88,6 +99,26 @@ MESSAGES_QUERY = """
 SEND_MUTATION = """
     mutation SendText($input: SendTextMessageInput!) {
         sendTextMessage(input: $input) {
+            success
+            error
+            message { %s }
+        }
+    }
+""" % _MESSAGE_FIELDS
+
+SEND_MEDIA_MUTATION = """
+    mutation SendMedia($input: SendMediaMessageInput!, $file: Upload!) {
+        sendMediaMessage(input: $input, file: $file) {
+            success
+            error
+            message { %s }
+        }
+    }
+""" % _MESSAGE_FIELDS
+
+RETRY_MEDIA_MUTATION = """
+    mutation RetryMedia($messageId: Int!) {
+        retryMediaDownload(messageId: $messageId) {
             success
             error
             message { %s }
@@ -184,4 +215,56 @@ class WhatsAppChatService:
             }
         except Exception as exc:  # noqa: BLE001
             logger.error("Error sending text message: %s", exc)
+            return {"success": False, "error": str(exc), "message": None}
+
+    async def send_media_message(
+        self,
+        conversation_id: Optional[int] = None,
+        wa_id: Optional[str] = None,
+        file_path: str = "",
+        caption: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Send an attachment via the multipart GraphQL mutation."""
+        input_payload: Dict[str, Any] = {}
+        if conversation_id is not None:
+            input_payload["conversationId"] = conversation_id
+        if wa_id:
+            input_payload["waId"] = wa_id
+        if caption:
+            input_payload["caption"] = caption
+
+        try:
+            result = await self.client.execute_multipart(
+                SEND_MEDIA_MUTATION,
+                {"input": input_payload},
+                file_path=file_path,
+                file_variable="file",
+            )
+            if result is None:
+                error = getattr(self.client, "last_error", None)
+                return {"success": False, "error": error or "Error al subir el archivo.", "message": None}
+            payload = result.get("sendMediaMessage") or {}
+            msg = payload.get("message")
+            return {
+                "success": bool(payload.get("success")),
+                "error": payload.get("error"),
+                "message": ChatMessage.from_dict(msg) if msg else None,
+            }
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Error sending media message: %s", exc)
+            return {"success": False, "error": str(exc), "message": None}
+
+    async def retry_media_download(self, message_id: int) -> Dict[str, Any]:
+        """Ask the backend to re-download a failed/lost attachment from Meta."""
+        try:
+            result = await self.client.execute(RETRY_MEDIA_MUTATION, {"messageId": message_id})
+            payload = (result or {}).get("retryMediaDownload") or {}
+            msg = payload.get("message")
+            return {
+                "success": bool(payload.get("success")),
+                "error": payload.get("error"),
+                "message": ChatMessage.from_dict(msg) if msg else None,
+            }
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Error retrying media download for %s: %s", message_id, exc)
             return {"success": False, "error": str(exc), "message": None}

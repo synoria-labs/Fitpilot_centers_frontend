@@ -23,6 +23,7 @@ logger = get_logger(__name__)
 class _WsBridge(QObject):
     """Bridges WS callbacks (executor thread) to the GUI thread via a queued signal."""
     message_received = Signal(object)
+    message_update_received = Signal(object)
 
 
 class WhatsAppChatController(BaseController):
@@ -33,6 +34,7 @@ class WhatsAppChatController(BaseController):
     message_sent = Signal(object)           # ChatMessage
     send_failed = Signal(str)
     new_message = Signal(object)            # ChatMessage (realtime)
+    message_updated = Signal(object)        # ChatMessage (media download finished/failed)
     error_occurred = Signal(str)
 
     def __init__(self, chat_service, parent: Optional[QObject] = None) -> None:
@@ -43,6 +45,9 @@ class WhatsAppChatController(BaseController):
         self._ws_bridge = _WsBridge()
         self._ws_bridge.message_received.connect(
             self._on_ws_message, Qt.ConnectionType.QueuedConnection
+        )
+        self._ws_bridge.message_update_received.connect(
+            self._on_ws_message_updated, Qt.ConnectionType.QueuedConnection
         )
         self._ws_client: Optional[ChatSubscriptionClient] = None
         self._ws_signals = None  # keep TaskSignals reference alive
@@ -102,6 +107,41 @@ class WhatsAppChatController(BaseController):
             text=text,
         )
 
+    def send_media(
+        self,
+        conversation_id: Optional[int],
+        file_path: str,
+        caption: Optional[str] = None,
+        wa_id: Optional[str] = None,
+    ) -> None:
+        self._execute_authenticated_operation(
+            self._service,
+            "send_media_message",
+            self._on_sent,
+            self._on_error,
+            conversation_id=conversation_id,
+            wa_id=wa_id,
+            file_path=file_path,
+            caption=caption,
+        )
+
+    def retry_media_download(self, message_id: int) -> None:
+        def _on_retry(result: dict) -> None:
+            # The refreshed message (download pending again) re-renders the bubble.
+            if result and result.get("success") and result.get("message"):
+                self.message_updated.emit(result["message"])
+            else:
+                error = (result or {}).get("error") or "No se pudo reintentar la descarga."
+                self.error_occurred.emit(error)
+
+        self._execute_authenticated_operation(
+            self._service,
+            "retry_media_download",
+            _on_retry,
+            self._on_error,
+            message_id=message_id,
+        )
+
     @property
     def current_conversation_id(self) -> Optional[int]:
         return self._current_conversation_id
@@ -140,6 +180,7 @@ class WhatsAppChatController(BaseController):
                 on_message=lambda data: self._ws_bridge.message_received.emit(data),
                 get_token=GraphQLClient.current_access_token,
                 conversation_id=None,  # all conversations; filter per view
+                on_message_updated=lambda data: self._ws_bridge.message_update_received.emit(data),
             )
             self._ws_signals = executor.submit_coroutine(coro)
             self._ws_signals.error.connect(
@@ -163,3 +204,12 @@ class WhatsAppChatController(BaseController):
             return
         if message:
             self.new_message.emit(message)
+
+    def _on_ws_message_updated(self, data: object) -> None:
+        try:
+            message = ChatMessage.from_dict(data) if isinstance(data, dict) else None
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Failed to parse realtime message update: %s", e)
+            return
+        if message:
+            self.message_updated.emit(message)

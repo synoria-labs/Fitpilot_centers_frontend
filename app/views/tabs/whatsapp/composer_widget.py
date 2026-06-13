@@ -1,10 +1,11 @@
-"""Message composer (text input + send button)."""
+"""Message composer (text input + attach button + send button)."""
 import qtawesome as qta
 from PySide6.QtCore import Signal, QSize
 from PySide6.QtGui import QPalette
-from PySide6.QtWidgets import QWidget, QHBoxLayout, QLineEdit, QToolButton
+from PySide6.QtWidgets import QDialog, QFileDialog, QHBoxLayout, QLineEdit, QToolButton, QWidget
 
 from . import theme
+from .attachment_preview_dialog import AttachmentPreviewDialog, FILE_DIALOG_FILTER
 
 _STYLE = f"""
 #composer {{ background-color: palette(window); }}
@@ -64,6 +65,7 @@ def _make_visual_button(icon_name: str, tooltip: str) -> QToolButton:
 
 class ComposerWidget(QWidget):
     send_requested = Signal(str)
+    attachment_requested = Signal(str, str)  # (file_path, caption)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -74,7 +76,16 @@ class ComposerWidget(QWidget):
         layout.setContentsMargins(16, 10, 16, 10)
         layout.setSpacing(8)
 
-        layout.addWidget(_make_visual_button("fa5s.plus", "Proximamente: adjuntar"))
+        self.attach_button = QToolButton()
+        self.attach_button.setObjectName("composerIconButton")
+        self.attach_button.setIcon(qta.icon("fa5s.plus", color=theme.palette_hex(QPalette.ColorRole.Mid)))
+        self.attach_button.setIconSize(QSize(18, 18))
+        self.attach_button.setFixedSize(36, 36)
+        self.attach_button.setToolTip("Adjuntar archivo")
+        self.attach_button.setAutoRaise(True)
+        self.attach_button.clicked.connect(self._on_attach_clicked)
+        layout.addWidget(self.attach_button)
+
         layout.addWidget(_make_visual_button("fa5s.smile", "Proximamente: emojis"))
 
         self.input = QLineEdit()
@@ -98,9 +109,27 @@ class ComposerWidget(QWidget):
     def set_enabled(self, enabled: bool) -> None:
         self.input.setEnabled(enabled)
         self.send_button.setEnabled(enabled)
+        self.attach_button.setEnabled(enabled)
+
+    def set_sending(self, sending: bool) -> None:
+        """Lock the composer while an attachment is being uploaded."""
+        self.set_enabled(not sending)
+        self.input.setPlaceholderText(
+            "Enviando archivo..." if sending else "Escribe un mensaje..."
+        )
 
     def _emit(self) -> None:
         text = self.input.text().strip()
         if text:
             self.send_requested.emit(text)
             self.input.clear()
+
+    def _on_attach_clicked(self) -> None:
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Adjuntar archivo", "", FILE_DIALOG_FILTER
+        )
+        if not file_path:
+            return
+        dialog = AttachmentPreviewDialog(file_path, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.attachment_requested.emit(dialog.file_path, dialog.caption)

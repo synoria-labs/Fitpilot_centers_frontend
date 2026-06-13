@@ -184,6 +184,8 @@ class ChatTab(QWidget):
         self.conversation_list.search_changed.connect(self._on_search)
         self.conversation_list.load_more_requested.connect(self._on_load_more)
         self.composer.send_requested.connect(self._on_send)
+        self.composer.attachment_requested.connect(self._on_send_media)
+        self.thread.retry_requested.connect(self._on_retry_media)
 
         self.controller.conversations_page_loaded.connect(self._on_conversations_page_loaded)
         self.controller.single_conversation_loaded.connect(self._on_single_conversation_loaded)
@@ -191,6 +193,7 @@ class ChatTab(QWidget):
         self.controller.message_sent.connect(self._on_message_sent)
         self.controller.send_failed.connect(self._on_send_failed)
         self.controller.new_message.connect(self._on_new_message)
+        self.controller.message_updated.connect(self._on_message_updated)
         self.controller.error_occurred.connect(self._on_error)
 
     # ------------------------------------------------------------------
@@ -266,7 +269,19 @@ class ChatTab(QWidget):
             return
         self.controller.send_text(self._current_conversation_id, text)
 
+    def _on_send_media(self, file_path: str, caption: str) -> None:
+        if self._current_conversation_id is None:
+            return
+        self.composer.set_sending(True)
+        self.controller.send_media(
+            self._current_conversation_id, file_path, caption or None
+        )
+
+    def _on_retry_media(self, message_id: int) -> None:
+        self.controller.retry_media_download(message_id)
+
     def _on_message_sent(self, message: ChatMessage) -> None:
+        self.composer.set_sending(False)
         if message.conversation_id == self._current_conversation_id:
             self.thread.append_message(
                 message,
@@ -276,7 +291,14 @@ class ChatTab(QWidget):
         self._apply_message_to_list(message)
 
     def _on_send_failed(self, error: str) -> None:
+        self.composer.set_sending(False)
         show_error(self, error, title="No se pudo enviar")
+
+    def _on_message_updated(self, message: ChatMessage) -> None:
+        """A media download finished/failed: re-render the bubble in place."""
+        if message.conversation_id == self._current_conversation_id:
+            self.thread.update_message(message)
+        self._apply_message_to_list(message)
 
     def _on_new_message(self, message: ChatMessage) -> None:
         if message.conversation_id == self._current_conversation_id:

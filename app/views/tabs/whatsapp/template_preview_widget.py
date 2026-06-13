@@ -1,7 +1,13 @@
-"""Reusable WhatsApp template preview with optional media header."""
+"""Reusable WhatsApp template preview with optional media header.
+
+Header images load through the shared MediaLoader (async download + disk
+cache), so the UI thread never blocks and repeated previews of the same asset
+are served from cache. Failures fall back to a text card and are logged
+(the previous urllib-based loader downloaded synchronously on the UI thread
+and swallowed every error).
+"""
 from __future__ import annotations
 
-import urllib.request
 from pathlib import Path
 from typing import Optional
 
@@ -9,7 +15,11 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QFrame, QLabel, QTextEdit, QVBoxLayout, QWidget
 
+from ....core.logging import get_logger
+from ....services.media_loader import get_media_loader
 from . import theme
+
+logger = get_logger(__name__)
 
 
 class TemplatePreviewWidget(QWidget):
@@ -21,6 +31,10 @@ class TemplatePreviewWidget(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
+
+        # Discards async media results that belong to an older set_preview call
+        # (the tabs re-render the preview on every keystroke).
+        self._media_request_seq = 0
 
         self._bubble = QFrame()
         self._bubble.setObjectName("templatePreviewBubble")
@@ -106,6 +120,7 @@ class TemplatePreviewWidget(QWidget):
         media_url: Optional[str],
         media_name: Optional[str],
     ) -> None:
+        self._media_request_seq += 1
         media_format = (media_format or "").upper()
         media_url = (media_url or "").strip()
         if not media_format:
@@ -114,35 +129,69 @@ class TemplatePreviewWidget(QWidget):
             return
 
         if media_format == "IMAGE" and media_url:
-            pixmap = self._load_pixmap(media_url)
-            if not pixmap.isNull():
-                self._media.setPixmap(
-                    pixmap.scaled(
-                        520,
-                        180,
-                        Qt.AspectRatioMode.KeepAspectRatio,
-                        Qt.TransformationMode.SmoothTransformation,
-                    )
-                )
-                self._media.setMinimumHeight(120)
-                self._media.setVisible(True)
-                return
+            cached = get_media_loader().cached_path(media_url)
+            if cached is not None:
+                pixmap = QPixmap(str(cached))
+                if not pixmap.isNull():
+                    self._show_image(pixmap)
+                    return
 
+            # Async fetch; only the latest request may update the label.
+            request_id = self._media_request_seq
+            self._media.setPixmap(QPixmap())
+            self._media.setText("Cargando imagen...")
+            self._media.setMinimumHeight(74)
+            self._media.setVisible(True)
+
+            self._media_handle = get_media_loader().fetch(media_url)
+            self._media_handle.finished.connect(
+                lambda path, rid=request_id: self._on_media_ready(rid, path, media_format, media_url, media_name)
+            )
+            self._media_handle.failed.connect(
+                lambda error, rid=request_id: self._on_media_failed(rid, error, media_format, media_url, media_name)
+            )
+            return
+
+        self._show_text_card(media_format, media_url, media_name)
+
+    def _on_media_ready(
+        self, request_id: int, path: str, media_format: str, media_url: str, media_name: Optional[str]
+    ) -> None:
+        if request_id != self._media_request_seq:
+            return  # a newer preview replaced this request
+        pixmap = QPixmap(path)
+        if pixmap.isNull():
+            logger.warning("Preview de plantilla: formato de imagen no soportado (%s)", media_url)
+            self._show_text_card(media_format, media_url, media_name)
+            return
+        self._show_image(pixmap)
+
+    def _on_media_failed(
+        self, request_id: int, error: str, media_format: str, media_url: str, media_name: Optional[str]
+    ) -> None:
+        if request_id != self._media_request_seq:
+            return
+        logger.warning("Preview de plantilla: no se pudo descargar %s: %s", media_url, error)
+        self._show_text_card(media_format, media_url, media_name)
+
+    def _show_image(self, pixmap: QPixmap) -> None:
+        self._media.setText("")
+        self._media.setPixmap(
+            pixmap.scaled(
+                520,
+                180,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+        )
+        self._media.setMinimumHeight(120)
+        self._media.setVisible(True)
+
+    def _show_text_card(
+        self, media_format: str, media_url: str, media_name: Optional[str]
+    ) -> None:
         label = media_name or Path(media_url).name or "Archivo multimedia"
         self._media.setPixmap(QPixmap())
         self._media.setText(f"{media_format}\n{label}\n{media_url}")
         self._media.setMinimumHeight(74)
         self._media.setVisible(True)
-
-    @staticmethod
-    def _load_pixmap(source: str) -> QPixmap:
-        pixmap = QPixmap()
-        try:
-            if source.startswith("http://") or source.startswith("https://"):
-                with urllib.request.urlopen(source, timeout=5) as response:
-                    pixmap.loadFromData(response.read())
-            else:
-                pixmap.load(source)
-        except Exception:
-            return QPixmap()
-        return pixmap

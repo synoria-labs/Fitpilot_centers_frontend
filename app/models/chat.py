@@ -71,6 +71,50 @@ class ChatContact:
         )
 
 
+# Message types whose payload is a downloadable attachment.
+MEDIA_MESSAGE_TYPES = {"image", "audio", "video", "document", "sticker"}
+
+
+@dataclass
+class ChatMedia:
+    """Attachment metadata of a chat message."""
+
+    id: int
+    media_type: str
+    mime_type: Optional[str] = None
+    filename: Optional[str] = None
+    caption: Optional[str] = None
+    file_size: Optional[int] = None
+    media_url: Optional[str] = None
+    downloaded: bool = False
+    download_failed: bool = False
+
+    @property
+    def absolute_url(self) -> Optional[str]:
+        """Resolve the stored URL against the API base for relative paths."""
+        if not self.media_url:
+            return None
+        if self.media_url.startswith(("http://", "https://")):
+            return self.media_url
+        return f"{Config.API_BASE_URL.rstrip('/')}/{self.media_url.lstrip('/')}"
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "ChatMedia":
+        d = d or {}
+        raw_size = d.get("fileSize")
+        return cls(
+            id=int(d.get("id") or 0),
+            media_type=d.get("mediaType") or "document",
+            mime_type=d.get("mimeType"),
+            filename=d.get("filename"),
+            caption=d.get("caption"),
+            file_size=int(raw_size) if raw_size is not None else None,
+            media_url=d.get("mediaUrl"),
+            downloaded=bool(d.get("downloaded")),
+            download_failed=bool(d.get("downloadFailed")),
+        )
+
+
 @dataclass
 class ChatMessage:
     id: int
@@ -82,14 +126,33 @@ class ChatMessage:
     timestamp: Optional[datetime] = None
     wa_message_id: Optional[str] = None
     media_url: Optional[str] = None
+    media: Optional[ChatMedia] = None
 
     @property
     def is_inbound(self) -> bool:
         return self.direction == "inbound"
 
+    @property
+    def is_media(self) -> bool:
+        return self.message_type in MEDIA_MESSAGE_TYPES
+
+    @property
+    def media_pending(self) -> bool:
+        """The backend has not finished downloading the attachment yet."""
+        if not self.is_media:
+            return False
+        if self.media is None:
+            return True
+        return not self.media.downloaded and not self.media.download_failed
+
+    @property
+    def media_failed(self) -> bool:
+        return self.is_media and self.media is not None and self.media.download_failed
+
     @classmethod
     def from_dict(cls, d: dict) -> "ChatMessage":
         d = d or {}
+        raw_media = d.get("media")
         return cls(
             id=int(d.get("id") or 0),
             conversation_id=int(d.get("conversationId") or 0),
@@ -100,6 +163,7 @@ class ChatMessage:
             timestamp=_parse_chat_timestamp(d.get("timestamp")),
             wa_message_id=d.get("waMessageId"),
             media_url=d.get("mediaUrl"),
+            media=ChatMedia.from_dict(raw_media) if raw_media else None,
         )
 
 

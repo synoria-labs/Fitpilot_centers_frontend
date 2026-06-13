@@ -1,8 +1,8 @@
 """Scrollable list of message bubbles for a conversation."""
-from typing import List, Set
+from typing import Dict, List, Set
 
 import qtawesome as qta
-from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QTimer, QSize
+from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QTimer, QSize, Signal
 from PySide6.QtWidgets import QScrollArea, QToolButton, QWidget, QVBoxLayout
 
 from ....models.chat import ChatMessage
@@ -17,6 +17,8 @@ _SCROLL_ANIMATION_MS = 180
 
 
 class MessageThreadWidget(QScrollArea):
+    retry_requested = Signal(int)  # message id (re-emitted from bubbles)
+
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setWidgetResizable(True)
@@ -36,6 +38,7 @@ class MessageThreadWidget(QScrollArea):
         )
 
         self._seen_ids: Set[int] = set()
+        self._bubbles: Dict[int, MessageBubble] = {}
         self._pending_scroll_mode = ""
         self._pending_scroll_attempts = 0
 
@@ -108,16 +111,46 @@ class MessageThreadWidget(QScrollArea):
         self._pending_scroll_attempts = _SCROLL_RETRY_COUNT
         self._apply_pending_scroll()
 
+    def update_message(self, message: ChatMessage) -> None:
+        """Replace the bubble of an existing message in place (e.g. when its
+        media download finished). Preserves the scroll position; re-anchors to
+        the bottom when the user was already there."""
+        old_bubble = self._bubbles.get(message.id)
+        if old_bubble is None:
+            return
+        index = self._layout.indexOf(old_bubble)
+        if index < 0:
+            return
+
+        was_near_bottom = self.is_near_bottom()
+        self._layout.takeAt(index)
+        old_bubble.deleteLater()
+
+        bubble = self._make_bubble(message)
+        self._layout.insertWidget(index, bubble)
+        self._bubbles[message.id] = bubble
+
+        if was_near_bottom:
+            self.scroll_to_bottom(animated=False)
+
+    def _make_bubble(self, message: ChatMessage) -> MessageBubble:
+        bubble = MessageBubble(message)
+        bubble.retry_requested.connect(self.retry_requested.emit)
+        return bubble
+
     def _add(self, message: ChatMessage) -> None:
         if message.id:
             if message.id in self._seen_ids:
                 return
             self._seen_ids.add(message.id)
-        bubble = MessageBubble(message)
+        bubble = self._make_bubble(message)
         self._layout.addWidget(bubble)
+        if message.id:
+            self._bubbles[message.id] = bubble
 
     def _clear(self) -> None:
         self._seen_ids.clear()
+        self._bubbles.clear()
         while self._layout.count() > 1:  # keep the trailing stretch at index 0
             item = self._layout.takeAt(self._layout.count() - 1)
             widget = item.widget()

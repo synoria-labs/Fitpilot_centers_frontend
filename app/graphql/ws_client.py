@@ -20,27 +20,51 @@ from ..core.config import Config
 
 logger = logging.getLogger(__name__)
 
+_MESSAGE_FIELDS = """
+    id
+    conversationId
+    contactId
+    direction
+    messageType
+    textContent
+    timestamp
+    waMessageId
+    mediaUrl
+    media {
+        id
+        mediaType
+        mimeType
+        filename
+        caption
+        fileSize
+        mediaUrl
+        downloaded
+        downloadFailed
+    }
+"""
+
 MESSAGE_ADDED_SUBSCRIPTION = gql(
     """
     subscription MessageAdded($conversationId: Int) {
-        messageAdded(conversationId: $conversationId) {
-            id
-            conversationId
-            contactId
-            direction
-            messageType
-            textContent
-            timestamp
-            waMessageId
-            mediaUrl
-        }
+        messageAdded(conversationId: $conversationId) { %s }
     }
     """
+    % _MESSAGE_FIELDS
+)
+
+MESSAGE_UPDATED_SUBSCRIPTION = gql(
+    """
+    subscription MessageUpdated($conversationId: Int) {
+        messageUpdated(conversationId: $conversationId) { %s }
+    }
+    """
+    % _MESSAGE_FIELDS
 )
 
 
 class ChatSubscriptionClient:
-    """Maintains a WebSocket subscription to ``messageAdded`` with auto-reconnect."""
+    """Maintains WebSocket subscriptions to ``messageAdded``/``messageUpdated``
+    with auto-reconnect."""
 
     def __init__(self) -> None:
         self._stop = False
@@ -53,8 +77,9 @@ class ChatSubscriptionClient:
         on_message: Callable[[dict], None],
         get_token: Callable[[], Optional[str]],
         conversation_id: Optional[int] = None,
+        on_message_updated: Optional[Callable[[dict], None]] = None,
     ) -> None:
-        """Subscribe and forward each message to ``on_message`` until stopped."""
+        """Subscribe and forward each event to its callback until stopped."""
         self._stop = False
         backoff = 1
         while not self._stop:
@@ -69,18 +94,28 @@ class ChatSubscriptionClient:
                 async with client as session:
                     logger.info("Chat subscription connected")
                     backoff = 1
-                    async for result in session.subscribe(
-                        MESSAGE_ADDED_SUBSCRIPTION,
-                        variable_values={"conversationId": conversation_id},
-                    ):
-                        if self._stop:
-                            break
-                        data = self._extract(result)
-                        if data:
-                            try:
-                                on_message(data)
-                            except Exception as cb_err:  # noqa: BLE001
-                                logger.warning("on_message callback error: %s", cb_err)
+                    consumers = [
+                        self._consume(
+                            session,
+                            MESSAGE_ADDED_SUBSCRIPTION,
+                            "messageAdded",
+                            on_message,
+                            conversation_id,
+                        )
+                    ]
+                    if on_message_updated is not None:
+                        consumers.append(
+                            self._consume(
+                                session,
+                                MESSAGE_UPDATED_SUBSCRIPTION,
+                                "messageUpdated",
+                                on_message_updated,
+                                conversation_id,
+                            )
+                        )
+                    # Both subscriptions share the connection; if one dies the
+                    # gather raises and the outer loop reconnects both.
+                    await asyncio.gather(*consumers)
             except asyncio.CancelledError:
                 break
             except Exception as e:  # noqa: BLE001
@@ -91,12 +126,33 @@ class ChatSubscriptionClient:
             backoff = min(backoff * 2, 20)
         logger.info("Chat subscription stopped")
 
+    async def _consume(
+        self,
+        session,
+        document,
+        field: str,
+        callback: Callable[[dict], None],
+        conversation_id: Optional[int],
+    ) -> None:
+        async for result in session.subscribe(
+            document,
+            variable_values={"conversationId": conversation_id},
+        ):
+            if self._stop:
+                break
+            data = self._extract(result, field)
+            if data:
+                try:
+                    callback(data)
+                except Exception as cb_err:  # noqa: BLE001
+                    logger.warning("%s callback error: %s", field, cb_err)
+
     @staticmethod
-    def _extract(result) -> Optional[dict]:
+    def _extract(result, field: str) -> Optional[dict]:
         """gql yields the data dict; be tolerant of ExecutionResult too."""
         if isinstance(result, dict):
-            return result.get("messageAdded")
+            return result.get(field)
         data = getattr(result, "data", None)
         if isinstance(data, dict):
-            return data.get("messageAdded")
+            return data.get(field)
         return None
