@@ -37,7 +37,6 @@ class TemplatePreviewWidget(QWidget):
     _MAX_IMAGE_HEIGHT = 260
     _MEDIA_VERTICAL_PADDING = 18
     _BODY_MIN_HEIGHT = 48
-    _BODY_MAX_HEIGHT = 190
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -85,6 +84,7 @@ class TemplatePreviewWidget(QWidget):
         self._body.setFrameShape(QFrame.Shape.NoFrame)
         self._body.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
         self._body.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._body.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._body.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._body.setFixedHeight(self._BODY_MIN_HEIGHT)
         bubble_layout.addWidget(self._body)
@@ -263,8 +263,7 @@ class TemplatePreviewWidget(QWidget):
         viewport_width = max(160, self._body.viewport().width())
         self._body.document().setTextWidth(viewport_width)
         document_height = int(self._body.document().size().height()) + 14
-        height = max(self._BODY_MIN_HEIGHT, min(self._BODY_MAX_HEIGHT, document_height))
-        self._body.setFixedHeight(height)
+        self._body.setFixedHeight(max(self._BODY_MIN_HEIGHT, document_height))
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
