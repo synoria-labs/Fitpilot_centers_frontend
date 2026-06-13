@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QTextEdit,
     QLineEdit, QGroupBox, QSplitter, QListWidget, QListWidgetItem, QComboBox,
-    QFileDialog,
+    QFileDialog, QScrollArea, QFrame,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
@@ -149,9 +149,25 @@ class WhatsAppTab(QWidget):
         left_layout.addWidget(self.templates_list)
         splitter.addWidget(left_panel)
 
-        # Panel derecho - Editor
+        # Panel derecho - Editor + vista previa lateral
         right_panel = QWidget()
-        right_layout = QVBoxLayout(right_panel)
+        right_layout = QHBoxLayout(right_panel)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(12)
+
+        editor_scroll = QScrollArea()
+        editor_scroll.setObjectName("templateEditorScroll")
+        editor_scroll.setWidgetResizable(True)
+        editor_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        editor_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        editor_scroll.setStyleSheet(
+            "QScrollArea#templateEditorScroll { border: none; background: transparent; }"
+            "QScrollArea#templateEditorScroll > QWidget > QWidget { background: transparent; }"
+        )
+        editor_container = QWidget()
+        editor_layout = QVBoxLayout(editor_container)
+        editor_layout.setContentsMargins(0, 0, 0, 0)
+        editor_layout.setSpacing(10)
 
         # Información de plantilla
         info_group = QGroupBox("Información de Plantilla")
@@ -183,7 +199,7 @@ class WhatsAppTab(QWidget):
         meta_layout.addStretch()
         info_layout.addLayout(meta_layout)
 
-        right_layout.addWidget(info_group)
+        editor_layout.addWidget(info_group)
 
         # Contenido
         content_group = QGroupBox("Contenido de la Plantilla")
@@ -240,15 +256,7 @@ class WhatsAppTab(QWidget):
         header_format_layout.addWidget(self.upload_asset_btn)
         content_layout.addLayout(header_format_layout)
 
-        preview_label = QLabel("Vista Previa:")
-        preview_label.setStyleSheet("font-weight: bold;")
-        content_layout.addWidget(preview_label)
-        self.preview_widget = TemplatePreviewWidget()
-        self.preview_widget.setMinimumHeight(280)
-        self.preview_widget.setMaximumHeight(420)
-        content_layout.addWidget(self.preview_widget)
-
-        right_layout.addWidget(content_group)
+        editor_layout.addWidget(content_group)
 
         # Enviar prueba
         test_group = QGroupBox("Enviar Prueba (envía la plantilla aprobada a un número)")
@@ -287,9 +295,40 @@ class WhatsAppTab(QWidget):
         self.test_asset_combo.setVisible(False)
         self.test_media_input.setVisible(False)
         test_layout.addWidget(self.test_media_row)
-        right_layout.addWidget(test_group)
+        editor_layout.addWidget(test_group)
         self.header_asset_combo.setVisible(False)
         self.upload_asset_btn.setVisible(False)
+
+        editor_layout.addStretch(1)
+        editor_scroll.setWidget(editor_container)
+
+        preview_panel = QFrame()
+        preview_panel.setObjectName("templatePreviewRail")
+        preview_panel.setMinimumWidth(320)
+        preview_panel.setMaximumWidth(380)
+        preview_layout = QVBoxLayout(preview_panel)
+        preview_layout.setContentsMargins(12, 12, 12, 12)
+        preview_layout.setSpacing(10)
+        preview_panel.setStyleSheet(
+            "QFrame#templatePreviewRail {"
+            " background-color: palette(window);"
+            " border: 1px solid palette(mid);"
+            " border-radius: 6px;"
+            "}"
+            "QLabel#templatePreviewRailTitle {"
+            " font-weight: bold;"
+            " font-size: 13px;"
+            "}"
+        )
+        preview_title = QLabel("Vista previa de la plantilla")
+        preview_title.setObjectName("templatePreviewRailTitle")
+        preview_layout.addWidget(preview_title)
+        self.preview_widget = TemplatePreviewWidget()
+        self.preview_widget.setMinimumHeight(420)
+        preview_layout.addWidget(self.preview_widget, 1)
+
+        right_layout.addWidget(editor_scroll, 1)
+        right_layout.addWidget(preview_panel)
 
         splitter.addWidget(right_panel)
         splitter.setSizes([300, 700])
