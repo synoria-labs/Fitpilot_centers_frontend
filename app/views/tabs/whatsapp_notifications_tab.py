@@ -402,8 +402,8 @@ class WhatsAppNotificationsTab(QWidget):
         preview_label.setObjectName("notifPreviewLabel")
         right_layout.addWidget(preview_label)
         self.preview_widget = TemplatePreviewWidget()
-        self.preview_widget.setMinimumHeight(170)
-        self.preview_widget.setMaximumHeight(260)
+        self.preview_widget.setMinimumHeight(280)
+        self.preview_widget.setMaximumHeight(420)
         right_layout.addWidget(self.preview_widget)
 
         actions = QHBoxLayout()

@@ -13,7 +13,15 @@ from typing import Optional
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QFrame, QLabel, QTextEdit, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QFrame,
+    QLabel,
+    QScrollArea,
+    QSizePolicy,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ....core.logging import get_logger
 from ....services.media_loader import get_media_loader
@@ -25,6 +33,12 @@ logger = get_logger(__name__)
 class TemplatePreviewWidget(QWidget):
     """Dark WhatsApp-like preview for template body/footer and media header."""
 
+    _MAX_BUBBLE_WIDTH = 620
+    _MAX_IMAGE_HEIGHT = 260
+    _MEDIA_VERTICAL_PADDING = 18
+    _BODY_MIN_HEIGHT = 48
+    _BODY_MAX_HEIGHT = 190
+
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setObjectName("templatePreview")
@@ -35,17 +49,33 @@ class TemplatePreviewWidget(QWidget):
         # Discards async media results that belong to an older set_preview call
         # (the tabs re-render the preview on every keystroke).
         self._media_request_seq = 0
+        self._original_pixmap: Optional[QPixmap] = None
+
+        self._scroll = QScrollArea()
+        self._scroll.setObjectName("templatePreviewScroll")
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._scroll.viewport().setObjectName("templatePreviewViewport")
+
+        self._thread = QWidget()
+        self._thread.setObjectName("templatePreviewThread")
+        thread_layout = QVBoxLayout(self._thread)
+        thread_layout.setContentsMargins(10, 10, 10, 10)
+        thread_layout.setSpacing(0)
 
         self._bubble = QFrame()
         self._bubble.setObjectName("templatePreviewBubble")
+        self._bubble.setMaximumWidth(self._MAX_BUBBLE_WIDTH)
+        self._bubble.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Preferred)
         bubble_layout = QVBoxLayout(self._bubble)
-        bubble_layout.setContentsMargins(10, 10, 10, 8)
+        bubble_layout.setContentsMargins(8, 8, 8, 8)
         bubble_layout.setSpacing(8)
 
         self._media = QLabel()
         self._media.setObjectName("templatePreviewMedia")
         self._media.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._media.setMinimumHeight(0)
+        self._media.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._media.setVisible(False)
         bubble_layout.addWidget(self._media)
 
@@ -53,8 +83,10 @@ class TemplatePreviewWidget(QWidget):
         self._body.setObjectName("templatePreviewText")
         self._body.setReadOnly(True)
         self._body.setFrameShape(QFrame.Shape.NoFrame)
-        self._body.setMinimumHeight(90)
-        self._body.setMaximumHeight(170)
+        self._body.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
+        self._body.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._body.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self._body.setFixedHeight(self._BODY_MIN_HEIGHT)
         bubble_layout.addWidget(self._body)
 
         self._footer = QLabel()
@@ -63,13 +95,33 @@ class TemplatePreviewWidget(QWidget):
         self._footer.setVisible(False)
         bubble_layout.addWidget(self._footer)
 
-        root.addWidget(self._bubble)
+        thread_layout.addWidget(
+            self._bubble,
+            0,
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop,
+        )
+        thread_layout.addStretch(1)
+        self._scroll.setWidget(self._thread)
+        root.addWidget(self._scroll)
         self.setStyleSheet(
             f"""
             QWidget#templatePreview {{
                 background-color: {theme.THREAD_BG};
                 border: 1px solid {theme.DIVIDER};
                 border-radius: 8px;
+            }}
+            QScrollArea#templatePreviewScroll {{
+                background-color: {theme.THREAD_BG};
+                border: none;
+            }}
+            QScrollArea#templatePreviewScroll > QWidget > QWidget {{
+                background-color: {theme.THREAD_BG};
+            }}
+            QWidget#templatePreviewViewport {{
+                background-color: {theme.THREAD_BG};
+            }}
+            QWidget#templatePreviewThread {{
+                background-color: {theme.THREAD_BG};
             }}
             QFrame#templatePreviewBubble {{
                 background-color: {theme.BUBBLE_IN};
@@ -112,6 +164,7 @@ class TemplatePreviewWidget(QWidget):
         footer = (footer or "").strip()
         self._footer.setText(footer)
         self._footer.setVisible(bool(footer))
+        self._update_body_height()
         self._render_media(media_format, media_url, media_name)
 
     def _render_media(
@@ -124,6 +177,7 @@ class TemplatePreviewWidget(QWidget):
         media_format = (media_format or "").upper()
         media_url = (media_url or "").strip()
         if not media_format:
+            self._original_pixmap = None
             self._media.clear()
             self._media.setVisible(False)
             return
@@ -138,9 +192,10 @@ class TemplatePreviewWidget(QWidget):
 
             # Async fetch; only the latest request may update the label.
             request_id = self._media_request_seq
+            self._original_pixmap = None
             self._media.setPixmap(QPixmap())
             self._media.setText("Cargando imagen...")
-            self._media.setMinimumHeight(74)
+            self._media.setFixedHeight(82)
             self._media.setVisible(True)
 
             self._media_handle = get_media_loader().fetch(media_url)
@@ -175,23 +230,45 @@ class TemplatePreviewWidget(QWidget):
         self._show_text_card(media_format, media_url, media_name)
 
     def _show_image(self, pixmap: QPixmap) -> None:
+        self._original_pixmap = pixmap
         self._media.setText("")
-        self._media.setPixmap(
-            pixmap.scaled(
-                520,
-                180,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-        )
-        self._media.setMinimumHeight(120)
         self._media.setVisible(True)
+        self._refresh_image_pixmap()
 
     def _show_text_card(
         self, media_format: str, media_url: str, media_name: Optional[str]
     ) -> None:
+        self._original_pixmap = None
         label = media_name or Path(media_url).name or "Archivo multimedia"
         self._media.setPixmap(QPixmap())
         self._media.setText(f"{media_format}\n{label}\n{media_url}")
-        self._media.setMinimumHeight(74)
+        self._media.setFixedHeight(90)
         self._media.setVisible(True)
+
+    def _refresh_image_pixmap(self) -> None:
+        if self._original_pixmap is None or self._original_pixmap.isNull():
+            return
+        available_width = self._bubble.width() or min(self.width() - 20, self._MAX_BUBBLE_WIDTH)
+        target_width = max(160, available_width - 18)
+        scaled = self._original_pixmap.scaled(
+            target_width,
+            self._MAX_IMAGE_HEIGHT,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        self._media.setPixmap(scaled)
+        self._media.setFixedHeight(scaled.height() + self._MEDIA_VERTICAL_PADDING)
+
+    def _update_body_height(self) -> None:
+        viewport_width = max(160, self._body.viewport().width())
+        self._body.document().setTextWidth(viewport_width)
+        document_height = int(self._body.document().size().height()) + 14
+        height = max(self._BODY_MIN_HEIGHT, min(self._BODY_MAX_HEIGHT, document_height))
+        self._body.setFixedHeight(height)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        available_width = max(240, self.width() - 20)
+        self._bubble.setMaximumWidth(min(self._MAX_BUBBLE_WIDTH, available_width))
+        self._refresh_image_pixmap()
+        self._update_body_height()

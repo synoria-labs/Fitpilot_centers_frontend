@@ -70,7 +70,7 @@ class WhatsAppController(BaseController):
             self._execute_authenticated_operation(
                 self._service,
                 "create_template",
-                self._on_saved,
+                lambda result: self._on_saved(result, is_new=True),
                 self._on_error,
                 name=data.get("name"),
                 language=data.get("language"),
@@ -85,7 +85,7 @@ class WhatsAppController(BaseController):
             self._execute_authenticated_operation(
                 self._service,
                 "update_template",
-                self._on_saved,
+                lambda result: self._on_saved(result, is_new=False),
                 self._on_error,
                 template_id=template_id,
                 body_text=data.get("body_text"),
@@ -176,10 +176,15 @@ class WhatsAppController(BaseController):
         self.loading_changed.emit(False)
         self.synced.emit(result or [])
 
-    def _on_saved(self, result: Dict[str, Any]) -> None:
+    def _on_saved(self, result: Dict[str, Any], *, is_new: bool) -> None:
         self.loading_changed.emit(False)
         if result and result.get("success"):
-            self.template_saved.emit(result.get("template"), "Plantilla guardada")
+            message = (
+                "Plantilla enviada a revisión en Meta. Estado: PENDING."
+                if is_new
+                else "Cambios enviados a Meta. La plantilla vuelve a revisión."
+            )
+            self.template_saved.emit(result.get("template"), message)
         else:
             self.error_occurred.emit((result or {}).get("error") or "No se pudo guardar")
 

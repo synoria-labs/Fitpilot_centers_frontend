@@ -90,6 +90,8 @@ class WhatsAppTab(QWidget):
         self._media_assets_by_kind: Dict[str, List[Dict[str, Any]]] = {}
         self._media_assets_by_id: Dict[int, Dict[str, Any]] = {}
         self._pending_header_asset_id: Optional[int] = None
+        self._baseline_snapshot: Optional[Dict[str, Any]] = None
+        self._loading = False
 
         try:
             service = container.get("whatsapp_service")
@@ -124,6 +126,7 @@ class WhatsAppTab(QWidget):
         header_layout.addWidget(self.new_btn)
 
         self.save_btn = QPushButton("💾 Guardar")
+        self.save_btn.setText("Enviar a revisión")
         self.save_btn.setEnabled(False)
         self.save_btn.clicked.connect(self.on_save_template)
         header_layout.addWidget(self.save_btn)
@@ -166,10 +169,12 @@ class WhatsAppTab(QWidget):
         meta_layout.addWidget(QLabel("Idioma:"))
         self.language_input = QLineEdit("es_MX")
         self.language_input.setMaximumWidth(100)
+        self.language_input.textChanged.connect(self._on_editor_changed)
         meta_layout.addWidget(self.language_input)
         meta_layout.addWidget(QLabel("Categoría:"))
         self.category_combo = QComboBox()
         self.category_combo.addItems(_CATEGORIES)
+        self.category_combo.currentIndexChanged.connect(self._on_editor_changed)
         meta_layout.addWidget(self.category_combo)
         meta_layout.addWidget(QLabel("Estado:"))
         self.status_label = QLabel("No guardado")
@@ -239,7 +244,8 @@ class WhatsAppTab(QWidget):
         preview_label.setStyleSheet("font-weight: bold;")
         content_layout.addWidget(preview_label)
         self.preview_widget = TemplatePreviewWidget()
-        self.preview_widget.setMaximumHeight(260)
+        self.preview_widget.setMinimumHeight(280)
+        self.preview_widget.setMaximumHeight(420)
         content_layout.addWidget(self.preview_widget)
 
         right_layout.addWidget(content_group)
@@ -367,6 +373,88 @@ class WhatsAppTab(QWidget):
     def _asset_label(asset: Dict[str, Any]) -> str:
         return asset.get("display_name") or asset.get("original_filename") or f"Asset {asset.get('id')}"
 
+    def _on_editor_changed(self, *_args) -> None:
+        self.update_preview()
+
+    def _template_status(self) -> str:
+        if not self.current:
+            return ""
+        return (self.current.get("template_status") or "").upper()
+
+    def _effective_header_asset_id(self) -> Optional[int]:
+        selected = self._selected_header_asset_id()
+        if selected is not None:
+            return selected
+        if self.current is not None:
+            return self._default_header_asset_id()
+        return None
+
+    def _current_snapshot(self) -> Dict[str, Any]:
+        return {
+            "name": self.name_input.text().strip(),
+            "language": self.language_input.text().strip() or "es_MX",
+            "category": self.category_combo.currentText(),
+            "body_text": self.body_editor.toPlainText().strip(),
+            "body_examples": tuple(self._example_values()),
+            "footer_text": self.footer_input.text().strip(),
+            "header_format": self._current_header_format(),
+            "header_media_asset_id": self._effective_header_asset_id(),
+        }
+
+    def _capture_baseline(self) -> None:
+        self._baseline_snapshot = self._current_snapshot()
+
+    def _is_dirty(self) -> bool:
+        return self._baseline_snapshot is not None and self._current_snapshot() != self._baseline_snapshot
+
+    def _new_template_ready(self) -> bool:
+        if not self.name_input.text().strip():
+            return False
+        if not self.language_input.text().strip():
+            return False
+        if not self.body_editor.toPlainText().strip():
+            return False
+        if self._current_header_format() and self._selected_header_asset_id() is None:
+            return False
+        return True
+
+    def _existing_template_ready(self) -> bool:
+        return bool(self.body_editor.toPlainText().strip())
+
+    def _set_content_editable(self, editable: bool) -> None:
+        self.body_editor.setReadOnly(not editable)
+        self.examples_input.setReadOnly(not editable)
+        self.footer_input.setReadOnly(not editable)
+        self.header_asset_combo.setEnabled(editable)
+        self.upload_asset_btn.setEnabled(editable)
+
+    def _update_review_cta(self) -> None:
+        if not hasattr(self, "save_btn"):
+            return
+        if self.current is None:
+            self.save_btn.setText("Enviar a revisión")
+            self.save_btn.setEnabled(not self._loading and self._new_template_ready())
+            return
+
+        status = self._template_status()
+        if status == "PENDING":
+            self.save_btn.setText("En revisión")
+            self.save_btn.setEnabled(False)
+            return
+        if status == "NOT_FOUND":
+            self.save_btn.setText("No disponible")
+            self.save_btn.setEnabled(False)
+            return
+        if status in {"APPROVED", "REJECTED"}:
+            self.save_btn.setText("Guardar cambios y reenviar")
+            self.save_btn.setEnabled(
+                not self._loading and self._existing_template_ready() and self._is_dirty()
+            )
+            return
+
+        self.save_btn.setText("No disponible")
+        self.save_btn.setEnabled(False)
+
     def _set_header_format(self, header_format: Optional[str]) -> None:
         self.header_format_combo.blockSignals(True)
         index = self.header_format_combo.findData(header_format)
@@ -490,6 +578,7 @@ class WhatsAppTab(QWidget):
         if not tpl:
             return
         self.current = tpl
+        self._baseline_snapshot = None
         body, examples, footer = _parse_components(tpl.get("components"))
 
         self.name_input.setText(tpl.get("template_name") or "")
@@ -506,8 +595,9 @@ class WhatsAppTab(QWidget):
         self._set_status(tpl.get("template_status"))
         self._set_identity_editable(False)
 
-        approved = (tpl.get("template_status") or "").upper() == "APPROVED"
-        self.save_btn.setEnabled(True)
+        status = self._template_status()
+        approved = status == "APPROVED"
+        self._set_content_editable(status in {"APPROVED", "REJECTED"})
         self.delete_btn.setEnabled(True)
         self.send_test_btn.setEnabled(approved)
         self.test_media_mode.blockSignals(True)
@@ -516,10 +606,13 @@ class WhatsAppTab(QWidget):
         self.test_media_input.clear()
         self._refresh_test_media_controls()
         self.update_preview()
+        self._capture_baseline()
+        self._update_review_cta()
         self.template_selected.emit(self.templates_list.currentRow())
 
     def on_new_template(self):
         self.current = None
+        self._baseline_snapshot = None
         self.templates_list.clearSelection()
         self.name_input.clear()
         self.language_input.setText("es_MX")
@@ -534,12 +627,24 @@ class WhatsAppTab(QWidget):
         self.preview_widget.set_preview(body="")
         self._set_status("Nueva plantilla")
         self._set_identity_editable(True)
+        self._set_content_editable(True)
         self.name_input.setFocus()
-        self.save_btn.setEnabled(True)
         self.delete_btn.setEnabled(False)
         self.send_test_btn.setEnabled(False)
+        self._update_review_cta()
 
     def on_save_template(self):
+        if self.current is not None:
+            status = self._template_status()
+            if status not in {"APPROVED", "REJECTED"}:
+                show_error(self, "Esta plantilla no se puede reenviar mientras no esté aprobada o rechazada.")
+                self._update_review_cta()
+                return
+            if not self._is_dirty():
+                show_error(self, "No hay cambios para reenviar a revisión.")
+                self._update_review_cta()
+                return
+
         body = self.body_editor.toPlainText().strip()
         if not body:
             show_error(self, "El cuerpo de la plantilla es obligatorio.")
@@ -552,11 +657,13 @@ class WhatsAppTab(QWidget):
         }
         header_format = self._current_header_format()
         header_asset_id = self._selected_header_asset_id()
-        if header_format and not header_asset_id:
+        if self.current is None and header_format and not header_asset_id:
             show_error(self, "Selecciona o sube un asset para el header de media.")
             return
-        if header_format:
+        if self.current is None and header_format:
             data["header_format"] = header_format
+            data["header_media_asset_id"] = header_asset_id
+        elif self.current is not None and header_format and header_asset_id:
             data["header_media_asset_id"] = header_asset_id
 
         if self.current is None:
@@ -571,6 +678,14 @@ class WhatsAppTab(QWidget):
             })
             self.controller.save_template(None, data)
         else:
+            if not show_confirmation(
+                self,
+                "Meta volverá a revisar esta plantilla. Mientras esté PENDING no se podrá usar para envíos.",
+                title="Reenviar a revisión",
+                ok_text="Reenviar",
+                cancel_text="Cancelar",
+            ):
+                return
             self.controller.save_template(self.current.get("id"), data)
 
     def on_delete_template(self):
@@ -655,6 +770,7 @@ class WhatsAppTab(QWidget):
             media_url=media_url,
             media_name=media_name,
         )
+        self._update_review_cta()
 
     # ------------------------------------------------------------------
     # Callbacks del controller
@@ -662,17 +778,48 @@ class WhatsAppTab(QWidget):
     def _on_templates_loaded(self, templates: List[Dict[str, Any]]):
         self._templates = templates or []
         keep = self.current.get("id") if self.current else None
+        if keep is not None:
+            refreshed = next((tpl for tpl in self._templates if tpl.get("id") == keep), None)
+            if refreshed:
+                self.current = refreshed
+                status = self._template_status()
+                self._set_status(refreshed.get("template_status"))
+                self._set_content_editable(status in {"APPROVED", "REJECTED"})
+                self.send_test_btn.setEnabled(status == "APPROVED" and not self._loading)
+                self._capture_baseline()
         self._populate_list(keep_id=keep)
+        self._update_review_cta()
         logger.info("Plantillas cargadas: %d", len(self._templates))
 
     def _on_synced(self, templates: List[Dict[str, Any]]):
         self._templates = templates or []
-        self._populate_list()
+        keep = self.current.get("id") if self.current else None
+        if keep is not None:
+            refreshed = next((tpl for tpl in self._templates if tpl.get("id") == keep), None)
+            if refreshed:
+                self.current = refreshed
+                status = self._template_status()
+                self._set_status(refreshed.get("template_status"))
+                self._set_content_editable(status in {"APPROVED", "REJECTED"})
+                self.send_test_btn.setEnabled(status == "APPROVED" and not self._loading)
+                self._capture_baseline()
+            else:
+                self.current = None
+                self._baseline_snapshot = None
+        self._populate_list(keep_id=keep)
+        self._update_review_cta()
         show_info(self, f"Sincronización completa: {len(self._templates)} plantillas.")
 
     def _on_template_saved(self, template: Optional[Dict[str, Any]], message: str):
-        show_info(self, f"{message}. Meta revisará la plantilla (estado PENDING hasta aprobación).")
+        show_info(self, message)
         self.current = template
+        if template:
+            self._set_status(template.get("template_status"))
+            self._set_identity_editable(False)
+            self._set_content_editable(False)
+            self.send_test_btn.setEnabled(False)
+            self._capture_baseline()
+            self._update_review_cta()
         self.controller.load_templates()
 
     def _on_template_deleted(self, template_id: int):
@@ -711,5 +858,9 @@ class WhatsAppTab(QWidget):
         show_error(self, message)
 
     def _on_loading_changed(self, loading: bool):
+        self._loading = loading
         self.sync_btn.setEnabled(not loading)
-        self.save_btn.setEnabled(not loading and (self.current is not None or self.name_input.text().strip() != ""))
+        self.new_btn.setEnabled(not loading)
+        self.delete_btn.setEnabled(not loading and self.current is not None)
+        self.send_test_btn.setEnabled(not loading and self._template_status() == "APPROVED")
+        self._update_review_cta()
