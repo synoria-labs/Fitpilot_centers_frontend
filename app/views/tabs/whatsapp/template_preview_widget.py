@@ -106,22 +106,22 @@ class TemplatePreviewWidget(QWidget):
         self.setStyleSheet(
             f"""
             QWidget#templatePreview {{
-                background-color: {theme.THREAD_BG};
+                background-color: palette(window);
                 border: 1px solid {theme.DIVIDER};
                 border-radius: 8px;
             }}
             QScrollArea#templatePreviewScroll {{
-                background-color: {theme.THREAD_BG};
+                background-color: palette(window);
                 border: none;
             }}
             QScrollArea#templatePreviewScroll > QWidget > QWidget {{
-                background-color: {theme.THREAD_BG};
+                background-color: palette(window);
             }}
             QWidget#templatePreviewViewport {{
-                background-color: {theme.THREAD_BG};
+                background-color: palette(window);
             }}
             QWidget#templatePreviewThread {{
-                background-color: {theme.THREAD_BG};
+                background-color: palette(window);
             }}
             QFrame#templatePreviewBubble {{
                 background-color: {theme.BUBBLE_IN};
