@@ -15,6 +15,7 @@ _CONFIG_FIELDS = """
     id
     enabled
     requireConfirmation
+    requireMpPayment
     model
     systemPrompt
     businessName
@@ -34,6 +35,7 @@ def _map_config(node: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         "id": node.get("id"),
         "enabled": bool(node.get("enabled")),
         "require_confirmation": bool(node.get("requireConfirmation")),
+        "require_mp_payment": bool(node.get("requireMpPayment")),
         "model": node.get("model") or "claude-sonnet-4-6",
         "system_prompt": node.get("systemPrompt") or "",
         "business_name": node.get("businessName") or "",
@@ -69,6 +71,7 @@ class ChatbotConfigService:
         self,
         enabled: bool,
         require_confirmation: bool,
+        require_mp_payment: bool,
         model: Optional[str],
         system_prompt: Optional[str],
         business_name: Optional[str] = None,
@@ -92,6 +95,7 @@ class ChatbotConfigService:
             "input": {
                 "enabled": enabled,
                 "requireConfirmation": require_confirmation,
+                "requireMpPayment": require_mp_payment,
                 "model": model,
                 "systemPrompt": system_prompt,
                 "businessName": business_name,

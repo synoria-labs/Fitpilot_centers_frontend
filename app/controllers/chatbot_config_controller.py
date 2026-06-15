@@ -45,6 +45,7 @@ class ChatbotConfigController(BaseController):
             self._on_error,
             enabled=bool(data.get("enabled", False)),
             require_confirmation=bool(data.get("require_confirmation", True)),
+            require_mp_payment=bool(data.get("require_mp_payment", False)),
             model=data.get("model"),
             system_prompt=data.get("system_prompt"),
             business_name=data.get("business_name"),

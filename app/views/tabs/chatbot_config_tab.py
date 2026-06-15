@@ -81,6 +81,11 @@ class ChatbotConfigTab(QWidget):
         )
         form.addRow("Confirmación", self.require_confirmation_check)
 
+        self.require_mp_payment_check = QCheckBox(
+            "Solicitar pago por MercadoPago antes de inscribir / renovar / reservar"
+        )
+        form.addRow("MercadoPago", self.require_mp_payment_check)
+
         self.model_combo = QComboBox()
         self.model_combo.setEditable(True)
         self.model_combo.addItems(_MODELS)
@@ -147,6 +152,7 @@ class ChatbotConfigTab(QWidget):
             return
         self.enabled_check.setChecked(bool(config.get("enabled")))
         self.require_confirmation_check.setChecked(bool(config.get("require_confirmation", True)))
+        self.require_mp_payment_check.setChecked(bool(config.get("require_mp_payment", False)))
         model = config.get("model") or "claude-sonnet-4-6"
         idx = self.model_combo.findText(model)
         if idx >= 0:
@@ -174,6 +180,7 @@ class ChatbotConfigTab(QWidget):
         data = {
             "enabled": self.enabled_check.isChecked(),
             "require_confirmation": self.require_confirmation_check.isChecked(),
+            "require_mp_payment": self.require_mp_payment_check.isChecked(),
             "model": self.model_combo.currentText().strip() or "claude-sonnet-4-6",
             "system_prompt": self.system_prompt_edit.toPlainText().strip(),
             "business_name": self.business_name_edit.text().strip(),
