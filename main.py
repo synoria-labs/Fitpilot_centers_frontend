@@ -82,6 +82,7 @@ class FitPilotApp:
             from app.services.whatsapp_service import WhatsAppService
             from app.services.whatsapp_chat_service import WhatsAppChatService
             from app.services.whatsapp_notifications_service import WhatsAppNotificationsService
+            from app.services.chatbot_config_service import ChatbotConfigService
             from app.services.dashboard_service import DashboardService
             from app.services.cache_service import CacheService
             from app.services.standing_bookings_service import StandingBookingsService
@@ -97,6 +98,7 @@ class FitPilotApp:
             container.register('whatsapp_service', service=WhatsAppService(graphql_client))
             container.register('whatsapp_chat_service', service=WhatsAppChatService(graphql_client))
             container.register('whatsapp_notifications_service', service=WhatsAppNotificationsService(graphql_client))
+            container.register('chatbot_config_service', service=ChatbotConfigService(graphql_client))
             container.register('standing_bookings_service', service=StandingBookingsService(graphql_client))
             container.register('sessions_service', service=SessionsService(graphql_client))
             cache_service = CacheService()
