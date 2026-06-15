@@ -55,8 +55,10 @@ class ChatbotConfigTab(QWidget):
         header_layout.addWidget(title)
         hint = QLabel(
             "Configura el asistente que responde automáticamente a los clientes por WhatsApp: "
-            "su comportamiento (system prompt), la información del negocio y si debe pedir "
-            "confirmación antes de reservar o cobrar."
+            "su comportamiento (system prompt) y si debe pedir confirmación antes de reservar o "
+            "cobrar. El horario de clases, los precios, las sedes/dirección y los instructores se "
+            "toman automáticamente de la base de datos; los campos de abajo son overrides/extras "
+            "(nombre, políticas, tono, teléfono) y respaldo."
         )
         hint.setWordWrap(True)
         header_layout.addWidget(hint)
