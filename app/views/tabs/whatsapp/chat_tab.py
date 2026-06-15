@@ -32,18 +32,18 @@ def _style() -> str:
 #chatTab {{ background-color: palette(window); }}
 #chatTab QSplitter::handle {{ background-color: palette(mid); width: 1px; }}
 #chatHeader {{
-    background-color: palette(alternate-base);
-    border-bottom: 1px solid palette(mid);
+    background-color: palette(window);
+    border-bottom: 1px solid {theme.DIVIDER};
 }}
-QLabel#headerName {{ color: palette(text); font-weight: bold; font-size: 14px; background: transparent; }}
-QLabel#headerSub {{ color: {theme.secondary_text_hex(background_role=QPalette.ColorRole.AlternateBase)}; font-size: 11px; background: transparent; }}
+QLabel#headerName {{ color: {theme.TEXT_PRIMARY}; font-weight: bold; font-size: 14px; background: transparent; }}
+QLabel#headerSub {{ color: {theme.TEXT_SECONDARY}; font-size: 11px; background: transparent; }}
 #chatActionButton {{
     background: transparent;
     border: none;
     border-radius: 17px;
     padding: 7px;
 }}
-#chatActionButton:hover {{ background-color: palette(base); }}
+#chatActionButton:hover {{ background-color: {theme.ITEM_HOVER}; }}
 #emptyState {{ background-color: palette(window); }}
 QLabel#emptyIcon {{ font-size: 64px; background: transparent; }}
 QLabel#emptyTitle {{ color: palette(text); font-size: 20px; background: transparent; }}
@@ -54,7 +54,7 @@ QLabel#emptySub {{ color: {theme.secondary_text_hex()}; font-size: 13px; backgro
 def _make_header_action(icon_name: str, tooltip: str) -> QToolButton:
     button = QToolButton()
     button.setObjectName("chatActionButton")
-    button.setIcon(qta.icon(icon_name, color=theme.palette_hex()))
+    button.setIcon(qta.icon(icon_name, color=theme.TEXT_PRIMARY))
     button.setIconSize(QSize(18, 18))
     button.setFixedSize(36, 36)
     button.setToolTip(tooltip)

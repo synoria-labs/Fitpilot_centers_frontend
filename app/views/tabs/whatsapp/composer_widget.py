@@ -1,6 +1,6 @@
 """Message composer (text input + attach button + emoji picker + send button)."""
 import qtawesome as qta
-from PySide6.QtCore import Signal, QSize, QPoint
+from PySide6.QtCore import Signal, QSize, QPoint, Qt
 from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QDialog, QFileDialog, QHBoxLayout, QLineEdit, QToolButton, QWidget
 
@@ -27,12 +27,12 @@ _STYLE = f"""
 #composerInput::placeholder {{ color: palette(placeholder-text); }}
 #composerIconButton {{
     background: transparent;
-    color: palette(mid);
+    color: {theme.TEXT_PRIMARY};
     border: none;
     border-radius: 18px;
     padding: 7px;
 }}
-#composerIconButton:hover {{ background-color: palette(alternate-base); }}
+#composerIconButton:hover {{ background-color: {theme.ITEM_HOVER}; }}
 #composerSend {{
     background-color: {theme.ACCENT};
     border: none;
@@ -71,6 +71,10 @@ class ComposerWidget(QWidget):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setObjectName("composer")
+        # A plain QWidget only paints its stylesheet background-color when
+        # WA_StyledBackground is set; without this the bar wouldn't take the
+        # palette(window) color (same as the chat area).
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(_STYLE)
         self._emoji_picker = None  # lazily created, reused across openings
 
@@ -80,7 +84,7 @@ class ComposerWidget(QWidget):
 
         self.attach_button = QToolButton()
         self.attach_button.setObjectName("composerIconButton")
-        self.attach_button.setIcon(qta.icon("fa5s.plus", color=theme.palette_hex(QPalette.ColorRole.Mid)))
+        self.attach_button.setIcon(qta.icon("fa5s.plus", color=theme.TEXT_PRIMARY))
         self.attach_button.setIconSize(QSize(18, 18))
         self.attach_button.setFixedSize(36, 36)
         self.attach_button.setToolTip("Adjuntar archivo")
@@ -90,7 +94,7 @@ class ComposerWidget(QWidget):
 
         self.emoji_button = QToolButton()
         self.emoji_button.setObjectName("composerIconButton")
-        self.emoji_button.setIcon(qta.icon("fa5s.smile", color=theme.palette_hex(QPalette.ColorRole.Mid)))
+        self.emoji_button.setIcon(qta.icon("fa5s.smile", color=theme.TEXT_PRIMARY))
         self.emoji_button.setIconSize(QSize(18, 18))
         self.emoji_button.setFixedSize(36, 36)
         self.emoji_button.setToolTip("Emojis")
