@@ -186,6 +186,7 @@ class ChatTab(QWidget):
         self.composer.send_requested.connect(self._on_send)
         self.composer.attachment_requested.connect(self._on_send_media)
         self.thread.retry_requested.connect(self._on_retry_media)
+        self.thread.reaction_requested.connect(self._on_reaction_requested)
 
         self.controller.conversations_page_loaded.connect(self._on_conversations_page_loaded)
         self.controller.single_conversation_loaded.connect(self._on_single_conversation_loaded)
@@ -280,6 +281,11 @@ class ChatTab(QWidget):
     def _on_retry_media(self, message_id: int) -> None:
         self.controller.retry_media_download(message_id)
 
+    def _on_reaction_requested(self, target_wa_id: str, emoji: str) -> None:
+        if self._current_conversation_id is None or not target_wa_id:
+            return
+        self.controller.send_reaction(self._current_conversation_id, target_wa_id, emoji)
+
     def _on_message_sent(self, message: ChatMessage) -> None:
         self.composer.set_sending(False)
         if message.conversation_id == self._current_conversation_id:
@@ -288,7 +294,8 @@ class ChatTab(QWidget):
                 force_scroll=True,
                 show_new_message_button=False,
             )
-        self._apply_message_to_list(message)
+        if not message.is_reaction:
+            self._apply_message_to_list(message)
 
     def _on_send_failed(self, error: str) -> None:
         self.composer.set_sending(False)
@@ -307,7 +314,9 @@ class ChatTab(QWidget):
                 force_scroll=False,
                 show_new_message_button=True,
             )
-        self._apply_message_to_list(message)
+        # Reactions don't reorder the chat list or change its preview (WhatsApp behavior).
+        if not message.is_reaction:
+            self._apply_message_to_list(message)
 
     def _on_error(self, error: str) -> None:
         logger.error("ChatTab error: %s", error)

@@ -125,6 +125,7 @@ class ChatMessage:
     text_content: Optional[str] = None
     timestamp: Optional[datetime] = None
     wa_message_id: Optional[str] = None
+    context_message_id: Optional[str] = None
     media_url: Optional[str] = None
     media: Optional[ChatMedia] = None
 
@@ -135,6 +136,20 @@ class ChatMessage:
     @property
     def is_media(self) -> bool:
         return self.message_type in MEDIA_MESSAGE_TYPES
+
+    @property
+    def is_reaction(self) -> bool:
+        return self.message_type == "reaction"
+
+    @property
+    def reaction_emoji(self) -> str:
+        """The reaction emoji; empty string means the reaction was removed."""
+        return (self.text_content or "").strip()
+
+    @property
+    def reaction_target_wa_id(self) -> Optional[str]:
+        """wa_message_id of the message this reaction targets."""
+        return self.context_message_id
 
     @property
     def media_pending(self) -> bool:
@@ -162,6 +177,7 @@ class ChatMessage:
             text_content=d.get("textContent"),
             timestamp=_parse_chat_timestamp(d.get("timestamp")),
             wa_message_id=d.get("waMessageId"),
+            context_message_id=d.get("contextMessageId"),
             media_url=d.get("mediaUrl"),
             media=ChatMedia.from_dict(raw_media) if raw_media else None,
         )

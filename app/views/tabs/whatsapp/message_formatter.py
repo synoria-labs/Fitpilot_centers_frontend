@@ -14,6 +14,10 @@ _WHITESPACE_RE = re.compile(r"\s+")
 
 def display_text_for_message(message: ChatMessage) -> str:
     """Return user-facing text for a message without storage/API artifacts."""
+    # Reactions render as a badge on their target bubble, never as text.
+    if message.message_type == "reaction":
+        return ""
+
     useful = extract_useful_text(message.text_content, message.message_type)
     if useful:
         return useful

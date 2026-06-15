@@ -18,6 +18,7 @@ _SCROLL_ANIMATION_MS = 180
 
 class MessageThreadWidget(QScrollArea):
     retry_requested = Signal(int)  # message id (re-emitted from bubbles)
+    reaction_requested = Signal(str, str)  # target wa_message_id, emoji ("" removes)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -39,6 +40,8 @@ class MessageThreadWidget(QScrollArea):
 
         self._seen_ids: Set[int] = set()
         self._bubbles: Dict[int, MessageBubble] = {}
+        self._bubbles_by_wa: Dict[str, MessageBubble] = {}  # wa_message_id -> bubble
+        self._reactions_by_wa: Dict[str, dict] = {}  # target wa_id -> {"inbound": e, "outbound": e}
         self._pending_scroll_mode = ""
         self._pending_scroll_attempts = 0
 
@@ -78,7 +81,10 @@ class MessageThreadWidget(QScrollArea):
         self._clear()
         self.clear_new_message_indicator()
         for m in messages:
-            self._add(m)
+            if m.is_reaction:
+                self._apply_reaction(m)
+            else:
+                self._add(m)
         self.scroll_to_bottom(animated=False)
 
     def append_message(
@@ -88,6 +94,11 @@ class MessageThreadWidget(QScrollArea):
         force_scroll: bool = False,
         show_new_message_button: bool = True,
     ) -> None:
+        if message.is_reaction:
+            # Reactions attach to an existing bubble; never a standalone bubble,
+            # no scroll, no "new message" indicator.
+            self._apply_reaction(message)
+            return
         if message.id and message.id in self._seen_ids:
             return
         was_near_bottom = self.is_near_bottom()
@@ -136,7 +147,36 @@ class MessageThreadWidget(QScrollArea):
     def _make_bubble(self, message: ChatMessage) -> MessageBubble:
         bubble = MessageBubble(message)
         bubble.retry_requested.connect(self.retry_requested.emit)
+        bubble.reaction_requested.connect(self._on_reaction_requested)
+        if message.wa_message_id:
+            self._bubbles_by_wa[message.wa_message_id] = bubble
+            known = self._reactions_by_wa.get(message.wa_message_id)
+            if known:
+                bubble.set_reactions(known)
         return bubble
+
+    def _on_reaction_requested(self, target_wa_id: str, emoji: str) -> None:
+        self.reaction_requested.emit(target_wa_id, emoji)
+
+    def _apply_reaction(self, message: ChatMessage) -> None:
+        """Attach (or clear) a reaction emoji on its target bubble.
+
+        Reactions are kept per reactor direction so a contact's and our own
+        reaction can both show. Latest event wins per direction; an empty emoji
+        removes that side's reaction. If the target bubble is not loaded yet, the
+        state is stashed and applied when the bubble appears (see ``_make_bubble``).
+        """
+        target = message.reaction_target_wa_id
+        if not target:
+            return
+        slot = self._reactions_by_wa.setdefault(target, {})
+        if message.reaction_emoji:
+            slot[message.direction] = message.reaction_emoji
+        else:
+            slot.pop(message.direction, None)
+        bubble = self._bubbles_by_wa.get(target)
+        if bubble is not None:
+            bubble.set_reactions(slot)
 
     def _add(self, message: ChatMessage) -> None:
         if message.id:
@@ -151,6 +191,8 @@ class MessageThreadWidget(QScrollArea):
     def _clear(self) -> None:
         self._seen_ids.clear()
         self._bubbles.clear()
+        self._bubbles_by_wa.clear()
+        self._reactions_by_wa.clear()
         while self._layout.count() > 1:  # keep the trailing stretch at index 0
             item = self._layout.takeAt(self._layout.count() - 1)
             widget = item.widget()

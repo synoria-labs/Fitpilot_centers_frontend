@@ -29,6 +29,7 @@ _MESSAGE_FIELDS = """
     textContent
     timestamp
     waMessageId
+    contextMessageId
     mediaUrl
     media {
         id

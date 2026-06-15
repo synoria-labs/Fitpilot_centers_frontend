@@ -22,6 +22,7 @@ _MESSAGE_FIELDS = """
     textContent
     timestamp
     waMessageId
+    contextMessageId
     mediaUrl
     media {
         id
@@ -119,6 +120,16 @@ SEND_MEDIA_MUTATION = """
 RETRY_MEDIA_MUTATION = """
     mutation RetryMedia($messageId: Int!) {
         retryMediaDownload(messageId: $messageId) {
+            success
+            error
+            message { %s }
+        }
+    }
+""" % _MESSAGE_FIELDS
+
+SEND_REACTION_MUTATION = """
+    mutation SendReaction($input: SendReactionInput!) {
+        sendReaction(input: $input) {
             success
             error
             message { %s }
@@ -252,6 +263,32 @@ class WhatsAppChatService:
             }
         except Exception as exc:  # noqa: BLE001
             logger.error("Error sending media message: %s", exc)
+            return {"success": False, "error": str(exc), "message": None}
+
+    async def send_reaction(
+        self,
+        conversation_id: Optional[int],
+        message_id: str,
+        emoji: str,
+    ) -> Dict[str, Any]:
+        """React to a message (emoji="" removes the reaction). ``message_id`` is the
+        target's wa_message_id."""
+        input_payload: Dict[str, Any] = {"messageId": message_id, "emoji": emoji}
+        if conversation_id is not None:
+            input_payload["conversationId"] = conversation_id
+        try:
+            result = await self.client.execute(
+                SEND_REACTION_MUTATION, {"input": input_payload}
+            )
+            payload = (result or {}).get("sendReaction") or {}
+            msg = payload.get("message")
+            return {
+                "success": bool(payload.get("success")),
+                "error": payload.get("error"),
+                "message": ChatMessage.from_dict(msg) if msg else None,
+            }
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Error sending reaction: %s", exc)
             return {"success": False, "error": str(exc), "message": None}
 
     async def retry_media_download(self, message_id: int) -> Dict[str, Any]:
