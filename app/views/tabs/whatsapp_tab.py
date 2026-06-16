@@ -249,6 +249,11 @@ class WhatsAppTab(QWidget):
         name_layout.addWidget(QLabel("Nombre:"))
         self.name_input = QLineEdit()
         self.name_input.setPlaceholderText("Ej: bienvenida_nuevo_socio")
+        self.name_input.setMaxLength(512)
+        self.name_input.setToolTip(
+            "Meta solo acepta minúsculas, números y guiones bajos (sin espacios ni mayúsculas)."
+        )
+        self.name_input.textChanged.connect(self._normalize_name_input)
         self.name_input.textChanged.connect(self.update_preview)
         name_layout.addWidget(self.name_input)
         info_layout.addLayout(name_layout)
@@ -748,6 +753,21 @@ class WhatsAppTab(QWidget):
         if self.current is not None:
             return self._default_header_asset_id()
         return None
+
+    def _normalize_name_input(self, text: str) -> None:
+        """Force the template name into Meta's charset (lowercase, digits, ``_``).
+
+        Meta rejects any other character with a generic "Invalid parameter", so we
+        normalize as the user types instead of letting the send fail.
+        """
+        normalized = re.sub(r"[^a-z0-9_]", "_", text.lower())
+        if normalized == text:
+            return
+        cursor = self.name_input.cursorPosition()
+        self.name_input.blockSignals(True)
+        self.name_input.setText(normalized)
+        self.name_input.setCursorPosition(min(cursor, len(normalized)))
+        self.name_input.blockSignals(False)
 
     def _current_snapshot(self) -> Dict[str, Any]:
         return {
