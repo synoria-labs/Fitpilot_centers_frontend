@@ -1,11 +1,12 @@
-"""Message composer (text input + attach button + send button)."""
+"""Message composer (text input + attach button + emoji picker + send button)."""
 import qtawesome as qta
-from PySide6.QtCore import Signal, QSize
+from PySide6.QtCore import Signal, QSize, QPoint, Qt
 from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QDialog, QFileDialog, QHBoxLayout, QLineEdit, QToolButton, QWidget
 
 from . import theme
 from .attachment_preview_dialog import AttachmentPreviewDialog, FILE_DIALOG_FILTER
+from .emoji_picker import EmojiPicker
 
 _STYLE = f"""
 #composer {{ background-color: palette(window); }}
@@ -26,12 +27,12 @@ _STYLE = f"""
 #composerInput::placeholder {{ color: palette(placeholder-text); }}
 #composerIconButton {{
     background: transparent;
-    color: palette(mid);
+    color: {theme.TEXT_PRIMARY};
     border: none;
     border-radius: 18px;
     padding: 7px;
 }}
-#composerIconButton:hover {{ background-color: palette(alternate-base); }}
+#composerIconButton:hover {{ background-color: {theme.ITEM_HOVER}; }}
 #composerSend {{
     background-color: {theme.ACCENT};
     border: none;
@@ -70,7 +71,12 @@ class ComposerWidget(QWidget):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setObjectName("composer")
+        # A plain QWidget only paints its stylesheet background-color when
+        # WA_StyledBackground is set; without this the bar wouldn't take the
+        # palette(window) color (same as the chat area).
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(_STYLE)
+        self._emoji_picker = None  # lazily created, reused across openings
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(16, 10, 16, 10)
@@ -78,7 +84,7 @@ class ComposerWidget(QWidget):
 
         self.attach_button = QToolButton()
         self.attach_button.setObjectName("composerIconButton")
-        self.attach_button.setIcon(qta.icon("fa5s.plus", color=theme.palette_hex(QPalette.ColorRole.Mid)))
+        self.attach_button.setIcon(qta.icon("fa5s.plus", color=theme.TEXT_PRIMARY))
         self.attach_button.setIconSize(QSize(18, 18))
         self.attach_button.setFixedSize(36, 36)
         self.attach_button.setToolTip("Adjuntar archivo")
@@ -86,7 +92,15 @@ class ComposerWidget(QWidget):
         self.attach_button.clicked.connect(self._on_attach_clicked)
         layout.addWidget(self.attach_button)
 
-        layout.addWidget(_make_visual_button("fa5s.smile", "Proximamente: emojis"))
+        self.emoji_button = QToolButton()
+        self.emoji_button.setObjectName("composerIconButton")
+        self.emoji_button.setIcon(qta.icon("fa5s.smile", color=theme.TEXT_PRIMARY))
+        self.emoji_button.setIconSize(QSize(18, 18))
+        self.emoji_button.setFixedSize(36, 36)
+        self.emoji_button.setToolTip("Emojis")
+        self.emoji_button.setAutoRaise(True)
+        self.emoji_button.clicked.connect(self._open_emoji_picker)
+        layout.addWidget(self.emoji_button)
 
         self.input = QLineEdit()
         self.input.setObjectName("composerInput")
@@ -110,6 +124,7 @@ class ComposerWidget(QWidget):
         self.input.setEnabled(enabled)
         self.send_button.setEnabled(enabled)
         self.attach_button.setEnabled(enabled)
+        self.emoji_button.setEnabled(enabled)
 
     def set_sending(self, sending: bool) -> None:
         """Lock the composer while an attachment is being uploaded."""
@@ -133,3 +148,19 @@ class ComposerWidget(QWidget):
         dialog = AttachmentPreviewDialog(file_path, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.attachment_requested.emit(dialog.file_path, dialog.caption)
+
+    def _open_emoji_picker(self) -> None:
+        if self._emoji_picker is None:
+            self._emoji_picker = EmojiPicker(self)
+            self._emoji_picker.emoji_selected.connect(self._insert_emoji)
+        picker = self._emoji_picker
+        # Position the popup just above the emoji button, left-aligned with it.
+        anchor = self.emoji_button.mapToGlobal(QPoint(0, 0))
+        x = anchor.x()
+        y = anchor.y() - picker.height() - 6
+        picker.move(x, max(0, y))
+        picker.show()
+
+    def _insert_emoji(self, emoji: str) -> None:
+        # Insert at the cursor (replacing any selection); keep the picker open.
+        self.input.insert(emoji)

@@ -73,9 +73,9 @@ def _style() -> str:
     background-color: transparent;
 }}
 #convChipActive {{
-    color: palette(highlighted-text);
-    background-color: palette(highlight);
-    border-color: palette(highlight);
+    color: palette(text);
+    background-color: palette(alternate-base);
+    border-color: palette(mid);
 }}
 QListView {{
     background-color: palette(window);

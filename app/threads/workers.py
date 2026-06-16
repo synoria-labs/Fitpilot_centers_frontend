@@ -95,6 +95,8 @@ class TabLoader(BaseWorker):
             "dashboard": ("app.views.tabs.dashboard_tab", "DashboardTab"),
             "whatsapp": ("app.views.tabs.whatsapp_tab", "WhatsAppTab"),
             "whatsapp_notifications": ("app.views.tabs.whatsapp_notifications_tab", "WhatsAppNotificationsTab"),
+            "chatbot_config": ("app.views.tabs.chatbot_config_tab", "ChatbotConfigTab"),
+            "campaigns": ("app.views.tabs.campaigns_tab", "CampaignsTab"),
             "whatsapp_chat": ("app.views.tabs.whatsapp.chat_tab", "ChatTab"),
             "finances": ("app.views.tabs.finances_tab", "FinancesTab"),
         }

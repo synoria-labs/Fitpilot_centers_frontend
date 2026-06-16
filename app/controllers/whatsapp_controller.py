@@ -19,6 +19,7 @@ class WhatsAppController(BaseController):
     synced = Signal(object)                   # List[dict]
     template_saved = Signal(object, str)      # template dict, mensaje
     template_deleted = Signal(int)            # template_id
+    template_ai_suggested = Signal(object)    # suggestion dict
     test_sent = Signal(str)                   # mensaje informativo
     media_assets_loaded = Signal(str, object) # kind, List[dict]
     media_asset_uploaded = Signal(str, object) # kind, asset dict
@@ -70,7 +71,7 @@ class WhatsAppController(BaseController):
             self._execute_authenticated_operation(
                 self._service,
                 "create_template",
-                self._on_saved,
+                lambda result: self._on_saved(result, is_new=True),
                 self._on_error,
                 name=data.get("name"),
                 language=data.get("language"),
@@ -85,7 +86,7 @@ class WhatsAppController(BaseController):
             self._execute_authenticated_operation(
                 self._service,
                 "update_template",
-                self._on_saved,
+                lambda result: self._on_saved(result, is_new=False),
                 self._on_error,
                 template_id=template_id,
                 body_text=data.get("body_text"),
@@ -93,6 +94,27 @@ class WhatsAppController(BaseController):
                 footer_text=data.get("footer_text"),
                 header_media_asset_id=data.get("header_media_asset_id"),
             )
+
+    def assist_template(self, action: str, data: Dict[str, Any]) -> None:
+        """Solicita una sugerencia IA para el editor de plantillas."""
+        if not self._service:
+            self.error_occurred.emit("Servicio de WhatsApp no disponible")
+            return
+        self.loading_changed.emit(True)
+        self._execute_authenticated_operation(
+            self._service,
+            "assist_template",
+            self._on_template_ai_suggested,
+            self._on_error,
+            action=action,
+            body_text=data.get("body_text") or "",
+            body_examples=data.get("body_examples") or [],
+            footer_text=data.get("footer_text"),
+            template_name=data.get("template_name"),
+            category=data.get("category"),
+            language=data.get("language"),
+            instruction=data.get("instruction"),
+        )
 
     def delete_template(self, template_id: int) -> None:
         if not self._service:
@@ -176,12 +198,24 @@ class WhatsAppController(BaseController):
         self.loading_changed.emit(False)
         self.synced.emit(result or [])
 
-    def _on_saved(self, result: Dict[str, Any]) -> None:
+    def _on_saved(self, result: Dict[str, Any], *, is_new: bool) -> None:
         self.loading_changed.emit(False)
         if result and result.get("success"):
-            self.template_saved.emit(result.get("template"), "Plantilla guardada")
+            message = (
+                "Plantilla enviada a revisión en Meta. Estado: PENDING."
+                if is_new
+                else "Cambios enviados a Meta. La plantilla vuelve a revisión."
+            )
+            self.template_saved.emit(result.get("template"), message)
         else:
             self.error_occurred.emit((result or {}).get("error") or "No se pudo guardar")
+
+    def _on_template_ai_suggested(self, result: Dict[str, Any]) -> None:
+        self.loading_changed.emit(False)
+        if result and result.get("success") and result.get("suggestion"):
+            self.template_ai_suggested.emit(result.get("suggestion"))
+        else:
+            self.error_occurred.emit((result or {}).get("error") or "No se pudo generar la sugerencia")
 
     def _on_test_sent(self, result: Dict[str, Any]) -> None:
         self.loading_changed.emit(False)

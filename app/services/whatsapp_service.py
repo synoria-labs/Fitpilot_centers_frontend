@@ -45,6 +45,16 @@ _MEDIA_ASSET_FIELDS = """
     lastValidatedAt
 """
 
+_AI_SUGGESTION_FIELDS = """
+    bodyText
+    bodyExamples
+    footerText
+    suggestedName
+    suggestedCategory
+    notes
+    warnings
+"""
+
 
 def _map_template(node: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     """Normaliza un nodo GraphQL (camelCase) a dict snake_case para la UI."""
@@ -85,6 +95,20 @@ def _map_asset(node: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         "created_at": node.get("createdAt"),
         "updated_at": node.get("updatedAt"),
         "last_validated_at": node.get("lastValidatedAt"),
+    }
+
+
+def _map_ai_suggestion(node: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not node:
+        return None
+    return {
+        "body_text": node.get("bodyText") or "",
+        "body_examples": node.get("bodyExamples") or [],
+        "footer_text": node.get("footerText") or "",
+        "suggested_name": node.get("suggestedName") or "",
+        "suggested_category": node.get("suggestedCategory") or "",
+        "notes": node.get("notes") or [],
+        "warnings": node.get("warnings") or [],
     }
 
 
@@ -157,6 +181,49 @@ class WhatsAppService:
         }
         result = await self.client.execute(mutation, variables)
         return self._map_result(result, "createWhatsappTemplate")
+
+    async def assist_template(
+        self,
+        action: str,
+        body_text: str = "",
+        body_examples: Optional[List[str]] = None,
+        footer_text: Optional[str] = None,
+        template_name: Optional[str] = None,
+        category: Optional[str] = None,
+        language: Optional[str] = None,
+        instruction: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Genera una sugerencia IA para redactar, optimizar o corregir una plantilla."""
+        mutation = f"""
+            mutation AssistWhatsappTemplate($input: AssistWhatsappTemplateInput!) {{
+                assistWhatsappTemplate(input: $input) {{
+                    success
+                    error
+                    suggestion {{ {_AI_SUGGESTION_FIELDS} }}
+                }}
+            }}
+        """
+        variables = {
+            "input": {
+                "action": (action or "").upper(),
+                "bodyText": body_text or "",
+                "bodyExamples": body_examples or [],
+                "footerText": footer_text,
+                "templateName": template_name,
+                "category": category,
+                "language": language,
+                "instruction": instruction,
+            }
+        }
+        result = await self.client.execute(mutation, variables)
+        payload = (result or {}).get("assistWhatsappTemplate")
+        if not payload:
+            return {"success": False, "error": "Sin respuesta del servidor", "suggestion": None}
+        return {
+            "success": bool(payload.get("success")),
+            "error": payload.get("error"),
+            "suggestion": _map_ai_suggestion(payload.get("suggestion")),
+        }
 
     async def update_template(
         self,

@@ -42,7 +42,11 @@ try:  # QtMultimedia may be missing in trimmed installs; degrade to file cards.
 except ImportError:  # pragma: no cover - environment dependent
     _MULTIMEDIA_AVAILABLE = False
 
-_IMAGE_MAX = 320
+# Inline image display width = chat bubble content width (WhatsApp-like): the
+# image fills the bubble and the caption wraps to this same width (no right-side
+# air). Tall images are capped in height keeping aspect ratio.
+MEDIA_BUBBLE_WIDTH = 320
+_IMAGE_MAX_HEIGHT = 420
 _STICKER_MAX = 160
 
 _FILE_ICONS = {
@@ -82,8 +86,12 @@ def _media_type_label(media_type: str) -> str:
 
 
 def create_media_widget(message: ChatMessage, parent: Optional[QWidget] = None) -> Optional[QWidget]:
-    """Build the widget for a message attachment, or None for plain text."""
-    if not message.is_media:
+    """Build the widget for a message attachment, or None for plain text.
+
+    Renders for media-typed messages and for any message that carries an
+    attachment object (e.g. a template whose IMAGE header is stored as media).
+    """
+    if not message.is_media and not message.media:
         return None
 
     media_type = message.media.media_type if message.media else message.message_type
@@ -168,7 +176,7 @@ class ImageMediaWidget(QLabel):
         super().__init__(parent)
         self._media = message.media
         self._pixmap: Optional[QPixmap] = None
-        self._max_side = _STICKER_MAX if self._media.media_type == "sticker" else _IMAGE_MAX
+        self._is_sticker = self._media.media_type == "sticker"
 
         self.setText("Cargando imagen...")
         self.setStyleSheet(f"color: {theme.TEXT_SECONDARY}; font-size: 12px; padding: 12px;")
@@ -184,9 +192,15 @@ class ImageMediaWidget(QLabel):
             self._on_failed("Formato de imagen no soportado.")
             return
         self._pixmap = pixmap
+        if self._is_sticker:
+            # Stickers stay small (and keep their own square-ish box).
+            bound_w = bound_h = _STICKER_MAX
+        else:
+            # Photos fill the bubble width; only very tall images are capped.
+            bound_w, bound_h = MEDIA_BUBBLE_WIDTH, _IMAGE_MAX_HEIGHT
         scaled = pixmap.scaled(
-            self._max_side,
-            self._max_side,
+            bound_w,
+            bound_h,
             Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.SmoothTransformation,
         )

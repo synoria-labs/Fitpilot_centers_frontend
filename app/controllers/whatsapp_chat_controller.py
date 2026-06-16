@@ -125,6 +125,28 @@ class WhatsAppChatController(BaseController):
             caption=caption,
         )
 
+    def send_reaction(
+        self, conversation_id: Optional[int], message_id: str, emoji: str
+    ) -> None:
+        """React to a message (emoji="" removes it). The persisted reaction is applied
+        to the target bubble via the ``new_message`` path (idempotent with the realtime echo)."""
+        def _on_reacted(result: dict) -> None:
+            if result and result.get("success") and result.get("message"):
+                self.new_message.emit(result["message"])
+            else:
+                error = (result or {}).get("error") or "No se pudo enviar la reacción."
+                self.error_occurred.emit(error)
+
+        self._execute_authenticated_operation(
+            self._service,
+            "send_reaction",
+            _on_reacted,
+            self._on_error,
+            conversation_id=conversation_id,
+            message_id=message_id,
+            emoji=emoji,
+        )
+
     def retry_media_download(self, message_id: int) -> None:
         def _on_retry(result: dict) -> None:
             # The refreshed message (download pending again) re-renders the bubble.

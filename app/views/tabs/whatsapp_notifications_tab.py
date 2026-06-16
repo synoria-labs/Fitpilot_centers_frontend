@@ -16,7 +16,7 @@ import qtawesome as qta
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QTextEdit,
     QLineEdit, QGroupBox, QSplitter, QListWidget, QListWidgetItem, QComboBox,
-    QCheckBox, QFormLayout, QFileDialog,
+    QCheckBox, QFormLayout, QFileDialog, QScrollArea, QFrame,
 )
 from PySide6.QtCore import Qt, Signal, QSize
 from PySide6.QtGui import QFont, QColor
@@ -91,6 +91,24 @@ QLabel#notifHint {{
 QWidget#notifEventsPane, QWidget#notifConfigPane {{
     background-color: palette(window);
 }}
+QScrollArea#notifConfigScroll {{
+    background-color: palette(window);
+    border: none;
+}}
+QScrollArea#notifConfigScroll > QWidget > QWidget {{
+    background-color: palette(window);
+}}
+QFrame#notifPreviewRail {{
+    background-color: palette(window);
+    border: 1px solid palette(mid);
+    border-radius: 6px;
+}}
+QLabel#notifPreviewRailTitle {{
+    color: palette(text);
+    font-size: 13px;
+    font-weight: 700;
+    background: transparent;
+}}
 QLabel#notifPanelTitle {{
     color: palette(text);
     font-size: 14px;
@@ -103,11 +121,6 @@ QLabel#notifEventTitle {{
     font-weight: 700;
     background: transparent;
 }}
-QLabel#notifPreviewLabel {{
-    color: palette(text);
-    font-weight: 700;
-    background: transparent;
-}}
 QListWidget#notifEventsList {{
     background-color: palette(window);
     border: none;
@@ -117,14 +130,15 @@ QListWidget#notifEventsList::item {{
     min-height: 34px;
     padding: 7px 12px;
     border-bottom: 1px solid palette(mid);
+    border-radius: 8px;
     color: palette(text);
 }}
 QListWidget#notifEventsList::item:hover {{
     background-color: palette(alternate-base);
 }}
 QListWidget#notifEventsList::item:selected {{
-    background-color: palette(highlight);
-    color: palette(highlighted-text);
+    background-color: palette(alternate-base);
+    color: palette(text);
 }}
 QGroupBox#notifGroup {{
     background-color: palette(window);
@@ -163,8 +177,8 @@ QComboBox QAbstractItemView {{
     background-color: palette(base);
     color: palette(text);
     border: 1px solid palette(mid);
-    selection-background-color: palette(highlight);
-    selection-color: palette(highlighted-text);
+    selection-background-color: palette(alternate-base);
+    selection-color: palette(text);
     outline: 0;
 }}
 QCheckBox {{
@@ -185,19 +199,6 @@ QCheckBox::indicator:checked {{
 }}
 QCheckBox:disabled {{
     color: palette(mid);
-}}
-QTextEdit#notifPreview {{
-    background-color: {theme.THREAD_BG};
-    color: {theme.TEXT_PRIMARY};
-    border: 1px solid {theme.DIVIDER};
-    border-radius: 8px;
-    padding: 10px;
-    font-size: 13px;
-    selection-background-color: {theme.ACCENT};
-    selection-color: #ffffff;
-}}
-QTextEdit#notifPreview:disabled {{
-    color: {theme.TEXT_SECONDARY};
 }}
 QPushButton#notifActionButton {{
     background-color: transparent;
@@ -324,18 +325,28 @@ class WhatsAppNotificationsTab(QWidget):
 
         right_panel = QWidget()
         right_panel.setObjectName("notifConfigPane")
-        right_layout = QVBoxLayout(right_panel)
+        right_layout = QHBoxLayout(right_panel)
         right_layout.setContentsMargins(14, 16, 20, 14)
-        right_layout.setSpacing(10)
+        right_layout.setSpacing(12)
+
+        config_scroll = QScrollArea()
+        config_scroll.setObjectName("notifConfigScroll")
+        config_scroll.setWidgetResizable(True)
+        config_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        config_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        config_container = QWidget()
+        config_layout = QVBoxLayout(config_container)
+        config_layout.setContentsMargins(0, 0, 0, 0)
+        config_layout.setSpacing(10)
 
         self.event_title = QLabel("Selecciona un evento")
         self.event_title.setObjectName("notifEventTitle")
         self.event_title.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-        right_layout.addWidget(self.event_title)
+        config_layout.addWidget(self.event_title)
 
         self.enabled_check = QCheckBox("Activar el envío automático para este evento")
         self.enabled_check.stateChanged.connect(self._update_preview)
-        right_layout.addWidget(self.enabled_check)
+        config_layout.addWidget(self.enabled_check)
 
         template_group = QGroupBox("Plantilla")
         template_group.setObjectName("notifGroup")
@@ -346,7 +357,7 @@ class WhatsAppNotificationsTab(QWidget):
         self.template_combo = QComboBox()
         self.template_combo.currentIndexChanged.connect(self.on_template_changed)
         template_form.addRow("Plantilla aprobada:", self.template_combo)
-        right_layout.addWidget(template_group)
+        config_layout.addWidget(template_group)
 
         self.vars_group = QGroupBox("Variables de la plantilla")
         self.vars_group.setObjectName("notifGroup")
@@ -354,7 +365,7 @@ class WhatsAppNotificationsTab(QWidget):
         self.vars_layout.setContentsMargins(10, 10, 10, 10)
         self.vars_layout.setHorizontalSpacing(10)
         self.vars_layout.setVerticalSpacing(8)
-        right_layout.addWidget(self.vars_group)
+        config_layout.addWidget(self.vars_group)
 
         self.header_media_group = QGroupBox("Media del encabezado")
         self.header_media_group.setObjectName("notifGroup")
@@ -385,7 +396,7 @@ class WhatsAppNotificationsTab(QWidget):
         self.header_media_input.textChanged.connect(self._update_preview)
         header_media_layout.addRow("URL legacy HTTPS:", self.header_media_input)
         self.header_media_group.setVisible(False)
-        right_layout.addWidget(self.header_media_group)
+        config_layout.addWidget(self.header_media_group)
 
         self.offsets_group = QGroupBox("Días de aviso antes del vencimiento")
         self.offsets_group.setObjectName("notifGroup")
@@ -396,15 +407,7 @@ class WhatsAppNotificationsTab(QWidget):
         self.offsets_input = QLineEdit()
         self.offsets_input.setPlaceholderText("Ej: 7, 1")
         offsets_layout.addWidget(self.offsets_input)
-        right_layout.addWidget(self.offsets_group)
-
-        preview_label = QLabel("Vista previa (con valores de ejemplo):")
-        preview_label.setObjectName("notifPreviewLabel")
-        right_layout.addWidget(preview_label)
-        self.preview_widget = TemplatePreviewWidget()
-        self.preview_widget.setMinimumHeight(170)
-        self.preview_widget.setMaximumHeight(260)
-        right_layout.addWidget(self.preview_widget)
+        config_layout.addWidget(self.offsets_group)
 
         actions = QHBoxLayout()
         actions.setContentsMargins(0, 0, 0, 0)
@@ -416,8 +419,27 @@ class WhatsAppNotificationsTab(QWidget):
         self.save_btn.setEnabled(False)
         self.save_btn.clicked.connect(self.on_save)
         actions.addWidget(self.save_btn)
-        right_layout.addStretch(1)
-        right_layout.addLayout(actions)
+        config_layout.addStretch(1)
+        config_layout.addLayout(actions)
+
+        config_scroll.setWidget(config_container)
+
+        preview_panel = QFrame()
+        preview_panel.setObjectName("notifPreviewRail")
+        preview_panel.setMinimumWidth(320)
+        preview_panel.setMaximumWidth(380)
+        preview_layout = QVBoxLayout(preview_panel)
+        preview_layout.setContentsMargins(12, 12, 12, 12)
+        preview_layout.setSpacing(10)
+        preview_title = QLabel("Vista previa de la plantilla")
+        preview_title.setObjectName("notifPreviewRailTitle")
+        preview_layout.addWidget(preview_title)
+        self.preview_widget = TemplatePreviewWidget()
+        self.preview_widget.setMinimumHeight(420)
+        preview_layout.addWidget(self.preview_widget, 1)
+
+        right_layout.addWidget(config_scroll, 1)
+        right_layout.addWidget(preview_panel)
 
         splitter.addWidget(right_panel)
         splitter.setStretchFactor(0, 0)

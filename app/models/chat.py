@@ -8,6 +8,29 @@ from ..core.config import Config
 from ..utils.datetime_helpers import parse_iso_datetime
 
 
+@dataclass(frozen=True)
+class ChatMembershipSnapshot:
+    status: str
+    remaining_days: Optional[int] = None
+
+    @classmethod
+    def from_dict(cls, d: dict) -> Optional["ChatMembershipSnapshot"]:
+        d = d or {}
+        status = (d.get("status") or "").strip()
+        if not status:
+            return None
+
+        raw_remaining = d.get("remainingDays")
+        if raw_remaining is None:
+            raw_remaining = d.get("remaining_days")
+        try:
+            remaining_days = int(raw_remaining) if raw_remaining is not None else None
+        except (TypeError, ValueError):
+            remaining_days = None
+
+        return cls(status=status, remaining_days=remaining_days)
+
+
 def _chat_local_timezone():
     try:
         return ZoneInfo(Config.TIMEZONE)
@@ -35,6 +58,7 @@ class ChatContact:
     profile_name: Optional[str] = None
     member_id: Optional[int] = None
     member_name: Optional[str] = None
+    member_membership: Optional[ChatMembershipSnapshot] = None
 
     @property
     def display_name(self) -> str:
@@ -68,6 +92,9 @@ class ChatContact:
             profile_name=d.get("profileName"),
             member_id=int(raw_member_id) if raw_member_id is not None else None,
             member_name=d.get("memberName"),
+            member_membership=ChatMembershipSnapshot.from_dict(
+                d.get("memberMembership") or d.get("member_membership") or {}
+            ),
         )
 
 
@@ -125,6 +152,7 @@ class ChatMessage:
     text_content: Optional[str] = None
     timestamp: Optional[datetime] = None
     wa_message_id: Optional[str] = None
+    context_message_id: Optional[str] = None
     media_url: Optional[str] = None
     media: Optional[ChatMedia] = None
 
@@ -135,6 +163,20 @@ class ChatMessage:
     @property
     def is_media(self) -> bool:
         return self.message_type in MEDIA_MESSAGE_TYPES
+
+    @property
+    def is_reaction(self) -> bool:
+        return self.message_type == "reaction"
+
+    @property
+    def reaction_emoji(self) -> str:
+        """The reaction emoji; empty string means the reaction was removed."""
+        return (self.text_content or "").strip()
+
+    @property
+    def reaction_target_wa_id(self) -> Optional[str]:
+        """wa_message_id of the message this reaction targets."""
+        return self.context_message_id
 
     @property
     def media_pending(self) -> bool:
@@ -162,6 +204,7 @@ class ChatMessage:
             text_content=d.get("textContent"),
             timestamp=_parse_chat_timestamp(d.get("timestamp")),
             wa_message_id=d.get("waMessageId"),
+            context_message_id=d.get("contextMessageId"),
             media_url=d.get("mediaUrl"),
             media=ChatMedia.from_dict(raw_media) if raw_media else None,
         )

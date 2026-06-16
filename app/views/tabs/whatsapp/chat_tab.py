@@ -7,10 +7,9 @@ from typing import Optional
 
 import qtawesome as qta
 from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QSplitter, QLabel, QStackedWidget, QFrame,
-    QToolButton,
+    QSizePolicy, QToolButton,
 )
 
 from ....controllers.whatsapp_chat_controller import WhatsAppChatController
@@ -21,6 +20,7 @@ from ....utils.dialog_helpers import show_error
 from . import theme
 from .avatar import Avatar
 from .conversation_list_widget import ConversationListWidget
+from .membership_chip import membership_chip_stylesheet, membership_chip_text
 from .message_thread_widget import MessageThreadWidget
 from .composer_widget import ComposerWidget
 
@@ -32,18 +32,18 @@ def _style() -> str:
 #chatTab {{ background-color: palette(window); }}
 #chatTab QSplitter::handle {{ background-color: palette(mid); width: 1px; }}
 #chatHeader {{
-    background-color: palette(alternate-base);
-    border-bottom: 1px solid palette(mid);
+    background-color: palette(window);
+    border-bottom: 1px solid {theme.DIVIDER};
 }}
-QLabel#headerName {{ color: palette(text); font-weight: bold; font-size: 14px; background: transparent; }}
-QLabel#headerSub {{ color: {theme.secondary_text_hex(background_role=QPalette.ColorRole.AlternateBase)}; font-size: 11px; background: transparent; }}
+QLabel#headerName {{ color: {theme.TEXT_PRIMARY}; font-weight: bold; font-size: 14px; background: transparent; }}
+QLabel#headerSub {{ color: {theme.TEXT_SECONDARY}; font-size: 11px; background: transparent; }}
 #chatActionButton {{
     background: transparent;
     border: none;
     border-radius: 17px;
     padding: 7px;
 }}
-#chatActionButton:hover {{ background-color: palette(base); }}
+#chatActionButton:hover {{ background-color: {theme.ITEM_HOVER}; }}
 #emptyState {{ background-color: palette(window); }}
 QLabel#emptyIcon {{ font-size: 64px; background: transparent; }}
 QLabel#emptyTitle {{ color: palette(text); font-size: 20px; background: transparent; }}
@@ -54,7 +54,7 @@ QLabel#emptySub {{ color: {theme.secondary_text_hex()}; font-size: 13px; backgro
 def _make_header_action(icon_name: str, tooltip: str) -> QToolButton:
     button = QToolButton()
     button.setObjectName("chatActionButton")
-    button.setIcon(qta.icon(icon_name, color=theme.palette_hex()))
+    button.setIcon(qta.icon(icon_name, color=theme.TEXT_PRIMARY))
     button.setIconSize(QSize(18, 18))
     button.setFixedSize(36, 36)
     button.setToolTip(tooltip)
@@ -157,11 +157,29 @@ class ChatTab(QWidget):
 
         name_box = QVBoxLayout()
         name_box.setSpacing(0)
+        name_row = QHBoxLayout()
+        name_row.setContentsMargins(0, 0, 0, 0)
+        name_row.setSpacing(8)
         self._header_name = QLabel("")
         self._header_name.setObjectName("headerName")
+        self._header_name.setMinimumWidth(0)
+        self._header_name.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Preferred,
+        )
+        self._header_membership_chip = QLabel("")
+        self._header_membership_chip.setObjectName("headerMembershipChip")
+        self._header_membership_chip.setSizePolicy(
+            QSizePolicy.Policy.Fixed,
+            QSizePolicy.Policy.Fixed,
+        )
+        self._header_membership_chip.hide()
         self._header_sub = QLabel("")
         self._header_sub.setObjectName("headerSub")
-        name_box.addWidget(self._header_name)
+        name_row.addWidget(self._header_name)
+        name_row.addWidget(self._header_membership_chip)
+        name_row.addStretch(1)
+        name_box.addLayout(name_row)
         name_box.addWidget(self._header_sub)
         h.addLayout(name_box, 1)
 
@@ -186,6 +204,7 @@ class ChatTab(QWidget):
         self.composer.send_requested.connect(self._on_send)
         self.composer.attachment_requested.connect(self._on_send_media)
         self.thread.retry_requested.connect(self._on_retry_media)
+        self.thread.reaction_requested.connect(self._on_reaction_requested)
 
         self.controller.conversations_page_loaded.connect(self._on_conversations_page_loaded)
         self.controller.single_conversation_loaded.connect(self._on_single_conversation_loaded)
@@ -257,6 +276,19 @@ class ChatTab(QWidget):
     def _update_header(self, conv: ChatConversation) -> None:
         self._header_avatar.set_name(conv.display_name, size=40)
         self._header_name.setText(conv.display_name)
+        chip_text = membership_chip_text(conv.contact.member_membership)
+        self._header_membership_chip.setVisible(bool(chip_text))
+        if chip_text:
+            self._header_membership_chip.setText(chip_text)
+            self._header_membership_chip.setStyleSheet(
+                membership_chip_stylesheet(
+                    conv.contact.member_membership,
+                    object_name="headerMembershipChip",
+                )
+            )
+            self._header_membership_chip.setToolTip(chip_text)
+        else:
+            self._header_membership_chip.clear()
         identity = conv.contact.secondary_identity or conv.contact.phone_number or conv.contact.wa_id
         self._header_sub.setText(identity)
 
@@ -280,6 +312,11 @@ class ChatTab(QWidget):
     def _on_retry_media(self, message_id: int) -> None:
         self.controller.retry_media_download(message_id)
 
+    def _on_reaction_requested(self, target_wa_id: str, emoji: str) -> None:
+        if self._current_conversation_id is None or not target_wa_id:
+            return
+        self.controller.send_reaction(self._current_conversation_id, target_wa_id, emoji)
+
     def _on_message_sent(self, message: ChatMessage) -> None:
         self.composer.set_sending(False)
         if message.conversation_id == self._current_conversation_id:
@@ -288,7 +325,8 @@ class ChatTab(QWidget):
                 force_scroll=True,
                 show_new_message_button=False,
             )
-        self._apply_message_to_list(message)
+        if not message.is_reaction:
+            self._apply_message_to_list(message)
 
     def _on_send_failed(self, error: str) -> None:
         self.composer.set_sending(False)
@@ -307,7 +345,9 @@ class ChatTab(QWidget):
                 force_scroll=False,
                 show_new_message_button=True,
             )
-        self._apply_message_to_list(message)
+        # Reactions don't reorder the chat list or change its preview (WhatsApp behavior).
+        if not message.is_reaction:
+            self._apply_message_to_list(message)
 
     def _on_error(self, error: str) -> None:
         logger.error("ChatTab error: %s", error)
