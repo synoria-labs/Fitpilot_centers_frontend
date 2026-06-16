@@ -320,6 +320,7 @@ class WhatsAppChatService:
         wa_id: Optional[str] = None,
         file_path: str = "",
         caption: Optional[str] = None,
+        voice_note: bool = False,
     ) -> Dict[str, Any]:
         """Send an attachment via the multipart GraphQL mutation."""
         input_payload: Dict[str, Any] = {}
@@ -329,6 +330,8 @@ class WhatsAppChatService:
             input_payload["waId"] = wa_id
         if caption:
             input_payload["caption"] = caption
+        if voice_note:
+            input_payload["voiceNote"] = True
 
         try:
             result = await self.client.execute_multipart(

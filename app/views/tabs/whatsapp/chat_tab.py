@@ -3,6 +3,7 @@
 Mirrors the official WhatsApp layout (chats on the left, conversation on the right).
 Realtime updates arrive via the controller's WebSocket subscription.
 """
+from pathlib import Path
 from typing import Optional
 
 import qtawesome as qta
@@ -76,6 +77,7 @@ class ChatTab(QWidget):
         self.controller = WhatsAppChatController(chat_service, self)
 
         self._current_conversation_id: Optional[int] = None
+        self._pending_voice_note_path: Optional[str] = None
 
         # Pagination state for the infinite-scroll conversation list.
         self._page_size: int = PAGE_SIZE
@@ -203,6 +205,8 @@ class ChatTab(QWidget):
         self.conversation_list.load_more_requested.connect(self._on_load_more)
         self.composer.send_requested.connect(self._on_send)
         self.composer.attachment_requested.connect(self._on_send_media)
+        self.composer.voice_note_requested.connect(self._on_send_voice_note)
+        self.composer.voice_note_failed.connect(self._on_voice_note_failed)
         self.composer.bot_toggle_requested.connect(self._on_bot_toggle)
         self.thread.retry_requested.connect(self._on_retry_media)
         self.thread.reaction_requested.connect(self._on_reaction_requested)
@@ -316,6 +320,22 @@ class ChatTab(QWidget):
             self._current_conversation_id, file_path, caption or None
         )
 
+    def _on_send_voice_note(self, file_path: str) -> None:
+        if self._current_conversation_id is None:
+            self._delete_voice_note(file_path)
+            return
+        self._pending_voice_note_path = file_path
+        self.composer.set_sending(True)
+        self.controller.send_media(
+            self._current_conversation_id,
+            file_path,
+            caption=None,
+            voice_note=True,
+        )
+
+    def _on_voice_note_failed(self, error: str) -> None:
+        show_error(self, error, title="Nota de voz")
+
     def _on_retry_media(self, message_id: int) -> None:
         self.controller.retry_media_download(message_id)
 
@@ -326,6 +346,7 @@ class ChatTab(QWidget):
 
     def _on_message_sent(self, message: ChatMessage) -> None:
         self.composer.set_sending(False)
+        self._cleanup_pending_voice_note()
         if message.conversation_id == self._current_conversation_id:
             self.thread.append_message(
                 message,
@@ -337,6 +358,7 @@ class ChatTab(QWidget):
 
     def _on_send_failed(self, error: str) -> None:
         self.composer.set_sending(False)
+        self._cleanup_pending_voice_note()
         show_error(self, error, title="No se pudo enviar")
 
     def _on_message_updated(self, message: ChatMessage) -> None:
@@ -357,6 +379,8 @@ class ChatTab(QWidget):
             self._apply_message_to_list(message)
 
     def _on_error(self, error: str) -> None:
+        self.composer.set_sending(False)
+        self._cleanup_pending_voice_note()
         logger.error("ChatTab error: %s", error)
 
     def _apply_message_to_list(self, message: ChatMessage) -> None:
@@ -368,6 +392,19 @@ class ChatTab(QWidget):
         """
         if not self.conversation_list.apply_message(message):
             self.controller.load_single_conversation(message.conversation_id)
+
+    def _cleanup_pending_voice_note(self) -> None:
+        if not self._pending_voice_note_path:
+            return
+        self._delete_voice_note(self._pending_voice_note_path)
+        self._pending_voice_note_path = None
+
+    @staticmethod
+    def _delete_voice_note(file_path: str) -> None:
+        try:
+            Path(file_path).unlink(missing_ok=True)
+        except OSError:
+            logger.warning("No se pudo eliminar nota de voz temporal: %s", file_path)
 
     # ------------------------------------------------------------------
     # Lifecycle

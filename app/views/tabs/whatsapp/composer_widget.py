@@ -1,12 +1,21 @@
-"""Message composer (text input + attach button + emoji picker + send button)."""
+"""Message composer (text input + attach button + voice recorder + send button)."""
 import qtawesome as qta
 from PySide6.QtCore import Signal, QSize, QPoint, Qt
 from PySide6.QtGui import QPalette
-from PySide6.QtWidgets import QDialog, QFileDialog, QHBoxLayout, QLineEdit, QToolButton, QWidget
+from PySide6.QtWidgets import (
+    QDialog,
+    QFileDialog,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QToolButton,
+    QWidget,
+)
 
 from . import theme
 from .attachment_preview_dialog import AttachmentPreviewDialog, FILE_DIALOG_FILTER
 from .emoji_picker import EmojiPicker
+from .voice_note_recorder import VoiceNoteRecorder
 
 _STYLE = f"""
 #composer {{ background-color: palette(window); }}
@@ -33,6 +42,31 @@ _STYLE = f"""
     padding: 7px;
 }}
 #composerIconButton:hover {{ background-color: {theme.ITEM_HOVER}; }}
+#recordingBar {{
+    background-color: palette(base);
+    border: 1px solid palette(highlight);
+    border-radius: 21px;
+    min-height: 42px;
+    max-height: 42px;
+}}
+QLabel#recordingDot {{
+    color: #ff5c5c;
+    background: transparent;
+    font-size: 16px;
+}}
+QLabel#recordingTime {{
+    color: {theme.TEXT_PRIMARY};
+    background: transparent;
+    font-size: 13px;
+}}
+#composerDangerButton {{
+    background: transparent;
+    color: #ff7777;
+    border: none;
+    border-radius: 18px;
+    padding: 7px;
+}}
+#composerDangerButton:hover {{ background-color: rgba(255, 92, 92, 0.16); }}
 #composerSend {{
     background-color: {theme.ACCENT};
     border: none;
@@ -52,21 +86,11 @@ _STYLE = f"""
 """
 
 
-def _make_visual_button(icon_name: str, tooltip: str) -> QToolButton:
-    button = QToolButton()
-    button.setObjectName("composerIconButton")
-    button.setIcon(qta.icon(icon_name, color=theme.palette_hex(QPalette.ColorRole.Mid)))
-    button.setIconSize(QSize(18, 18))
-    button.setFixedSize(36, 36)
-    button.setToolTip(tooltip)
-    button.setEnabled(False)
-    button.setAutoRaise(True)
-    return button
-
-
 class ComposerWidget(QWidget):
     send_requested = Signal(str)
     attachment_requested = Signal(str, str)  # (file_path, caption)
+    voice_note_requested = Signal(str)  # converted OGG/Opus path
+    voice_note_failed = Signal(str)
     bot_toggle_requested = Signal(bool)  # robot button: enable/disable the bot for this conversation
 
     def __init__(self, parent=None) -> None:
@@ -78,6 +102,13 @@ class ComposerWidget(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(_STYLE)
         self._emoji_picker = None  # lazily created, reused across openings
+        self._recording = False
+        self._voice_recorder = VoiceNoteRecorder(self)
+        self._voice_recorder.recording_started.connect(self._on_recording_started)
+        self._voice_recorder.duration_changed.connect(self._update_recording_time)
+        self._voice_recorder.ready.connect(self._on_voice_note_ready)
+        self._voice_recorder.canceled.connect(self._on_recording_canceled)
+        self._voice_recorder.error.connect(self._on_voice_note_error)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(16, 10, 16, 10)
@@ -115,13 +146,58 @@ class ComposerWidget(QWidget):
         self._update_bot_button(True)
         layout.addWidget(self.bot_button)
 
+        self.recording_bar = QWidget()
+        self.recording_bar.setObjectName("recordingBar")
+        recording_layout = QHBoxLayout(self.recording_bar)
+        recording_layout.setContentsMargins(14, 0, 8, 0)
+        recording_layout.setSpacing(8)
+
+        self.recording_dot = QLabel("●")
+        self.recording_dot.setObjectName("recordingDot")
+        recording_layout.addWidget(self.recording_dot)
+
+        self.recording_time = QLabel("0:00")
+        self.recording_time.setObjectName("recordingTime")
+        recording_layout.addWidget(self.recording_time)
+        recording_layout.addStretch(1)
+
+        self.cancel_recording_button = QToolButton()
+        self.cancel_recording_button.setObjectName("composerDangerButton")
+        self.cancel_recording_button.setIcon(qta.icon("fa5s.trash", color="#ff7777"))
+        self.cancel_recording_button.setIconSize(QSize(16, 16))
+        self.cancel_recording_button.setFixedSize(36, 36)
+        self.cancel_recording_button.setToolTip("Cancelar nota de voz")
+        self.cancel_recording_button.setAutoRaise(True)
+        self.cancel_recording_button.clicked.connect(self._cancel_voice_recording)
+        recording_layout.addWidget(self.cancel_recording_button)
+
+        self.send_recording_button = QToolButton()
+        self.send_recording_button.setObjectName("composerSend")
+        self.send_recording_button.setIcon(qta.icon("fa5s.paper-plane", color="#ffffff"))
+        self.send_recording_button.setIconSize(QSize(16, 16))
+        self.send_recording_button.setFixedSize(36, 36)
+        self.send_recording_button.setToolTip("Enviar nota de voz")
+        self.send_recording_button.clicked.connect(self._send_voice_recording)
+        recording_layout.addWidget(self.send_recording_button)
+
+        self.recording_bar.hide()
+        layout.addWidget(self.recording_bar, 1)
+
         self.input = QLineEdit()
         self.input.setObjectName("composerInput")
         self.input.setPlaceholderText("Escribe un mensaje...")
         self.input.returnPressed.connect(self._emit)
         layout.addWidget(self.input, 1)
 
-        layout.addWidget(_make_visual_button("fa5s.microphone", "Proximamente: audio"))
+        self.mic_button = QToolButton()
+        self.mic_button.setObjectName("composerIconButton")
+        self.mic_button.setIcon(qta.icon("fa5s.microphone", color=theme.TEXT_PRIMARY))
+        self.mic_button.setIconSize(QSize(18, 18))
+        self.mic_button.setFixedSize(36, 36)
+        self.mic_button.setToolTip("Grabar nota de voz")
+        self.mic_button.setAutoRaise(True)
+        self.mic_button.clicked.connect(self._start_voice_recording)
+        layout.addWidget(self.mic_button)
 
         self.send_button = QToolButton()
         self.send_button.setObjectName("composerSend")
@@ -139,6 +215,9 @@ class ComposerWidget(QWidget):
         self.attach_button.setEnabled(enabled)
         self.emoji_button.setEnabled(enabled)
         self.bot_button.setEnabled(enabled)
+        self.mic_button.setEnabled(enabled)
+        self.cancel_recording_button.setEnabled(enabled)
+        self.send_recording_button.setEnabled(enabled)
 
     def set_sending(self, sending: bool) -> None:
         """Lock the composer while an attachment is being uploaded."""
@@ -199,3 +278,59 @@ class ComposerWidget(QWidget):
     def _insert_emoji(self, emoji: str) -> None:
         # Insert at the cursor (replacing any selection); keep the picker open.
         self.input.insert(emoji)
+
+    # ------------------------------------------------------------------
+    # Voice notes
+    # ------------------------------------------------------------------
+    def _start_voice_recording(self) -> None:
+        self._voice_recorder.start()
+
+    def _cancel_voice_recording(self) -> None:
+        self.cancel_recording_button.setEnabled(False)
+        self.send_recording_button.setEnabled(False)
+        self._voice_recorder.cancel()
+
+    def _send_voice_recording(self) -> None:
+        self.cancel_recording_button.setEnabled(False)
+        self.send_recording_button.setEnabled(False)
+        self.recording_time.setText("Procesando...")
+        self._voice_recorder.finish()
+
+    def _on_recording_started(self) -> None:
+        self._recording = True
+        self.recording_time.setText("0:00")
+        self.cancel_recording_button.setEnabled(True)
+        self.send_recording_button.setEnabled(True)
+        self._set_recording_mode(True)
+
+    def _on_recording_canceled(self) -> None:
+        self._recording = False
+        self._set_recording_mode(False)
+
+    def _on_voice_note_ready(self, file_path: str) -> None:
+        self._recording = False
+        self._set_recording_mode(False)
+        self.voice_note_requested.emit(file_path)
+
+    def _on_voice_note_error(self, message: str) -> None:
+        self._recording = False
+        self._set_recording_mode(False)
+        self.voice_note_failed.emit(message or "No se pudo grabar la nota de voz.")
+
+    def _update_recording_time(self, duration_ms: int) -> None:
+        if not self._recording:
+            return
+        seconds = max(0, int(duration_ms / 1000))
+        self.recording_time.setText(f"{seconds // 60}:{seconds % 60:02d}")
+
+    def _set_recording_mode(self, recording: bool) -> None:
+        for widget in (
+            self.attach_button,
+            self.emoji_button,
+            self.bot_button,
+            self.input,
+            self.mic_button,
+            self.send_button,
+        ):
+            widget.setVisible(not recording)
+        self.recording_bar.setVisible(recording)
