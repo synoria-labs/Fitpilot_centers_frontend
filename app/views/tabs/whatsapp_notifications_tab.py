@@ -130,14 +130,15 @@ QListWidget#notifEventsList::item {{
     min-height: 34px;
     padding: 7px 12px;
     border-bottom: 1px solid palette(mid);
+    border-radius: 8px;
     color: palette(text);
 }}
 QListWidget#notifEventsList::item:hover {{
     background-color: palette(alternate-base);
 }}
 QListWidget#notifEventsList::item:selected {{
-    background-color: palette(highlight);
-    color: palette(highlighted-text);
+    background-color: palette(alternate-base);
+    color: palette(text);
 }}
 QGroupBox#notifGroup {{
     background-color: palette(window);
@@ -176,8 +177,8 @@ QComboBox QAbstractItemView {{
     background-color: palette(base);
     color: palette(text);
     border: 1px solid palette(mid);
-    selection-background-color: palette(highlight);
-    selection-color: palette(highlighted-text);
+    selection-background-color: palette(alternate-base);
+    selection-color: palette(text);
     outline: 0;
 }}
 QCheckBox {{

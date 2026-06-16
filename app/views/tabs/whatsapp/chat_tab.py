@@ -7,10 +7,9 @@ from typing import Optional
 
 import qtawesome as qta
 from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QSplitter, QLabel, QStackedWidget, QFrame,
-    QToolButton,
+    QSizePolicy, QToolButton,
 )
 
 from ....controllers.whatsapp_chat_controller import WhatsAppChatController
@@ -21,6 +20,7 @@ from ....utils.dialog_helpers import show_error
 from . import theme
 from .avatar import Avatar
 from .conversation_list_widget import ConversationListWidget
+from .membership_chip import membership_chip_stylesheet, membership_chip_text
 from .message_thread_widget import MessageThreadWidget
 from .composer_widget import ComposerWidget
 
@@ -157,11 +157,29 @@ class ChatTab(QWidget):
 
         name_box = QVBoxLayout()
         name_box.setSpacing(0)
+        name_row = QHBoxLayout()
+        name_row.setContentsMargins(0, 0, 0, 0)
+        name_row.setSpacing(8)
         self._header_name = QLabel("")
         self._header_name.setObjectName("headerName")
+        self._header_name.setMinimumWidth(0)
+        self._header_name.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Preferred,
+        )
+        self._header_membership_chip = QLabel("")
+        self._header_membership_chip.setObjectName("headerMembershipChip")
+        self._header_membership_chip.setSizePolicy(
+            QSizePolicy.Policy.Fixed,
+            QSizePolicy.Policy.Fixed,
+        )
+        self._header_membership_chip.hide()
         self._header_sub = QLabel("")
         self._header_sub.setObjectName("headerSub")
-        name_box.addWidget(self._header_name)
+        name_row.addWidget(self._header_name)
+        name_row.addWidget(self._header_membership_chip)
+        name_row.addStretch(1)
+        name_box.addLayout(name_row)
         name_box.addWidget(self._header_sub)
         h.addLayout(name_box, 1)
 
@@ -258,6 +276,19 @@ class ChatTab(QWidget):
     def _update_header(self, conv: ChatConversation) -> None:
         self._header_avatar.set_name(conv.display_name, size=40)
         self._header_name.setText(conv.display_name)
+        chip_text = membership_chip_text(conv.contact.member_membership)
+        self._header_membership_chip.setVisible(bool(chip_text))
+        if chip_text:
+            self._header_membership_chip.setText(chip_text)
+            self._header_membership_chip.setStyleSheet(
+                membership_chip_stylesheet(
+                    conv.contact.member_membership,
+                    object_name="headerMembershipChip",
+                )
+            )
+            self._header_membership_chip.setToolTip(chip_text)
+        else:
+            self._header_membership_chip.clear()
         identity = conv.contact.secondary_identity or conv.contact.phone_number or conv.contact.wa_id
         self._header_sub.setText(identity)
 

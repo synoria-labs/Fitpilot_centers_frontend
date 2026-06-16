@@ -28,6 +28,7 @@ from app.core import get_logger
 from app.core import container
 from app.views.login_view import LoginView
 from app.views.main_window import MainWindow
+from app.views.selectable_styles import selectable_item_states_qss
 from app.controllers.main_controller import MainController
 from app.auth.session_store import SessionStore
 from app.graphql.client import GraphQLClient
@@ -160,6 +161,7 @@ class FitPilotApp:
             """Configura el tema de la aplicación para usar el diseño por defecto del sistema."""
             if self.app is None:
                 raise RuntimeError("QApplication is not initialized")
+            self.app.setStyleSheet(selectable_item_states_qss())
 
             # Usar el estilo por defecto del sistema (no forzar Fusion)
             # PySide6 automÃ¡ticamente detectarÃ¡ el mejor estilo para cada plataforma

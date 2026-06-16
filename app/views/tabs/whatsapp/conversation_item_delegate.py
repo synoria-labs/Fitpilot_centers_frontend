@@ -14,14 +14,15 @@ from PySide6.QtWidgets import QStyle, QStyledItemDelegate
 from ....models.chat import ChatConversation
 from . import theme
 from .conversation_list_model import CONVERSATION_ROLE
+from .membership_chip import membership_chip_size, paint_membership_chip
 from .message_formatter import snippet_for_message
 
 _AVATAR_SIZE = 48
 _LEFT_MARGIN = 12
 _RIGHT_MARGIN = 14
-_V_MARGIN = 8
 _GAP = 12         # avatar <-> text
 _LINE_GAP = 3     # between text lines
+_CHIP_GAP = 8
 
 _HEIGHT_MEMBER = 88
 _HEIGHT_PLAIN = 72
@@ -44,6 +45,9 @@ class ConversationItemDelegate(QStyledItemDelegate):
         self._unread_font = QFont()
         self._unread_font.setPixelSize(10)
         self._unread_font.setBold(True)
+        self._chip_font = QFont()
+        self._chip_font.setPixelSize(10)
+        self._chip_font.setBold(True)
         avatar_px = max(12, _AVATAR_SIZE // 2 - 4)
         self._avatar_font = QFont()
         self._avatar_font.setPixelSize(avatar_px)
@@ -71,16 +75,17 @@ class ConversationItemDelegate(QStyledItemDelegate):
         hover = bool(option.state & QStyle.StateFlag.State_MouseOver)
 
         # Background.
-        if selected:
-            painter.fillRect(rect, palette.highlight())
-        elif hover:
-            painter.fillRect(rect, palette.alternateBase())
+        if selected or hover:
+            background_rect = rect.adjusted(6, 4, -6, -4)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(palette.color(QPalette.ColorRole.AlternateBase))
+            painter.drawRoundedRect(background_rect, 8, 8)
         # Bottom divider.
         painter.setPen(QPen(palette.color(QPalette.ColorRole.Mid), 1))
         painter.drawLine(rect.left(), rect.bottom(), rect.right(), rect.bottom())
 
-        primary = palette.highlightedText().color() if selected else palette.text().color()
-        secondary = primary if selected else _secondary_color(palette)
+        primary = palette.text().color()
+        secondary = _secondary_color(palette)
 
         # Avatar.
         avatar_x = rect.left() + _LEFT_MARGIN
@@ -109,19 +114,44 @@ class ConversationItemDelegate(QStyledItemDelegate):
         time_text = self._fmt_time(conv.last_activity)
         time_fm = QFontMetrics(self._time_font)
         time_w = time_fm.horizontalAdvance(time_text) if time_text else 0
+        top_right = text_right - (time_w + _GAP if time_text else 0)
+        top_width = max(0, top_right - text_left)
+
+        chip_size = membership_chip_size(conv.contact.member_membership, self._chip_font)
+        draw_chip = chip_size.width() > 0 and top_width >= chip_size.width() + 48
+        chip_rect = QRect()
+        if draw_chip:
+            chip_rect = QRect(
+                top_right - chip_size.width(),
+                start_y + (name_h - chip_size.height()) // 2,
+                chip_size.width(),
+                chip_size.height(),
+            )
+
         if time_text:
             painter.setFont(self._time_font)
             painter.setPen(secondary)
             time_rect = QRect(text_right - time_w, start_y, time_w, name_h)
             painter.drawText(time_rect, int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter), time_text)
 
-        name_w = max(0, text_width - (time_w + _GAP if time_text else 0))
+        name_w = (
+            max(0, chip_rect.left() - text_left - _CHIP_GAP)
+            if draw_chip
+            else top_width
+        )
         painter.setFont(self._name_font)
         painter.setPen(primary)
         name_fm = QFontMetrics(self._name_font)
         name = name_fm.elidedText(conv.display_name, Qt.TextElideMode.ElideRight, name_w)
         painter.drawText(QRect(text_left, start_y, name_w, name_h),
                          int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), name)
+        if draw_chip:
+            paint_membership_chip(
+                painter,
+                chip_rect,
+                conv.contact.member_membership,
+                self._chip_font,
+            )
 
         cursor_y = start_y + name_h + _LINE_GAP
 

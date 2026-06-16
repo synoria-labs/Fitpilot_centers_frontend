@@ -8,6 +8,29 @@ from ..core.config import Config
 from ..utils.datetime_helpers import parse_iso_datetime
 
 
+@dataclass(frozen=True)
+class ChatMembershipSnapshot:
+    status: str
+    remaining_days: Optional[int] = None
+
+    @classmethod
+    def from_dict(cls, d: dict) -> Optional["ChatMembershipSnapshot"]:
+        d = d or {}
+        status = (d.get("status") or "").strip()
+        if not status:
+            return None
+
+        raw_remaining = d.get("remainingDays")
+        if raw_remaining is None:
+            raw_remaining = d.get("remaining_days")
+        try:
+            remaining_days = int(raw_remaining) if raw_remaining is not None else None
+        except (TypeError, ValueError):
+            remaining_days = None
+
+        return cls(status=status, remaining_days=remaining_days)
+
+
 def _chat_local_timezone():
     try:
         return ZoneInfo(Config.TIMEZONE)
@@ -35,6 +58,7 @@ class ChatContact:
     profile_name: Optional[str] = None
     member_id: Optional[int] = None
     member_name: Optional[str] = None
+    member_membership: Optional[ChatMembershipSnapshot] = None
 
     @property
     def display_name(self) -> str:
@@ -68,6 +92,9 @@ class ChatContact:
             profile_name=d.get("profileName"),
             member_id=int(raw_member_id) if raw_member_id is not None else None,
             member_name=d.get("memberName"),
+            member_membership=ChatMembershipSnapshot.from_dict(
+                d.get("memberMembership") or d.get("member_membership") or {}
+            ),
         )
 
 

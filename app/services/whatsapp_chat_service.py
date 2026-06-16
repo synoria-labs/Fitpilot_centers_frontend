@@ -37,6 +37,38 @@ _MESSAGE_FIELDS = """
     }
 """
 
+_CONTACT_FIELDS_WITH_MEMBERSHIP = """
+    id
+    waId
+    phoneNumber
+    name
+    profileName
+    memberId
+    memberName
+    memberMembership {
+        status
+        remainingDays
+    }
+"""
+
+_CONTACT_FIELDS_WITH_MEMBER = """
+    id
+    waId
+    phoneNumber
+    name
+    profileName
+    memberId
+    memberName
+"""
+
+_CONTACT_FIELDS_BASIC = """
+    id
+    waId
+    phoneNumber
+    name
+    profileName
+"""
+
 CONVERSATIONS_QUERY = """
     query GetConversations($limit: Int = 50, $offset: Int! = 0, $search: String) {
         conversations(limit: $limit, offset: $offset, search: $search) {
@@ -44,11 +76,24 @@ CONVERSATIONS_QUERY = """
             status
             lastActivity
             unreadCount
-            contact { id waId phoneNumber name profileName memberId memberName }
+            contact { %s }
             lastMessage { %s }
         }
     }
-""" % _MESSAGE_FIELDS
+""" % (_CONTACT_FIELDS_WITH_MEMBERSHIP, _MESSAGE_FIELDS)
+
+CONVERSATIONS_MEMBER_QUERY = """
+    query GetConversations($limit: Int = 50, $offset: Int! = 0, $search: String) {
+        conversations(limit: $limit, offset: $offset, search: $search) {
+            id
+            status
+            lastActivity
+            unreadCount
+            contact { %s }
+            lastMessage { %s }
+        }
+    }
+""" % (_CONTACT_FIELDS_WITH_MEMBER, _MESSAGE_FIELDS)
 
 CONVERSATIONS_COMPAT_QUERY = """
     query GetConversations($limit: Int = 50, $offset: Int! = 0, $search: String) {
@@ -57,11 +102,11 @@ CONVERSATIONS_COMPAT_QUERY = """
             status
             lastActivity
             unreadCount
-            contact { id waId phoneNumber name profileName }
+            contact { %s }
             lastMessage { %s }
         }
     }
-""" % _MESSAGE_FIELDS
+""" % (_CONTACT_FIELDS_BASIC, _MESSAGE_FIELDS)
 
 CONVERSATION_QUERY = """
     query GetConversation($id: Int!) {
@@ -70,11 +115,24 @@ CONVERSATION_QUERY = """
             status
             lastActivity
             unreadCount
-            contact { id waId phoneNumber name profileName memberId memberName }
+            contact { %s }
             lastMessage { %s }
         }
     }
-""" % _MESSAGE_FIELDS
+""" % (_CONTACT_FIELDS_WITH_MEMBERSHIP, _MESSAGE_FIELDS)
+
+CONVERSATION_MEMBER_QUERY = """
+    query GetConversation($id: Int!) {
+        conversation(id: $id) {
+            id
+            status
+            lastActivity
+            unreadCount
+            contact { %s }
+            lastMessage { %s }
+        }
+    }
+""" % (_CONTACT_FIELDS_WITH_MEMBER, _MESSAGE_FIELDS)
 
 CONVERSATION_COMPAT_QUERY = """
     query GetConversation($id: Int!) {
@@ -83,11 +141,11 @@ CONVERSATION_COMPAT_QUERY = """
             status
             lastActivity
             unreadCount
-            contact { id waId phoneNumber name profileName }
+            contact { %s }
             lastMessage { %s }
         }
     }
-""" % _MESSAGE_FIELDS
+""" % (_CONTACT_FIELDS_BASIC, _MESSAGE_FIELDS)
 
 MESSAGES_QUERY = """
     query GetMessages($conversationId: Int!, $limit: Int! = 50, $offset: Int! = 0) {
@@ -143,26 +201,49 @@ class WhatsAppChatService:
 
     def __init__(self, graphql_client) -> None:
         self.client = graphql_client
-        self._use_member_contact_fields = True
+        self._contact_schema_level = 0
+
+    async def _execute_with_contact_fallback(
+        self,
+        queries: tuple[str, str, str],
+        variables: dict,
+        operation_name: str,
+    ) -> Optional[dict]:
+        level_names = ("membership", "member", "basic")
+        for level in range(self._contact_schema_level, len(queries)):
+            result = await self.client.execute(queries[level], variables)
+            if result is not None:
+                if level != self._contact_schema_level:
+                    logger.warning(
+                        "%s query using %s contact fields after fallback",
+                        operation_name,
+                        level_names[level],
+                    )
+                self._contact_schema_level = level
+                return result
+
+            logger.warning(
+                "%s query with %s contact fields failed; trying fallback",
+                operation_name,
+                level_names[level],
+            )
+
+        return None
 
     async def get_conversations(
         self, limit: int = PAGE_SIZE, offset: int = 0, search: Optional[str] = None
     ) -> List[ChatConversation]:
         variables = {"limit": limit, "offset": offset, "search": search}
         try:
-            query = (
-                CONVERSATIONS_QUERY
-                if self._use_member_contact_fields
-                else CONVERSATIONS_COMPAT_QUERY
+            result = await self._execute_with_contact_fallback(
+                (
+                    CONVERSATIONS_QUERY,
+                    CONVERSATIONS_MEMBER_QUERY,
+                    CONVERSATIONS_COMPAT_QUERY,
+                ),
+                variables,
+                "Conversation",
             )
-            result = await self.client.execute(query, variables)
-            if result is None and self._use_member_contact_fields:
-                logger.warning(
-                    "Conversation query with member fields failed; retrying with base schema"
-                )
-                result = await self.client.execute(CONVERSATIONS_COMPAT_QUERY, variables)
-                if result is not None:
-                    self._use_member_contact_fields = False
             items = (result or {}).get("conversations") or []
             return [ChatConversation.from_dict(item) for item in items]
         except Exception as exc:  # noqa: BLE001
@@ -175,16 +256,15 @@ class WhatsAppChatService:
         """Fetch a single conversation enriched like the list (incremental inserts)."""
         variables = {"id": conversation_id}
         try:
-            query = (
-                CONVERSATION_QUERY
-                if self._use_member_contact_fields
-                else CONVERSATION_COMPAT_QUERY
+            result = await self._execute_with_contact_fallback(
+                (
+                    CONVERSATION_QUERY,
+                    CONVERSATION_MEMBER_QUERY,
+                    CONVERSATION_COMPAT_QUERY,
+                ),
+                variables,
+                "Single conversation",
             )
-            result = await self.client.execute(query, variables)
-            if result is None and self._use_member_contact_fields:
-                result = await self.client.execute(CONVERSATION_COMPAT_QUERY, variables)
-                if result is not None:
-                    self._use_member_contact_fields = False
             item = (result or {}).get("conversation")
             return ChatConversation.from_dict(item) if item else None
         except Exception as exc:  # noqa: BLE001
