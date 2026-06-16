@@ -107,6 +107,17 @@ class WhatsAppChatController(BaseController):
             text=text,
         )
 
+    def set_conversation_bot_enabled(self, conversation_id: int, enabled: bool) -> None:
+        """Enable/disable the bot for a conversation (robot button). Errors surface via error_occurred."""
+        self._execute_authenticated_operation(
+            self._service,
+            "set_conversation_bot_enabled",
+            lambda _result: None,
+            self._on_error,
+            conversation_id=conversation_id,
+            enabled=enabled,
+        )
+
     def send_media(
         self,
         conversation_id: Optional[int],

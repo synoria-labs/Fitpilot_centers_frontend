@@ -67,6 +67,7 @@ def _make_visual_button(icon_name: str, tooltip: str) -> QToolButton:
 class ComposerWidget(QWidget):
     send_requested = Signal(str)
     attachment_requested = Signal(str, str)  # (file_path, caption)
+    bot_toggle_requested = Signal(bool)  # robot button: enable/disable the bot for this conversation
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -102,6 +103,18 @@ class ComposerWidget(QWidget):
         self.emoji_button.clicked.connect(self._open_emoji_picker)
         layout.addWidget(self.emoji_button)
 
+        # Robot toggle: enable/disable the WhatsApp bot for the open conversation.
+        self.bot_button = QToolButton()
+        self.bot_button.setObjectName("composerIconButton")
+        self.bot_button.setCheckable(True)
+        self.bot_button.setChecked(True)
+        self.bot_button.setIconSize(QSize(18, 18))
+        self.bot_button.setFixedSize(36, 36)
+        self.bot_button.setAutoRaise(True)
+        self.bot_button.toggled.connect(self._on_bot_toggled)
+        self._update_bot_button(True)
+        layout.addWidget(self.bot_button)
+
         self.input = QLineEdit()
         self.input.setObjectName("composerInput")
         self.input.setPlaceholderText("Escribe un mensaje...")
@@ -125,12 +138,34 @@ class ComposerWidget(QWidget):
         self.send_button.setEnabled(enabled)
         self.attach_button.setEnabled(enabled)
         self.emoji_button.setEnabled(enabled)
+        self.bot_button.setEnabled(enabled)
 
     def set_sending(self, sending: bool) -> None:
         """Lock the composer while an attachment is being uploaded."""
         self.set_enabled(not sending)
         self.input.setPlaceholderText(
             "Enviando archivo..." if sending else "Escribe un mensaje..."
+        )
+
+    def set_bot_enabled(self, enabled: bool) -> None:
+        """Reflect a conversation's bot state on the toggle WITHOUT emitting a change."""
+        self.bot_button.blockSignals(True)
+        self.bot_button.setChecked(bool(enabled))
+        self.bot_button.blockSignals(False)
+        self._update_bot_button(bool(enabled))
+
+    def _on_bot_toggled(self, checked: bool) -> None:
+        self._update_bot_button(checked)
+        self.bot_toggle_requested.emit(checked)
+
+    def _update_bot_button(self, enabled: bool) -> None:
+        icon = "mdi6.robot" if enabled else "mdi6.robot-off"
+        color = theme.ACCENT if enabled else theme.palette_hex(QPalette.ColorRole.Mid)
+        self.bot_button.setIcon(qta.icon(icon, color=color))
+        self.bot_button.setToolTip(
+            "Bot activado — clic para desactivar"
+            if enabled
+            else "Bot desactivado — clic para activar"
         )
 
     def _emit(self) -> None:
