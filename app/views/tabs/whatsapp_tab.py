@@ -12,7 +12,8 @@ from typing import Any, Dict, List, Optional
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QTextEdit,
     QLineEdit, QGroupBox, QSplitter, QListWidget, QListWidgetItem, QComboBox,
-    QFileDialog, QScrollArea, QFrame,
+    QFileDialog, QScrollArea, QFrame, QDialog, QDialogButtonBox, QInputDialog,
+    QMenu,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
@@ -75,6 +76,70 @@ def _media_header_info(components: Optional[List[Any]]) -> tuple[Optional[str], 
             return media_format, str(handles[0] or "").strip()
         return media_format, ""
     return None, ""
+
+
+class TemplateAiSuggestionDialog(QDialog):
+    """Preview dialog for an AI-generated WhatsApp template suggestion."""
+
+    def __init__(self, suggestion: Dict[str, Any], parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self._suggestion = suggestion or {}
+        self.setWindowTitle("Sugerencia de IA")
+        self.resize(560, 520)
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(10)
+
+        body_label = QLabel("BODY")
+        body_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        layout.addWidget(body_label)
+        self.body_preview = QTextEdit()
+        self.body_preview.setReadOnly(True)
+        self.body_preview.setPlainText(self._suggestion.get("body_text") or "")
+        self.body_preview.setMinimumHeight(190)
+        layout.addWidget(self.body_preview)
+
+        examples = " | ".join(self._suggestion.get("body_examples") or [])
+        examples_label = QLabel("Valores de ejemplo")
+        examples_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        layout.addWidget(examples_label)
+        self.examples_preview = QLineEdit(examples)
+        self.examples_preview.setReadOnly(True)
+        layout.addWidget(self.examples_preview)
+
+        footer_label = QLabel("Footer")
+        footer_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        layout.addWidget(footer_label)
+        self.footer_preview = QLineEdit(self._suggestion.get("footer_text") or "")
+        self.footer_preview.setReadOnly(True)
+        layout.addWidget(self.footer_preview)
+
+        meta_lines = []
+        if self._suggestion.get("suggested_name"):
+            meta_lines.append(f"Nombre sugerido: {self._suggestion.get('suggested_name')}")
+        if self._suggestion.get("suggested_category"):
+            meta_lines.append(f"Categoria sugerida: {self._suggestion.get('suggested_category')}")
+        for note in self._suggestion.get("notes") or []:
+            meta_lines.append(f"Nota: {note}")
+        for warning in self._suggestion.get("warnings") or []:
+            meta_lines.append(f"Advertencia: {warning}")
+        if meta_lines:
+            meta = QLabel("\n".join(meta_lines))
+            meta.setWordWrap(True)
+            meta.setStyleSheet("color: #5d6d7e;")
+            layout.addWidget(meta)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Aplicar")
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("Cancelar")
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def suggestion(self) -> Dict[str, Any]:
+        return self._suggestion
 
 
 class WhatsAppTab(QWidget):
@@ -213,6 +278,18 @@ class WhatsAppTab(QWidget):
         vars_label.setWordWrap(True)
         content_layout.addWidget(vars_label)
 
+        ai_layout = QHBoxLayout()
+        ai_layout.addStretch()
+        self.ai_btn = QPushButton("Asistir con IA")
+        self.ai_menu = QMenu(self.ai_btn)
+        self.ai_menu.addAction("Redactar", lambda: self.on_ai_assist("DRAFT"))
+        self.ai_menu.addAction("Optimizar", lambda: self.on_ai_assist("OPTIMIZE"))
+        self.ai_menu.addAction("Corregir", lambda: self.on_ai_assist("CORRECT"))
+        self.ai_btn.setMenu(self.ai_menu)
+        self.ai_btn.setEnabled(False)
+        ai_layout.addWidget(self.ai_btn)
+        content_layout.addLayout(ai_layout)
+
         content_layout.addWidget(QLabel("Cuerpo (BODY):"))
         self.body_editor = QTextEdit()
         self.body_editor.setPlaceholderText(
@@ -339,6 +416,7 @@ class WhatsAppTab(QWidget):
         self.controller.synced.connect(self._on_synced)
         self.controller.template_saved.connect(self._on_template_saved)
         self.controller.template_deleted.connect(self._on_template_deleted)
+        self.controller.template_ai_suggested.connect(self._on_template_ai_suggested)
         self.controller.test_sent.connect(self._on_test_sent)
         self.controller.media_assets_loaded.connect(self._on_media_assets_loaded)
         self.controller.media_asset_uploaded.connect(self._on_media_asset_uploaded)
@@ -466,6 +544,12 @@ class WhatsAppTab(QWidget):
         self.footer_input.setReadOnly(not editable)
         self.header_asset_combo.setEnabled(editable)
         self.upload_asset_btn.setEnabled(editable)
+        self._update_ai_cta()
+
+    def _update_ai_cta(self) -> None:
+        if not hasattr(self, "ai_btn"):
+            return
+        self.ai_btn.setEnabled(not self._loading and not self.body_editor.isReadOnly())
 
     def _update_review_cta(self) -> None:
         if not hasattr(self, "save_btn"):
@@ -727,6 +811,40 @@ class WhatsAppTab(QWidget):
                 return
             self.controller.save_template(self.current.get("id"), data)
 
+    def on_ai_assist(self, action: str):
+        if self.body_editor.isReadOnly():
+            return
+
+        body = self.body_editor.toPlainText().strip()
+        instruction = None
+        if action == "DRAFT" and not body:
+            instruction, ok = QInputDialog.getMultiLineText(
+                self,
+                "Redactar con IA",
+                "Describe el objetivo de la plantilla:",
+                "",
+            )
+            if not ok:
+                return
+            instruction = (instruction or "").strip()
+            if not instruction:
+                show_error(self, "Describe que debe redactar la IA.")
+                return
+        elif action in {"OPTIMIZE", "CORRECT"} and not body:
+            show_error(self, "Escribe un cuerpo de plantilla antes de usar esta accion.")
+            return
+
+        data = {
+            "body_text": body,
+            "body_examples": self._example_values(),
+            "footer_text": self.footer_input.text().strip() or None,
+            "template_name": self.name_input.text().strip() or None,
+            "category": self.category_combo.currentText(),
+            "language": self.language_input.text().strip() or "es_MX",
+            "instruction": instruction,
+        }
+        self.controller.assist_template(action, data)
+
     def on_delete_template(self):
         if not self.current:
             return
@@ -861,6 +979,17 @@ class WhatsAppTab(QWidget):
             self._update_review_cta()
         self.controller.load_templates()
 
+    def _on_template_ai_suggested(self, suggestion: Dict[str, Any]):
+        dialog = TemplateAiSuggestionDialog(suggestion, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        selected = dialog.suggestion()
+        self.body_editor.setPlainText(selected.get("body_text") or "")
+        self.examples_input.setText(" | ".join(selected.get("body_examples") or []))
+        self.footer_input.setText(selected.get("footer_text") or "")
+        self.update_preview()
+        self._update_review_cta()
+
     def _on_template_deleted(self, template_id: int):
         show_info(self, "Plantilla eliminada.")
         self.current = None
@@ -902,4 +1031,5 @@ class WhatsAppTab(QWidget):
         self.new_btn.setEnabled(not loading)
         self.delete_btn.setEnabled(not loading and self.current is not None)
         self.send_test_btn.setEnabled(not loading and self._template_status() == "APPROVED")
+        self._update_ai_cta()
         self._update_review_cta()
