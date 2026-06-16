@@ -324,6 +324,11 @@ class ChatTab(QWidget):
         if self._current_conversation_id is None:
             self._delete_voice_note(file_path)
             return
+        logger.info(
+            "Sending voice note for conversation %s: %s",
+            self._current_conversation_id,
+            file_path,
+        )
         self._pending_voice_note_path = file_path
         self.composer.set_sending(True)
         self.controller.send_media(
@@ -403,6 +408,7 @@ class ChatTab(QWidget):
     def _delete_voice_note(file_path: str) -> None:
         try:
             Path(file_path).unlink(missing_ok=True)
+            logger.info("Deleted temporary voice note: %s", file_path)
         except OSError:
             logger.warning("No se pudo eliminar nota de voz temporal: %s", file_path)
 
