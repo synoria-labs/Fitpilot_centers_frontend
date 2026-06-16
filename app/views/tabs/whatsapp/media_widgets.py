@@ -10,7 +10,8 @@ Rendering states:
 - audio                     -> inline player (system-player fallback on codec errors)
 - video/document            -> file card, click downloads and opens externally
 """
-from typing import Optional
+import asyncio
+from typing import List, Optional
 
 import qtawesome as qta
 from PySide6.QtCore import QSize, Qt, QUrl, Signal
@@ -21,7 +22,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QSlider,
     QSizePolicy,
     QToolButton,
     QVBoxLayout,
@@ -31,7 +31,10 @@ from PySide6.QtWidgets import (
 from ....core.logging import get_logger
 from ....models.chat import ChatMessage
 from ....services.media_loader import get_media_loader
+from ....services.voice_note_converter import compute_waveform_bars
+from ....threads.asyncio_executor import get_global_executor
 from . import theme
+from .voice_waveform_widget import PlaybackWaveformWidget
 
 logger = get_logger(__name__)
 
@@ -48,6 +51,14 @@ except ImportError:  # pragma: no cover - environment dependent
 MEDIA_BUBBLE_WIDTH = 320
 _IMAGE_MAX_HEIGHT = 420
 _STICKER_MAX = 160
+
+# Number of bars rendered in an audio bubble's waveform.
+_WAVEFORM_BARS = 48
+
+
+async def _decode_waveform(path: str, bar_count: int) -> List[float]:
+    """Run the blocking ffmpeg waveform decode in a worker thread."""
+    return await asyncio.to_thread(compute_waveform_bars, path, bar_count)
 
 _FILE_ICONS = {
     "video": "fa5s.file-video",
@@ -263,6 +274,7 @@ class AudioMediaWidget(QFrame):
         self._player: Optional[QMediaPlayer] = None
         self._audio_output: Optional[QAudioOutput] = None
         self._duration_ms = 0
+        self._waveform_signals = None  # kept alive while the decode runs
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(4, 6, 4, 6)
@@ -280,11 +292,10 @@ class AudioMediaWidget(QFrame):
         self._play_button.clicked.connect(self._toggle_playback)
         layout.addWidget(self._play_button)
 
-        self._slider = QSlider(Qt.Orientation.Horizontal)
-        self._slider.setMinimumWidth(150)
-        self._slider.setEnabled(False)
-        self._slider.sliderMoved.connect(self._on_slider_moved)
-        layout.addWidget(self._slider, 1)
+        self._waveform = PlaybackWaveformWidget(bar_count=_WAVEFORM_BARS)
+        self._waveform.setEnabled(False)
+        self._waveform.seek_requested.connect(self._on_waveform_seek)
+        layout.addWidget(self._waveform, 1)
 
         self._time_label = QLabel("--:--")
         self._time_label.setStyleSheet(f"color: {theme.TEXT_SECONDARY}; font-size: 11px;")
@@ -315,7 +326,27 @@ class AudioMediaWidget(QFrame):
         self._player.playbackStateChanged.connect(self._on_state_changed)
         self._player.setSource(QUrl.fromLocalFile(path))
         self._play_button.setEnabled(True)
-        self._slider.setEnabled(True)
+        self._waveform.setEnabled(True)
+        self._start_waveform_decode(path)
+
+    def _start_waveform_decode(self, path: str) -> None:
+        """Compute the real waveform off the GUI thread; skeleton until ready."""
+        try:
+            signals = get_global_executor().submit_coroutine(
+                _decode_waveform(path, _WAVEFORM_BARS)
+            )
+        except Exception as exc:  # noqa: BLE001 - executor not ready/shutting down
+            logger.debug("No se pudo calcular la onda de %s: %s", path, exc)
+            return
+        signals.result.connect(self._on_waveform_ready)
+        signals.error.connect(
+            lambda error: logger.debug("Onda de audio no disponible: %s", error)
+        )
+        self._waveform_signals = signals
+
+    def _on_waveform_ready(self, bars) -> None:
+        if bars:
+            self._waveform.set_bars(list(bars))
 
     def _on_failed(self, error: str) -> None:
         logger.warning("No se pudo descargar el audio %s: %s", self._media.absolute_url, error)
@@ -336,18 +367,17 @@ class AudioMediaWidget(QFrame):
 
     def _on_duration_changed(self, duration: int) -> None:
         self._duration_ms = max(0, duration)
-        self._slider.setRange(0, self._duration_ms)
         self._time_label.setText(self._fmt_ms(self._duration_ms))
 
     def _on_position_changed(self, position: int) -> None:
-        if not self._slider.isSliderDown():
-            self._slider.setValue(position)
+        if self._duration_ms > 0:
+            self._waveform.set_progress(position / self._duration_ms)
         remaining = self._duration_ms - position if self._duration_ms else position
         self._time_label.setText(self._fmt_ms(remaining))
 
-    def _on_slider_moved(self, value: int) -> None:
-        if self._player is not None:
-            self._player.setPosition(value)
+    def _on_waveform_seek(self, fraction: float) -> None:
+        if self._player is not None and self._duration_ms > 0:
+            self._player.setPosition(int(fraction * self._duration_ms))
 
     def _on_player_error(self, _error, error_string: str = "") -> None:
         logger.warning(
@@ -355,7 +385,7 @@ class AudioMediaWidget(QFrame):
         )
         # Codec not supported by the platform backend: degrade to external player.
         self._play_button.hide()
-        self._slider.hide()
+        self._waveform.hide()
         self._time_label.hide()
         self._fallback_button.show()
         if self._player is not None:

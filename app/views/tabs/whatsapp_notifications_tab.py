@@ -25,6 +25,7 @@ from ...core import container, get_logger
 from ...controllers.whatsapp_notifications_controller import WhatsAppNotificationsController
 from ...utils.dialog_helpers import show_error, show_info
 from .whatsapp import theme
+from .whatsapp.screen_style import screen_qss
 from .whatsapp.template_preview_widget import TemplatePreviewWidget
 
 logger = get_logger(__name__)
@@ -69,167 +70,8 @@ def _required_header_media_format(components: Optional[List[Any]]) -> Optional[s
 
 
 def _style() -> str:
-    secondary = theme.secondary_text_hex()
-    return f"""
-#notificationsTab {{ background-color: palette(window); }}
-#notificationsTab QSplitter::handle {{ background-color: palette(mid); width: 1px; }}
-#notifHeader {{
-    background-color: palette(window);
-    border-bottom: 1px solid palette(mid);
-}}
-QLabel#notifTitle {{
-    color: palette(text);
-    font-size: 22px;
-    font-weight: 700;
-    background: transparent;
-}}
-QLabel#notifHint {{
-    color: {secondary};
-    font-size: 12px;
-    background: transparent;
-}}
-QWidget#notifEventsPane, QWidget#notifConfigPane {{
-    background-color: palette(window);
-}}
-QScrollArea#notifConfigScroll {{
-    background-color: palette(window);
-    border: none;
-}}
-QScrollArea#notifConfigScroll > QWidget > QWidget {{
-    background-color: palette(window);
-}}
-QFrame#notifPreviewRail {{
-    background-color: palette(window);
-    border: 1px solid palette(mid);
-    border-radius: 6px;
-}}
-QLabel#notifPreviewRailTitle {{
-    color: palette(text);
-    font-size: 13px;
-    font-weight: 700;
-    background: transparent;
-}}
-QLabel#notifPanelTitle {{
-    color: palette(text);
-    font-size: 14px;
-    font-weight: 700;
-    background: transparent;
-}}
-QLabel#notifEventTitle {{
-    color: palette(text);
-    font-size: 18px;
-    font-weight: 700;
-    background: transparent;
-}}
-QListWidget#notifEventsList {{
-    background-color: palette(window);
-    border: none;
-    outline: 0;
-}}
-QListWidget#notifEventsList::item {{
-    min-height: 34px;
-    padding: 7px 12px;
-    border-bottom: 1px solid palette(mid);
-    border-radius: 8px;
-    color: palette(text);
-}}
-QListWidget#notifEventsList::item:hover {{
-    background-color: palette(alternate-base);
-}}
-QListWidget#notifEventsList::item:selected {{
-    background-color: palette(alternate-base);
-    color: palette(text);
-}}
-QGroupBox#notifGroup {{
-    background-color: palette(window);
-    border: 1px solid palette(mid);
-    border-radius: 8px;
-    margin-top: 10px;
-    padding: 10px;
-    color: palette(text);
-    font-weight: 600;
-}}
-QGroupBox#notifGroup::title {{
-    subcontrol-origin: margin;
-    left: 10px;
-    padding: 0 4px;
-    color: {secondary};
-}}
-QComboBox, QLineEdit {{
-    background-color: palette(base);
-    color: palette(text);
-    border: 1px solid palette(mid);
-    border-radius: 8px;
-    min-height: 34px;
-    padding: 0 10px;
-    selection-background-color: palette(highlight);
-    selection-color: palette(highlighted-text);
-}}
-QComboBox:focus, QLineEdit:focus {{
-    border: 1px solid {theme.ACCENT};
-}}
-QComboBox:disabled, QLineEdit:disabled {{
-    background-color: palette(window);
-    color: palette(mid);
-    border: 1px solid palette(mid);
-}}
-QComboBox QAbstractItemView {{
-    background-color: palette(base);
-    color: palette(text);
-    border: 1px solid palette(mid);
-    selection-background-color: palette(alternate-base);
-    selection-color: palette(text);
-    outline: 0;
-}}
-QCheckBox {{
-    color: palette(text);
-    spacing: 8px;
-    background: transparent;
-}}
-QCheckBox::indicator {{
-    width: 16px;
-    height: 16px;
-    border: 1px solid palette(mid);
-    border-radius: 4px;
-    background-color: palette(base);
-}}
-QCheckBox::indicator:checked {{
-    background-color: {theme.ACCENT};
-    border-color: {theme.ACCENT};
-}}
-QCheckBox:disabled {{
-    color: palette(mid);
-}}
-QPushButton#notifActionButton {{
-    background-color: transparent;
-    color: palette(text);
-    border: 1px solid palette(mid);
-    border-radius: 7px;
-    padding: 7px 12px;
-    font-weight: 600;
-}}
-QPushButton#notifActionButton:hover {{
-    background-color: palette(alternate-base);
-}}
-QPushButton#notifActionButton:disabled {{
-    color: palette(mid);
-}}
-QPushButton#notifPrimaryButton {{
-    background-color: {theme.ACCENT};
-    color: #ffffff;
-    border: none;
-    border-radius: 7px;
-    padding: 8px 14px;
-    font-weight: 700;
-}}
-QPushButton#notifPrimaryButton:hover {{
-    background-color: #06c191;
-}}
-QPushButton#notifPrimaryButton:disabled {{
-    background-color: palette(mid);
-    color: palette(window);
-}}
-"""
+    # Shared screen stylesheet (single source of truth with the Plantillas screen).
+    return screen_qss("notif")
 
 
 class WhatsAppNotificationsTab(QWidget):
@@ -265,7 +107,7 @@ class WhatsAppNotificationsTab(QWidget):
     # UI
     # ------------------------------------------------------------------
     def setup_ui(self):
-        self.setObjectName("notificationsTab")
+        self.setObjectName("notifTab")
         self.setStyleSheet(_style())
 
         layout = QVBoxLayout(self)
@@ -308,7 +150,7 @@ class WhatsAppNotificationsTab(QWidget):
         splitter.setChildrenCollapsible(False)
 
         left_panel = QWidget()
-        left_panel.setObjectName("notifEventsPane")
+        left_panel.setObjectName("notifListPane")
         left_layout = QVBoxLayout(left_panel)
         left_layout.setContentsMargins(20, 16, 12, 14)
         left_layout.setSpacing(10)
@@ -316,7 +158,7 @@ class WhatsAppNotificationsTab(QWidget):
         events_title.setObjectName("notifPanelTitle")
         left_layout.addWidget(events_title)
         self.events_list = QListWidget()
-        self.events_list.setObjectName("notifEventsList")
+        self.events_list.setObjectName("notifList")
         self.events_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.events_list.setUniformItemSizes(True)
         self.events_list.itemClicked.connect(self.on_event_selected)
@@ -340,7 +182,7 @@ class WhatsAppNotificationsTab(QWidget):
         config_layout.setSpacing(10)
 
         self.event_title = QLabel("Selecciona un evento")
-        self.event_title.setObjectName("notifEventTitle")
+        self.event_title.setObjectName("notifItemTitle")
         self.event_title.setFont(QFont("Arial", 12, QFont.Weight.Bold))
         config_layout.addWidget(self.event_title)
 

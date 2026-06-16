@@ -16,6 +16,7 @@ from . import theme
 from .attachment_preview_dialog import AttachmentPreviewDialog, FILE_DIALOG_FILTER
 from .emoji_picker import EmojiPicker
 from .voice_note_recorder import VoiceNoteRecorder
+from .voice_waveform_widget import VoiceWaveformWidget
 
 _STYLE = f"""
 #composer {{ background-color: palette(window); }}
@@ -50,14 +51,29 @@ _STYLE = f"""
     max-height: 42px;
 }}
 QLabel#recordingDot {{
-    color: #ff5c5c;
-    background: transparent;
-    font-size: 16px;
+    background-color: #ff5c5c;
+    border-radius: 4px;
+    min-width: 8px;
+    max-width: 8px;
+    min-height: 8px;
+    max-height: 8px;
 }}
 QLabel#recordingTime {{
     color: {theme.TEXT_PRIMARY};
     background: transparent;
     font-size: 13px;
+    min-width: 38px;
+}}
+#composerPauseButton {{
+    background: transparent;
+    border: none;
+    border-radius: 18px;
+    padding: 7px;
+}}
+#composerPauseButton:hover {{ background-color: {theme.ITEM_HOVER}; }}
+#composerPauseButton:disabled {{
+    background: transparent;
+    color: palette(mid);
 }}
 #composerDangerButton {{
     background: transparent;
@@ -93,7 +109,12 @@ class ComposerWidget(QWidget):
     voice_note_failed = Signal(str)
     bot_toggle_requested = Signal(bool)  # robot button: enable/disable the bot for this conversation
 
-    def __init__(self, parent=None) -> None:
+    def __init__(
+        self,
+        parent=None,
+        *,
+        voice_recorder: VoiceNoteRecorder | None = None,
+    ) -> None:
         super().__init__(parent)
         self.setObjectName("composer")
         # A plain QWidget only paints its stylesheet background-color when
@@ -103,9 +124,13 @@ class ComposerWidget(QWidget):
         self.setStyleSheet(_STYLE)
         self._emoji_picker = None  # lazily created, reused across openings
         self._recording = False
-        self._voice_recorder = VoiceNoteRecorder(self)
+        self._recording_paused = False
+        self._voice_recorder = voice_recorder or VoiceNoteRecorder(self)
         self._voice_recorder.recording_started.connect(self._on_recording_started)
+        self._voice_recorder.recording_paused.connect(self._on_recording_paused)
+        self._voice_recorder.recording_resumed.connect(self._on_recording_resumed)
         self._voice_recorder.duration_changed.connect(self._update_recording_time)
+        self._voice_recorder.level_changed.connect(self._on_recording_level)
         self._voice_recorder.ready.connect(self._on_voice_note_ready)
         self._voice_recorder.canceled.connect(self._on_recording_canceled)
         self._voice_recorder.error.connect(self._on_voice_note_error)
@@ -152,14 +177,25 @@ class ComposerWidget(QWidget):
         recording_layout.setContentsMargins(14, 0, 8, 0)
         recording_layout.setSpacing(8)
 
-        self.recording_dot = QLabel("●")
+        self.recording_dot = QLabel()
         self.recording_dot.setObjectName("recordingDot")
         recording_layout.addWidget(self.recording_dot)
 
         self.recording_time = QLabel("0:00")
         self.recording_time.setObjectName("recordingTime")
         recording_layout.addWidget(self.recording_time)
-        recording_layout.addStretch(1)
+
+        self.voice_waveform = VoiceWaveformWidget()
+        recording_layout.addWidget(self.voice_waveform, 1)
+
+        self.pause_recording_button = QToolButton()
+        self.pause_recording_button.setObjectName("composerPauseButton")
+        self.pause_recording_button.setIconSize(QSize(16, 16))
+        self.pause_recording_button.setFixedSize(36, 36)
+        self.pause_recording_button.setAutoRaise(True)
+        self.pause_recording_button.clicked.connect(self._toggle_voice_recording_pause)
+        self._update_pause_button()
+        recording_layout.addWidget(self.pause_recording_button)
 
         self.cancel_recording_button = QToolButton()
         self.cancel_recording_button.setObjectName("composerDangerButton")
@@ -216,6 +252,7 @@ class ComposerWidget(QWidget):
         self.emoji_button.setEnabled(enabled)
         self.bot_button.setEnabled(enabled)
         self.mic_button.setEnabled(enabled)
+        self.pause_recording_button.setEnabled(enabled)
         self.cancel_recording_button.setEnabled(enabled)
         self.send_recording_button.setEnabled(enabled)
 
@@ -286,42 +323,89 @@ class ComposerWidget(QWidget):
         self._voice_recorder.start()
 
     def _cancel_voice_recording(self) -> None:
+        self.pause_recording_button.setEnabled(False)
         self.cancel_recording_button.setEnabled(False)
         self.send_recording_button.setEnabled(False)
         self._voice_recorder.cancel()
 
     def _send_voice_recording(self) -> None:
+        self.pause_recording_button.setEnabled(False)
         self.cancel_recording_button.setEnabled(False)
         self.send_recording_button.setEnabled(False)
+        self.voice_waveform.set_processing(True)
         self.recording_time.setText("Procesando...")
         self._voice_recorder.finish()
 
+    def _toggle_voice_recording_pause(self) -> None:
+        if not self._recording:
+            return
+        if self._recording_paused:
+            self._voice_recorder.resume()
+        else:
+            self._voice_recorder.pause()
+
     def _on_recording_started(self) -> None:
         self._recording = True
+        self._recording_paused = False
         self.recording_time.setText("0:00")
+        self.voice_waveform.reset()
+        self._update_pause_button()
+        self._set_recording_dot_paused(False)
+        self.pause_recording_button.setEnabled(True)
         self.cancel_recording_button.setEnabled(True)
         self.send_recording_button.setEnabled(True)
         self._set_recording_mode(True)
 
+    def _on_recording_paused(self) -> None:
+        self._recording_paused = True
+        self.voice_waveform.set_paused(True)
+        self._set_recording_dot_paused(True)
+        self._update_pause_button()
+
+    def _on_recording_resumed(self) -> None:
+        self._recording_paused = False
+        self.voice_waveform.set_paused(False)
+        self._set_recording_dot_paused(False)
+        self._update_pause_button()
+
     def _on_recording_canceled(self) -> None:
         self._recording = False
+        self._recording_paused = False
         self._set_recording_mode(False)
 
     def _on_voice_note_ready(self, file_path: str) -> None:
         self._recording = False
+        self._recording_paused = False
         self._set_recording_mode(False)
         self.voice_note_requested.emit(file_path)
 
     def _on_voice_note_error(self, message: str) -> None:
         self._recording = False
+        self._recording_paused = False
         self._set_recording_mode(False)
         self.voice_note_failed.emit(message or "No se pudo grabar la nota de voz.")
+
+    def _on_recording_level(self, level: float) -> None:
+        if self._recording:
+            self.voice_waveform.add_level(level)
 
     def _update_recording_time(self, duration_ms: int) -> None:
         if not self._recording:
             return
         seconds = max(0, int(duration_ms / 1000))
         self.recording_time.setText(f"{seconds // 60}:{seconds % 60:02d}")
+
+    def _update_pause_button(self) -> None:
+        icon_name = "fa5s.play" if self._recording_paused else "fa5s.pause"
+        color = theme.ACCENT if self._recording_paused else theme.TEXT_PRIMARY
+        self.pause_recording_button.setIcon(qta.icon(icon_name, color=color))
+        self.pause_recording_button.setToolTip(
+            "Reanudar nota de voz" if self._recording_paused else "Pausar nota de voz"
+        )
+
+    def _set_recording_dot_paused(self, paused: bool) -> None:
+        color = theme.TEXT_SECONDARY if paused else "#ff5c5c"
+        self.recording_dot.setStyleSheet(f"background-color: {color};")
 
     def _set_recording_mode(self, recording: bool) -> None:
         for widget in (
@@ -334,3 +418,7 @@ class ComposerWidget(QWidget):
         ):
             widget.setVisible(not recording)
         self.recording_bar.setVisible(recording)
+        if not recording:
+            self.voice_waveform.reset()
+            self._update_pause_button()
+            self._set_recording_dot_paused(False)

@@ -24,6 +24,7 @@ from ...controllers.whatsapp_controller import WhatsAppController
 from ...utils.dialog_helpers import show_confirmation, show_error, show_info
 from .whatsapp import theme
 from .whatsapp.emoji_picker import EmojiPicker
+from .whatsapp.screen_style import screen_qss
 from .whatsapp.template_preview_widget import TemplatePreviewWidget
 
 logger = get_logger(__name__)
@@ -31,7 +32,7 @@ logger = get_logger(__name__)
 _PLACEHOLDER_RE = re.compile(r"\{\{\s*(\d+)\s*\}\}")
 _CATEGORIES = ["UTILITY", "MARKETING", "AUTHENTICATION"]
 _STATUS_COLORS = {
-    "APPROVED": "#2ecc71",
+    "APPROVED": theme.ACCENT,
     "PENDING": "#f39c12",
     "REJECTED": "#e74c3c",
 }
@@ -181,17 +182,18 @@ class CarouselCardWidget(QFrame):
 
     def __init__(self, index: int, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
-        self.setFrameShape(QFrame.Shape.StyledPanel)
+        self.setObjectName("tplCard")
+        self.setFrameShape(QFrame.Shape.NoFrame)
         self._assets_by_kind: Dict[str, List[Dict[str, Any]]] = {}
         # Remembered selection so an async asset load can restore it after load_from().
         self._desired_asset_id: Optional[int] = None
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(6)
 
         self.title_label = QLabel(f"Tarjeta {index}")
-        self.title_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        self.title_label.setObjectName("tplPanelTitle")
         layout.addWidget(self.title_label)
 
         media_row = QHBoxLayout()
@@ -205,6 +207,9 @@ class CarouselCardWidget(QFrame):
         self.asset_combo.currentIndexChanged.connect(lambda *_: self.changed.emit())
         media_row.addWidget(self.asset_combo, 1)
         self.upload_btn = QPushButton("Subir")
+        self.upload_btn.setObjectName("tplActionButton")
+        self.upload_btn.setIcon(qta.icon("fa5s.upload", color=theme.palette_hex()))
+        self.upload_btn.setIconSize(QSize(14, 14))
         self.upload_btn.clicked.connect(lambda: self.upload_requested.emit(self, self.current_kind()))
         media_row.addWidget(self.upload_btn)
         layout.addLayout(media_row)
@@ -293,6 +298,7 @@ class CarouselEditor(QGroupBox):
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__("Carrusel", parent)
+        self.setObjectName("tplGroup")
         self.setCheckable(True)
         self.setChecked(False)
         self.toggled.connect(self._on_toggled)
@@ -304,7 +310,7 @@ class CarouselEditor(QGroupBox):
             "Entre 1 y 10 tarjetas; todas con el mismo formato (Imagen o Video). "
             "Un carrusel reemplaza el encabezado, footer y botones de nivel superior."
         )
-        hint.setStyleSheet("color: #5d6d7e; font-size: 11px;")
+        hint.setObjectName("tplHint")
         hint.setWordWrap(True)
         layout.addWidget(hint)
 
@@ -313,10 +319,16 @@ class CarouselEditor(QGroupBox):
 
         btn_row = QHBoxLayout()
         btn_row.addStretch()
-        self.add_card_btn = QPushButton("+ Tarjeta")
+        self.add_card_btn = QPushButton("Tarjeta")
+        self.add_card_btn.setObjectName("tplActionButton")
+        self.add_card_btn.setIcon(qta.icon("fa5s.plus", color=theme.palette_hex()))
+        self.add_card_btn.setIconSize(QSize(14, 14))
         self.add_card_btn.clicked.connect(lambda: self.add_card())
         btn_row.addWidget(self.add_card_btn)
-        self.remove_card_btn = QPushButton("- Tarjeta")
+        self.remove_card_btn = QPushButton("Quitar tarjeta")
+        self.remove_card_btn.setObjectName("tplActionButton")
+        self.remove_card_btn.setIcon(qta.icon("fa5s.minus", color=theme.palette_hex()))
+        self.remove_card_btn.setIconSize(QSize(14, 14))
         self.remove_card_btn.clicked.connect(self.remove_card)
         btn_row.addWidget(self.remove_card_btn)
         layout.addLayout(btn_row)
@@ -477,62 +489,100 @@ class WhatsAppTab(QWidget):
     # UI
     # ------------------------------------------------------------------
     def setup_ui(self):
-        layout = QVBoxLayout(self)
+        self.setObjectName("tplTab")
+        self.setStyleSheet(screen_qss("tpl"))
 
-        # Header
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        # Header bar (consistente con Notificaciones / Chat)
+        header = QWidget()
+        header.setObjectName("tplHeader")
+        header_outer = QVBoxLayout(header)
+        header_outer.setContentsMargins(20, 16, 14, 12)
+        header_outer.setSpacing(8)
+
         header_layout = QHBoxLayout()
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(10)
         title = QLabel("Gestión de Plantillas WhatsApp")
-        title.setFont(QFont("Arial", 14, QFont.Weight.Bold))
+        title.setObjectName("tplTitle")
         header_layout.addWidget(title)
         header_layout.addStretch()
 
-        self.sync_btn = QPushButton("🔄 Sincronizar")
+        self.sync_btn = QPushButton("Sincronizar")
+        self.sync_btn.setObjectName("tplActionButton")
+        self.sync_btn.setIcon(qta.icon("fa5s.sync", color=theme.palette_hex()))
+        self.sync_btn.setIconSize(QSize(14, 14))
         self.sync_btn.clicked.connect(self.on_sync)
         header_layout.addWidget(self.sync_btn)
 
-        self.new_btn = QPushButton("+ Nueva Plantilla")
+        self.new_btn = QPushButton("Nueva plantilla")
+        self.new_btn.setObjectName("tplActionButton")
+        self.new_btn.setIcon(qta.icon("fa5s.plus", color=theme.palette_hex()))
+        self.new_btn.setIconSize(QSize(14, 14))
         self.new_btn.clicked.connect(self.on_new_template)
         header_layout.addWidget(self.new_btn)
 
-        self.save_btn = QPushButton("💾 Guardar")
-        self.save_btn.setText("Enviar a revisión")
-        self.save_btn.setEnabled(False)
-        self.save_btn.clicked.connect(self.on_save_template)
-        header_layout.addWidget(self.save_btn)
-
-        self.delete_btn = QPushButton("🗑️ Eliminar")
+        self.delete_btn = QPushButton("Eliminar")
+        self.delete_btn.setObjectName("tplActionButton")
+        self.delete_btn.setIcon(qta.icon("fa5s.trash", color=theme.palette_hex()))
+        self.delete_btn.setIconSize(QSize(14, 14))
         self.delete_btn.setEnabled(False)
         self.delete_btn.clicked.connect(self.on_delete_template)
         header_layout.addWidget(self.delete_btn)
 
-        layout.addLayout(header_layout)
+        self.save_btn = QPushButton("Enviar a revisión")
+        self.save_btn.setObjectName("tplPrimaryButton")
+        self.save_btn.setIcon(qta.icon("fa5s.paper-plane", color="#ffffff"))
+        self.save_btn.setIconSize(QSize(14, 14))
+        self.save_btn.setEnabled(False)
+        self.save_btn.clicked.connect(self.on_save_template)
+        header_layout.addWidget(self.save_btn)
+        header_outer.addLayout(header_layout)
+
+        hint = QLabel(
+            "Crea y envía a revisión plantillas de Meta: encabezado de texto, imagen, video, "
+            "documento o ubicación, botones y carrusel. Usa {{1}}, {{2}}… como variables del cuerpo."
+        )
+        hint.setObjectName("tplHint")
+        hint.setWordWrap(True)
+        header_outer.addWidget(hint)
+        layout.addWidget(header)
 
         # Splitter principal
         splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.setChildrenCollapsible(False)
 
-        # Panel izquierdo - Lista
-        left_panel = QGroupBox("Plantillas")
+        # Panel izquierdo - Lista de plantillas
+        left_panel = QWidget()
+        left_panel.setObjectName("tplListPane")
         left_layout = QVBoxLayout(left_panel)
+        left_layout.setContentsMargins(20, 16, 12, 14)
+        left_layout.setSpacing(10)
+        list_title = QLabel("Plantillas")
+        list_title.setObjectName("tplPanelTitle")
+        left_layout.addWidget(list_title)
         self.templates_list = QListWidget()
+        self.templates_list.setObjectName("tplList")
+        self.templates_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.templates_list.itemClicked.connect(self.on_template_selected)
-        left_layout.addWidget(self.templates_list)
+        left_layout.addWidget(self.templates_list, 1)
         splitter.addWidget(left_panel)
 
         # Panel derecho - Editor + vista previa lateral
         right_panel = QWidget()
+        right_panel.setObjectName("tplConfigPane")
         right_layout = QHBoxLayout(right_panel)
-        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setContentsMargins(14, 16, 20, 14)
         right_layout.setSpacing(12)
 
         editor_scroll = QScrollArea()
-        editor_scroll.setObjectName("templateEditorScroll")
+        editor_scroll.setObjectName("tplConfigScroll")
         editor_scroll.setWidgetResizable(True)
         editor_scroll.setFrameShape(QFrame.Shape.NoFrame)
         editor_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        editor_scroll.setStyleSheet(
-            "QScrollArea#templateEditorScroll { border: none; background: transparent; }"
-            "QScrollArea#templateEditorScroll > QWidget > QWidget { background: transparent; }"
-        )
         editor_container = QWidget()
         editor_layout = QVBoxLayout(editor_container)
         editor_layout.setContentsMargins(0, 0, 0, 0)
@@ -540,6 +590,7 @@ class WhatsAppTab(QWidget):
 
         # Información de plantilla
         info_group = QGroupBox("Información de Plantilla")
+        info_group.setObjectName("tplGroup")
         info_layout = QVBoxLayout(info_group)
 
         name_layout = QHBoxLayout()
@@ -568,7 +619,7 @@ class WhatsAppTab(QWidget):
         meta_layout.addWidget(self.category_combo)
         meta_layout.addWidget(QLabel("Estado:"))
         self.status_label = QLabel("No guardado")
-        self.status_label.setStyleSheet("color: orange;")
+        self.status_label.setStyleSheet(f"color: {_STATUS_COLORS['PENDING']};")
         meta_layout.addWidget(self.status_label)
         meta_layout.addStretch()
         info_layout.addLayout(meta_layout)
@@ -577,19 +628,23 @@ class WhatsAppTab(QWidget):
 
         # Contenido
         content_group = QGroupBox("Contenido de la Plantilla")
+        content_group.setObjectName("tplGroup")
         content_layout = QVBoxLayout(content_group)
 
         vars_label = QLabel(
             "Usa marcadores posicionales: {{1}}, {{2}}, {{3}}... (deben coincidir con la "
             "plantilla aprobada en Meta)"
         )
-        vars_label.setStyleSheet("color: #3498db; font-size: 11px;")
+        vars_label.setObjectName("tplHint")
         vars_label.setWordWrap(True)
         content_layout.addWidget(vars_label)
 
         ai_layout = QHBoxLayout()
         ai_layout.addStretch()
         self.ai_btn = QPushButton("Asistir con IA")
+        self.ai_btn.setObjectName("tplActionButton")
+        self.ai_btn.setIcon(qta.icon("fa5s.magic", color=theme.palette_hex()))
+        self.ai_btn.setIconSize(QSize(14, 14))
         self.ai_menu = QMenu(self.ai_btn)
         self.ai_menu.addAction("Redactar", lambda: self.on_ai_assist("DRAFT"))
         self.ai_menu.addAction("Optimizar", lambda: self.on_ai_assist("OPTIMIZE"))
@@ -601,6 +656,7 @@ class WhatsAppTab(QWidget):
 
         content_layout.addWidget(QLabel("Cuerpo (BODY):"))
         self.body_editor = QTextEdit()
+        self.body_editor.setObjectName("tplBodyEditor")
         self.body_editor.setPlaceholderText(
             "Hola {{1}}! 👋\n\nBienvenido a FitPilot. Tu membresía {{2}} está activa.\n\n"
             "¡Nos vemos en el gym! 💪"
@@ -633,28 +689,31 @@ class WhatsAppTab(QWidget):
         body_tools_layout.addWidget(self.body_monospace_btn)
 
         body_tools_layout.addStretch()
-        self.add_variable_btn = QPushButton("+ Agregar variable")
+        self.add_variable_btn = QPushButton("Agregar variable")
+        self.add_variable_btn.setObjectName("tplActionButton")
         self.add_variable_btn.setIcon(qta.icon("fa5s.plus", color=theme.palette_hex()))
+        self.add_variable_btn.setIconSize(QSize(14, 14))
         self.add_variable_btn.clicked.connect(self.on_add_variable)
         self.add_variable_btn.setEnabled(False)
         body_tools_layout.addWidget(self.add_variable_btn)
         content_layout.addLayout(body_tools_layout)
 
         samples_title = QLabel("Muestras de variables")
-        samples_title.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        samples_title.setObjectName("tplPanelTitle")
         content_layout.addWidget(samples_title)
         samples_hint = QLabel(
             "Incluye muestras para que Meta pueda revisar la plantilla. No incluyas datos reales de clientes."
         )
+        samples_hint.setObjectName("tplHint")
         samples_hint.setWordWrap(True)
-        samples_hint.setStyleSheet("color: #5d6d7e; font-size: 11px;")
         content_layout.addWidget(samples_hint)
 
         self.variables_empty_label = QLabel("No hay variables en el cuerpo.")
-        self.variables_empty_label.setStyleSheet("color: #7f8c8d; font-size: 11px;")
+        self.variables_empty_label.setObjectName("tplHint")
         content_layout.addWidget(self.variables_empty_label)
 
         self.variables_table = QTableWidget(0, 2)
+        self.variables_table.setObjectName("tplTable")
         self.variables_table.setHorizontalHeaderLabels(["Variable", "Valor de ejemplo"])
         self.variables_table.verticalHeader().setVisible(False)
         self.variables_table.horizontalHeader().setSectionResizeMode(
@@ -694,6 +753,9 @@ class WhatsAppTab(QWidget):
         header_format_layout.addWidget(self.header_asset_combo, 1)
 
         self.upload_asset_btn = QPushButton("Subir media")
+        self.upload_asset_btn.setObjectName("tplActionButton")
+        self.upload_asset_btn.setIcon(qta.icon("fa5s.upload", color=theme.palette_hex()))
+        self.upload_asset_btn.setIconSize(QSize(14, 14))
         self.upload_asset_btn.clicked.connect(self.on_upload_header_asset)
         header_format_layout.addWidget(self.upload_asset_btn)
         content_layout.addLayout(header_format_layout)
@@ -746,10 +808,16 @@ class WhatsAppTab(QWidget):
         buttons_header_layout = QHBoxLayout()
         buttons_header_layout.addWidget(QLabel("Botones (opcional):"))
         buttons_header_layout.addStretch()
-        self.add_button_btn = QPushButton("+ Botón")
+        self.add_button_btn = QPushButton("Botón")
+        self.add_button_btn.setObjectName("tplActionButton")
+        self.add_button_btn.setIcon(qta.icon("fa5s.plus", color=theme.palette_hex()))
+        self.add_button_btn.setIconSize(QSize(14, 14))
         self.add_button_btn.clicked.connect(self.on_add_button)
         buttons_header_layout.addWidget(self.add_button_btn)
-        self.remove_button_btn = QPushButton("- Quitar botón")
+        self.remove_button_btn = QPushButton("Quitar botón")
+        self.remove_button_btn.setObjectName("tplActionButton")
+        self.remove_button_btn.setIcon(qta.icon("fa5s.minus", color=theme.palette_hex()))
+        self.remove_button_btn.setIconSize(QSize(14, 14))
         self.remove_button_btn.clicked.connect(self.on_remove_button)
         buttons_header_layout.addWidget(self.remove_button_btn)
         content_layout.addLayout(buttons_header_layout)
@@ -758,11 +826,12 @@ class WhatsAppTab(QWidget):
             "Máx 10 botones. URL con {{1}} al final = dinámica (1 por plantilla). "
             "Valor = URL para URL, número para llamada."
         )
+        buttons_hint.setObjectName("tplHint")
         buttons_hint.setWordWrap(True)
-        buttons_hint.setStyleSheet("color: #5d6d7e; font-size: 11px;")
         content_layout.addWidget(buttons_hint)
 
         self.buttons_table = QTableWidget(0, 4)
+        self.buttons_table.setObjectName("tplTable")
         self.buttons_table.setHorizontalHeaderLabels(
             ["Tipo", "Texto", "URL / Teléfono", "Ejemplo {{1}}"]
         )
@@ -788,14 +857,18 @@ class WhatsAppTab(QWidget):
         editor_layout.addWidget(self.carousel_group)
 
         # Enviar prueba
-        test_group = QGroupBox("Enviar Prueba (envía la plantilla aprobada a un número)")
+        test_group = QGroupBox("Enviar prueba (envía la plantilla aprobada a un número)")
+        test_group.setObjectName("tplGroup")
         test_layout = QVBoxLayout(test_group)
         test_row = QHBoxLayout()
         test_row.addWidget(QLabel("Teléfono:"))
         self.test_phone = QLineEdit()
         self.test_phone.setPlaceholderText("+52 XXX XXX XXXX")
         test_row.addWidget(self.test_phone)
-        self.send_test_btn = QPushButton("📤 Enviar Prueba")
+        self.send_test_btn = QPushButton("Enviar prueba")
+        self.send_test_btn.setObjectName("tplActionButton")
+        self.send_test_btn.setIcon(qta.icon("fa5s.paper-plane", color=theme.palette_hex()))
+        self.send_test_btn.setIconSize(QSize(14, 14))
         self.send_test_btn.setEnabled(False)
         self.send_test_btn.clicked.connect(self.on_send_test)
         test_row.addWidget(self.send_test_btn)
@@ -832,25 +905,14 @@ class WhatsAppTab(QWidget):
         editor_scroll.setWidget(editor_container)
 
         preview_panel = QFrame()
-        preview_panel.setObjectName("templatePreviewRail")
+        preview_panel.setObjectName("tplPreviewRail")
         preview_panel.setMinimumWidth(320)
         preview_panel.setMaximumWidth(380)
         preview_layout = QVBoxLayout(preview_panel)
         preview_layout.setContentsMargins(12, 12, 12, 12)
         preview_layout.setSpacing(10)
-        preview_panel.setStyleSheet(
-            "QFrame#templatePreviewRail {"
-            " background-color: palette(window);"
-            " border: 1px solid palette(mid);"
-            " border-radius: 6px;"
-            "}"
-            "QLabel#templatePreviewRailTitle {"
-            " font-weight: bold;"
-            " font-size: 13px;"
-            "}"
-        )
         preview_title = QLabel("Vista previa de la plantilla")
-        preview_title.setObjectName("templatePreviewRailTitle")
+        preview_title.setObjectName("tplPreviewRailTitle")
         preview_layout.addWidget(preview_title)
         self.preview_widget = TemplatePreviewWidget()
         self.preview_widget.setMinimumHeight(420)
@@ -860,8 +922,10 @@ class WhatsAppTab(QWidget):
         right_layout.addWidget(preview_panel)
 
         splitter.addWidget(right_panel)
-        splitter.setSizes([300, 700])
-        layout.addWidget(splitter)
+        splitter.setStretchFactor(0, 0)
+        splitter.setStretchFactor(1, 1)
+        splitter.setSizes([400, 900])
+        layout.addWidget(splitter, 1)
 
     def _connect_controller(self):
         self.controller.templates_loaded.connect(self._on_templates_loaded)
