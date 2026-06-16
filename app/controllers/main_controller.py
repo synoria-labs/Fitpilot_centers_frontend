@@ -24,9 +24,9 @@ class LoginViewLike(Protocol):
 
 @runtime_checkable
 class MainWindowLike(Protocol):
-    tab_changed: Any
+    nav_changed: Any
     refresh_requested: Any
-    tab_widget: Any
+    content_stack: Any
 
     def show(self) -> None: ...
     def hide(self) -> None: ...
@@ -73,7 +73,7 @@ class MainController(QObject):
         self.auth_controller.logout_success.connect(self.on_logout_success)
 
         if self.main_window:
-            self.main_window.tab_changed.connect(self.on_tab_changed)
+            self.main_window.nav_changed.connect(self.on_nav_changed)
             self.main_window.refresh_requested.connect(
                 lambda tab_id: self.load_tab_async(tab_id, force=True)
             )
@@ -367,29 +367,12 @@ class MainController(QObject):
         if self.main_window:
             self.main_window.show_error("Error", f"No se pudo cargar {tab_id}: {error}")
 
-    @Slot(int)
-    def on_tab_changed(self, index: int) -> None:
-        """Maneja el cambio de pestana."""
-        logger.debug("Tab changed to index: %s", index)
-
-        if self.main_window and index >= 0:
-            tab_name = self.main_window.tab_widget.tabText(index)
-            tab_mapping = {
-                "Socios": "members",
-                "Clases": "classes",
-                "Membresias": "memberships",
-                "Dashboard": "dashboard",
-                "WhatsApp": "whatsapp",
-                "Notificaciones": "whatsapp_notifications",
-                "Chatbot": "chatbot_config",
-                "Campañas": "campaigns",
-                "Chats": "whatsapp_chat",
-            }
-
-            tab_id = tab_mapping.get(tab_name)
-            if tab_id and tab_id not in self.loaded_tabs:
-                logger.info("Tab '%s' not loaded, loading now...", tab_id)
-                self.load_tab_async(tab_id)
+    @Slot(str)
+    def on_nav_changed(self, tab_id: str) -> None:
+        """Maneja el cambio de sección desde la sidebar o el menú Configuración."""
+        if tab_id and tab_id not in self.loaded_tabs:
+            logger.info("Section '%s' not loaded, loading now...", tab_id)
+            self.load_tab_async(tab_id)
 
     def cleanup(self) -> None:
         """Limpia recursos antes de cerrar."""
