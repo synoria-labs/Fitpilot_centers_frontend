@@ -120,6 +120,27 @@ class TemplatePreviewWidget(QWidget):
         self._footer.setVisible(False)
         bubble_layout.addWidget(self._footer)
 
+        # TEXT header (rendered above the body).
+        self._header_text = QLabel()
+        self._header_text.setObjectName("templatePreviewHeaderText")
+        self._header_text.setWordWrap(True)
+        self._header_text.setVisible(False)
+        bubble_layout.insertWidget(0, self._header_text)
+
+        # Buttons + carousel summary (rendered below the footer).
+        self._buttons = QLabel()
+        self._buttons.setObjectName("templatePreviewButtons")
+        self._buttons.setWordWrap(True)
+        self._buttons.setVisible(False)
+        bubble_layout.addWidget(self._buttons)
+
+        self._carousel = QLabel()
+        self._carousel.setObjectName("templatePreviewCarousel")
+        self._carousel.setWordWrap(True)
+        self._carousel.setTextFormat(Qt.TextFormat.RichText)
+        self._carousel.setVisible(False)
+        bubble_layout.addWidget(self._carousel)
+
         thread_layout.addWidget(
             self._bubble,
             0,
@@ -184,14 +205,80 @@ class TemplatePreviewWidget(QWidget):
         media_format: Optional[str] = None,
         media_url: Optional[str] = None,
         media_name: Optional[str] = None,
+        header_text: Optional[str] = None,
+        buttons: Optional[list] = None,
+        location: Optional[dict] = None,
+        carousel: Optional[list] = None,
     ) -> None:
+        header_text = (header_text or "").strip()
+        self._header_text.setTextFormat(Qt.TextFormat.RichText)
+        self._header_text.setText(f"<b>{html.escape(header_text)}</b>" if header_text else "")
+        self._header_text.setVisible(bool(header_text))
+
         self._body.setHtml(_render_whatsapp_markup(body or ""))
         footer = (footer or "").strip()
         self._footer.setTextFormat(Qt.TextFormat.RichText)
         self._footer.setText(_render_whatsapp_markup(footer))
         self._footer.setVisible(bool(footer))
         self._update_body_height()
-        self._render_media(media_format, media_url, media_name)
+
+        self._render_buttons(buttons)
+        self._render_carousel(carousel)
+
+        if carousel:
+            self._render_media(None, None, None)
+        elif location is not None:
+            self._render_location(location)
+        else:
+            self._render_media(media_format, media_url, media_name)
+
+    def _render_buttons(self, buttons: Optional[list]) -> None:
+        if not buttons:
+            self._buttons.clear()
+            self._buttons.setVisible(False)
+            return
+        icons = {"URL": "🔗", "PHONE_NUMBER": "📞", "QUICK_REPLY": "💬"}
+        self._buttons.setTextFormat(Qt.TextFormat.RichText)
+        lines = []
+        for button in buttons:
+            if not isinstance(button, dict):
+                continue
+            btype = str(button.get("type") or "").upper()
+            text = html.escape(str(button.get("text") or ""))
+            lines.append(f"{icons.get(btype, '•')} {text}")
+        self._buttons.setText("<br>".join(lines))
+        self._buttons.setVisible(bool(lines))
+
+    def _render_carousel(self, carousel: Optional[list]) -> None:
+        if not carousel:
+            self._carousel.clear()
+            self._carousel.setVisible(False)
+            return
+        cards = []
+        for index, card in enumerate(carousel, start=1):
+            if not isinstance(card, dict):
+                continue
+            fmt = str(card.get("media_format") or "").upper()
+            name = html.escape(str(card.get("media_name") or "(sin media)"))
+            body = (card.get("body") or "").strip()
+            snippet = html.escape(body[:60] + ("…" if len(body) > 60 else ""))
+            cards.append(f"<b>Tarjeta {index}</b> [{fmt}] {name}<br>{snippet}")
+        self._carousel.setText("<hr>".join(cards))
+        self._carousel.setVisible(bool(cards))
+
+    def _render_location(self, location: dict) -> None:
+        self._media_request_seq += 1  # cancel any in-flight image fetch
+        self._original_pixmap = None
+        name = str((location or {}).get("name") or "").strip()
+        address = str((location or {}).get("address") or "").strip()
+        lat = str((location or {}).get("latitude") or "").strip()
+        lng = str((location or {}).get("longitude") or "").strip()
+        coords = ", ".join(p for p in (lat, lng) if p)
+        parts = [p for p in (name, address, coords) if p] or ["Ubicación"]
+        self._media.setPixmap(QPixmap())
+        self._media.setText("📍 Ubicación\n" + "\n".join(parts))
+        self._media.setFixedHeight(90)
+        self._media.setVisible(True)
 
     def _render_media(
         self,
