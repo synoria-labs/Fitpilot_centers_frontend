@@ -9,18 +9,21 @@ valores de ejemplo + footer opcional); la app arma los ``components`` en el back
 import re
 from typing import Any, Dict, List, Optional
 
+import qtawesome as qta
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QTextEdit,
     QLineEdit, QGroupBox, QSplitter, QListWidget, QListWidgetItem, QComboBox,
     QFileDialog, QScrollArea, QFrame, QDialog, QDialogButtonBox, QInputDialog,
-    QMenu,
+    QMenu, QTableWidget, QTableWidgetItem, QHeaderView, QToolButton,
 )
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QPoint, QSize, Qt, Signal
 from PySide6.QtGui import QFont
 
 from ...core import container, get_logger
 from ...controllers.whatsapp_controller import WhatsAppController
 from ...utils.dialog_helpers import show_confirmation, show_error, show_info
+from .whatsapp import theme
+from .whatsapp.emoji_picker import EmojiPicker
 from .whatsapp.template_preview_widget import TemplatePreviewWidget
 
 logger = get_logger(__name__)
@@ -156,7 +159,11 @@ class WhatsAppTab(QWidget):
         self._media_assets_by_id: Dict[int, Dict[str, Any]] = {}
         self._pending_header_asset_id: Optional[int] = None
         self._baseline_snapshot: Optional[Dict[str, Any]] = None
+        self._variable_examples_by_index: Dict[int, str] = {}
+        self._syncing_variable_table = False
         self._loading = False
+        self._emoji_picker: Optional[EmojiPicker] = None
+        self._format_buttons: List[QToolButton] = []
 
         try:
             service = container.get("whatsapp_service")
@@ -296,17 +303,70 @@ class WhatsAppTab(QWidget):
             "Hola {{1}}! 👋\n\nBienvenido a FitPilot. Tu membresía {{2}} está activa.\n\n"
             "¡Nos vemos en el gym! 💪"
         )
-        self.body_editor.textChanged.connect(self.update_preview)
+        self.body_editor.textChanged.connect(self._on_body_text_changed)
         content_layout.addWidget(self.body_editor)
 
-        examples_layout = QHBoxLayout()
-        examples_layout.addWidget(QLabel("Valores de ejemplo:"))
-        self.examples_input = QLineEdit()
-        self.examples_input.setPlaceholderText("Para {{1}}, {{2}}... separados por |  →  Juan | Mensual Libre")
-        self.examples_input.textChanged.connect(self.update_preview)
-        examples_layout.addWidget(self.examples_input)
-        content_layout.addLayout(examples_layout)
+        body_tools_layout = QHBoxLayout()
+        body_tools_layout.setContentsMargins(0, 0, 0, 0)
+        body_tools_layout.setSpacing(4)
 
+        self.body_emoji_btn = self._make_body_tool_button("fa5s.smile", "Insertar emoji")
+        self.body_emoji_btn.clicked.connect(self._open_body_emoji_picker)
+        body_tools_layout.addWidget(self.body_emoji_btn)
+
+        self.body_bold_btn = self._make_body_tool_button("fa5s.bold", "Negrita")
+        self.body_bold_btn.clicked.connect(lambda: self._wrap_body_selection("*"))
+        body_tools_layout.addWidget(self.body_bold_btn)
+
+        self.body_italic_btn = self._make_body_tool_button("fa5s.italic", "Cursiva")
+        self.body_italic_btn.clicked.connect(lambda: self._wrap_body_selection("_"))
+        body_tools_layout.addWidget(self.body_italic_btn)
+
+        self.body_strike_btn = self._make_body_tool_button("fa5s.strikethrough", "Tachado")
+        self.body_strike_btn.clicked.connect(lambda: self._wrap_body_selection("~"))
+        body_tools_layout.addWidget(self.body_strike_btn)
+
+        self.body_monospace_btn = self._make_body_tool_button("fa5s.code", "Monospace")
+        self.body_monospace_btn.clicked.connect(lambda: self._wrap_body_selection("```"))
+        body_tools_layout.addWidget(self.body_monospace_btn)
+
+        body_tools_layout.addStretch()
+        self.add_variable_btn = QPushButton("+ Agregar variable")
+        self.add_variable_btn.setIcon(qta.icon("fa5s.plus", color=theme.palette_hex()))
+        self.add_variable_btn.clicked.connect(self.on_add_variable)
+        self.add_variable_btn.setEnabled(False)
+        body_tools_layout.addWidget(self.add_variable_btn)
+        content_layout.addLayout(body_tools_layout)
+
+        samples_title = QLabel("Muestras de variables")
+        samples_title.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        content_layout.addWidget(samples_title)
+        samples_hint = QLabel(
+            "Incluye muestras para que Meta pueda revisar la plantilla. No incluyas datos reales de clientes."
+        )
+        samples_hint.setWordWrap(True)
+        samples_hint.setStyleSheet("color: #5d6d7e; font-size: 11px;")
+        content_layout.addWidget(samples_hint)
+
+        self.variables_empty_label = QLabel("No hay variables en el cuerpo.")
+        self.variables_empty_label.setStyleSheet("color: #7f8c8d; font-size: 11px;")
+        content_layout.addWidget(self.variables_empty_label)
+
+        self.variables_table = QTableWidget(0, 2)
+        self.variables_table.setHorizontalHeaderLabels(["Variable", "Valor de ejemplo"])
+        self.variables_table.verticalHeader().setVisible(False)
+        self.variables_table.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.ResizeMode.ResizeToContents
+        )
+        self.variables_table.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.ResizeMode.Stretch
+        )
+        self.variables_table.setMinimumHeight(86)
+        self.variables_table.setMaximumHeight(180)
+        self.variables_table.setAlternatingRowColors(True)
+        self.variables_table.itemChanged.connect(self._on_variable_sample_changed)
+        self.variables_table.setVisible(False)
+        content_layout.addWidget(self.variables_table)
         footer_layout = QHBoxLayout()
         footer_layout.addWidget(QLabel("Footer (opcional):"))
         self.footer_input = QLineEdit()
@@ -426,11 +486,178 @@ class WhatsAppTab(QWidget):
     # ------------------------------------------------------------------
     # Helpers de estado de plantilla
     # ------------------------------------------------------------------
+    def _body_placeholder_indices(self) -> List[int]:
+        body = self.body_editor.toPlainText()
+        return sorted({int(match) for match in _PLACEHOLDER_RE.findall(body or "")})
+
+    def _max_body_placeholder_index(self) -> int:
+        indices = self._body_placeholder_indices()
+        return max(indices) if indices else 0
+
     def _example_values(self) -> List[str]:
-        raw = self.examples_input.text().strip()
-        if not raw:
+        max_index = self._max_body_placeholder_index()
+        if max_index <= 0:
             return []
-        return [part.strip() for part in raw.split("|")]
+        return [
+            (self._variable_examples_by_index.get(index) or "").strip()
+            for index in range(1, max_index + 1)
+        ]
+
+    def _body_tools_enabled(self) -> bool:
+        return (
+            hasattr(self, "body_editor")
+            and not self._loading
+            and not self.body_editor.isReadOnly()
+        )
+
+    def _make_body_tool_button(self, icon_name: str, tooltip: str) -> QToolButton:
+        button = QToolButton()
+        button.setObjectName("templateBodyToolButton")
+        button.setIcon(qta.icon(icon_name, color=theme.palette_hex()))
+        button.setIconSize(QSize(16, 16))
+        button.setFixedSize(30, 30)
+        button.setToolTip(tooltip)
+        button.setAutoRaise(True)
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.setEnabled(False)
+        button.setStyleSheet(
+            """
+            QToolButton#templateBodyToolButton {
+                border: 1px solid transparent;
+                border-radius: 4px;
+                padding: 4px;
+                background: transparent;
+            }
+            QToolButton#templateBodyToolButton:hover {
+                background-color: palette(alternate-base);
+                border-color: palette(mid);
+            }
+            QToolButton#templateBodyToolButton:disabled {
+                color: palette(mid);
+            }
+            """
+        )
+        self._format_buttons.append(button)
+        return button
+
+    def _update_body_toolbar_cta(self) -> None:
+        editable = self._body_tools_enabled()
+        if hasattr(self, "add_variable_btn"):
+            self.add_variable_btn.setEnabled(editable)
+        if hasattr(self, "variables_table"):
+            self.variables_table.setEnabled(editable)
+        for button in self._format_buttons:
+            button.setEnabled(editable)
+
+    def _insert_body_text(self, text: str) -> None:
+        if not self._body_tools_enabled():
+            return
+        cursor = self.body_editor.textCursor()
+        cursor.insertText(text)
+        self.body_editor.setTextCursor(cursor)
+        self.body_editor.setFocus()
+
+    def _wrap_body_selection(self, prefix: str, suffix: Optional[str] = None) -> None:
+        if not self._body_tools_enabled():
+            return
+        suffix = prefix if suffix is None else suffix
+        cursor = self.body_editor.textCursor()
+        selected = cursor.selectedText().replace("\u2029", "\n")
+        start = cursor.selectionStart() if cursor.hasSelection() else cursor.position()
+
+        cursor.beginEditBlock()
+        if selected:
+            cursor.insertText(f"{prefix}{selected}{suffix}")
+        else:
+            cursor.insertText(f"{prefix}{suffix}")
+            cursor.setPosition(start + len(prefix))
+        cursor.endEditBlock()
+
+        self.body_editor.setTextCursor(cursor)
+        self.body_editor.setFocus()
+
+    def _open_body_emoji_picker(self) -> None:
+        if not self._body_tools_enabled():
+            return
+        if self._emoji_picker is None:
+            self._emoji_picker = EmojiPicker(self)
+            self._emoji_picker.emoji_selected.connect(self._insert_body_emoji)
+        picker = self._emoji_picker
+        anchor = self.body_emoji_btn.mapToGlobal(QPoint(0, self.body_emoji_btn.height()))
+        picker.move(anchor.x(), anchor.y() + 6)
+        picker.show()
+        picker.raise_()
+
+    def _insert_body_emoji(self, emoji: str) -> None:
+        self._insert_body_text(emoji)
+
+    def _set_variable_examples(self, examples: List[str]) -> None:
+        self._variable_examples_by_index = {
+            index: str(value or "").strip()
+            for index, value in enumerate(examples or [], start=1)
+        }
+        self._sync_variable_samples_from_body()
+
+    def _capture_variable_table_values(self) -> None:
+        if not hasattr(self, "variables_table"):
+            return
+        for row in range(self.variables_table.rowCount()):
+            variable_item = self.variables_table.item(row, 0)
+            value_item = self.variables_table.item(row, 1)
+            if variable_item is None:
+                continue
+            index = variable_item.data(Qt.ItemDataRole.UserRole)
+            if index is None:
+                continue
+            self._variable_examples_by_index[int(index)] = (
+                value_item.text().strip() if value_item is not None else ""
+            )
+
+    def _sync_variable_samples_from_body(self) -> None:
+        if self._syncing_variable_table or not hasattr(self, "variables_table"):
+            return
+        self._syncing_variable_table = True
+        self.variables_table.blockSignals(True)
+        try:
+            self._capture_variable_table_values()
+            indices = self._body_placeholder_indices()
+            self.variables_table.setRowCount(0)
+            for row, index in enumerate(indices):
+                self.variables_table.insertRow(row)
+
+                variable_item = QTableWidgetItem(f"{{{{{index}}}}}")
+                variable_item.setData(Qt.ItemDataRole.UserRole, index)
+                variable_item.setFlags(variable_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                self.variables_table.setItem(row, 0, variable_item)
+
+                value_item = QTableWidgetItem(self._variable_examples_by_index.get(index, ""))
+                self.variables_table.setItem(row, 1, value_item)
+
+            self.variables_empty_label.setVisible(not indices)
+            self.variables_table.setVisible(bool(indices))
+        finally:
+            self.variables_table.blockSignals(False)
+            self._syncing_variable_table = False
+
+    def _missing_variable_samples(self) -> List[str]:
+        missing = []
+        for index in self._body_placeholder_indices():
+            value = (self._variable_examples_by_index.get(index) or "").strip()
+            if not value:
+                missing.append(f"{{{{{index}}}}}")
+        return missing
+
+    def _validate_variable_samples(self) -> bool:
+        self._capture_variable_table_values()
+        missing = self._missing_variable_samples()
+        if missing:
+            show_error(
+                self,
+                "Agrega valores de ejemplo para: " + ", ".join(missing),
+                title="Muestras de variables",
+            )
+            return False
+        return True
 
     def _set_status(self, status: Optional[str]):
         text = status or "No guardado"
@@ -493,6 +720,22 @@ class WhatsAppTab(QWidget):
     def _on_editor_changed(self, *_args) -> None:
         self.update_preview()
 
+    def _on_body_text_changed(self) -> None:
+        self._sync_variable_samples_from_body()
+        self.update_preview()
+
+    def _on_variable_sample_changed(self, item: QTableWidgetItem) -> None:
+        if self._syncing_variable_table or item.column() != 1:
+            return
+        variable_item = self.variables_table.item(item.row(), 0)
+        if variable_item is None:
+            return
+        index = variable_item.data(Qt.ItemDataRole.UserRole)
+        if index is None:
+            return
+        self._variable_examples_by_index[int(index)] = item.text().strip()
+        self.update_preview()
+
     def _template_status(self) -> str:
         if not self.current:
             return ""
@@ -540,10 +783,10 @@ class WhatsAppTab(QWidget):
 
     def _set_content_editable(self, editable: bool) -> None:
         self.body_editor.setReadOnly(not editable)
-        self.examples_input.setReadOnly(not editable)
         self.footer_input.setReadOnly(not editable)
         self.header_asset_combo.setEnabled(editable)
         self.upload_asset_btn.setEnabled(editable)
+        self._update_body_toolbar_cta()
         self._update_ai_cta()
 
     def _update_ai_cta(self) -> None:
@@ -695,6 +938,22 @@ class WhatsAppTab(QWidget):
     # ------------------------------------------------------------------
     # Acciones de usuario
     # ------------------------------------------------------------------
+    def on_add_variable(self):
+        if not self._body_tools_enabled():
+            return
+        existing = set(self._body_placeholder_indices())
+        next_index = 1
+        while next_index in existing:
+            next_index += 1
+
+        cursor = self.body_editor.textCursor()
+        cursor.insertText(f"{{{{{next_index}}}}}")
+        self.body_editor.setTextCursor(cursor)
+        self.body_editor.setFocus()
+        self._variable_examples_by_index.setdefault(next_index, "")
+        self._sync_variable_samples_from_body()
+        self.update_preview()
+
     def on_template_selected(self, item: QListWidgetItem):
         template_id = item.data(Qt.ItemDataRole.UserRole)
         tpl = next((t for t in self._templates if t.get("id") == template_id), None)
@@ -710,7 +969,7 @@ class WhatsAppTab(QWidget):
         if category in _CATEGORIES:
             self.category_combo.setCurrentText(category)
         self.body_editor.setPlainText(body)
-        self.examples_input.setText(" | ".join(examples))
+        self._set_variable_examples(examples)
         self.footer_input.setText(footer)
         media_format, _media_url = _media_header_info(tpl.get("components"))
         self._pending_header_asset_id = tpl.get("default_header_media_asset_id")
@@ -741,7 +1000,7 @@ class WhatsAppTab(QWidget):
         self.language_input.setText("es_MX")
         self.category_combo.setCurrentText("UTILITY")
         self.body_editor.clear()
-        self.examples_input.clear()
+        self._set_variable_examples([])
         self.footer_input.clear()
         self.test_media_row.setVisible(False)
         self.test_media_input.clear()
@@ -771,6 +1030,8 @@ class WhatsAppTab(QWidget):
         body = self.body_editor.toPlainText().strip()
         if not body:
             show_error(self, "El cuerpo de la plantilla es obligatorio.")
+            return
+        if not self._validate_variable_samples():
             return
 
         data = {
@@ -882,6 +1143,8 @@ class WhatsAppTab(QWidget):
         if not phone:
             show_error(self, "Ingresa un número de teléfono.")
             return
+        if not self._validate_variable_samples():
+            return
         header_asset_id = None
         header_media_url = None
         if self._current_header_format():
@@ -905,6 +1168,7 @@ class WhatsAppTab(QWidget):
         )
 
     def update_preview(self):
+        self._capture_variable_table_values()
         body = self.body_editor.toPlainText()
         values = self._example_values()
 
@@ -985,7 +1249,7 @@ class WhatsAppTab(QWidget):
             return
         selected = dialog.suggestion()
         self.body_editor.setPlainText(selected.get("body_text") or "")
-        self.examples_input.setText(" | ".join(selected.get("body_examples") or []))
+        self._set_variable_examples(selected.get("body_examples") or [])
         self.footer_input.setText(selected.get("footer_text") or "")
         self.update_preview()
         self._update_review_cta()
@@ -1031,5 +1295,6 @@ class WhatsAppTab(QWidget):
         self.new_btn.setEnabled(not loading)
         self.delete_btn.setEnabled(not loading and self.current is not None)
         self.send_test_btn.setEnabled(not loading and self._template_status() == "APPROVED")
+        self._update_body_toolbar_cta()
         self._update_ai_cta()
         self._update_review_cta()
