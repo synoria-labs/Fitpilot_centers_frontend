@@ -120,6 +120,7 @@ class MainWindow(QMainWindow):
             ("WhatsApp", "whatsapp", False),  # Solo admin (plantillas)
             ("Notificaciones", "whatsapp_notifications", False),  # Solo admin (config de envíos)
             ("Chatbot", "chatbot_config", False),  # Solo admin (config del agente de WhatsApp)
+            ("Campañas", "campaigns", False),  # Solo admin (difusión de marketing por WhatsApp)
             ("Membresías", "memberships", True),
             ("Dashboard", "dashboard", True),
             ("Finanzas", "finances", False),  # Solo admin
@@ -280,7 +281,7 @@ class MainWindow(QMainWindow):
         """Actualiza la visibilidad de las pestañas según el rol."""
         # WhatsApp y Chats solo para admin
         if role != 'admin':
-            admin_only_tabs = {"WhatsApp", "Chats", "Finanzas", "Chatbot"}
+            admin_only_tabs = {"WhatsApp", "Chats", "Finanzas", "Chatbot", "Campañas"}
             for i in range(self.tab_widget.count()):
                 if self.tab_widget.tabText(i) in admin_only_tabs:
                     self.tab_widget.setTabEnabled(i, False)

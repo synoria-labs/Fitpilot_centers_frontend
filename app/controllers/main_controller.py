@@ -382,6 +382,7 @@ class MainController(QObject):
                 "WhatsApp": "whatsapp",
                 "Notificaciones": "whatsapp_notifications",
                 "Chatbot": "chatbot_config",
+                "Campañas": "campaigns",
                 "Chats": "whatsapp_chat",
             }
 
