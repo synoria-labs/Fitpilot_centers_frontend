@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -72,10 +74,10 @@ def test_convert_wav_to_ogg_opus_uses_packaged_ffmpeg(monkeypatch, tmp_path):
         Path(command[-1]).write_bytes(b"ogg")
         return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
-    monkeypatch.setattr(
-        voice_note_converter.imageio_ffmpeg,
-        "get_ffmpeg_exe",
-        fake_get_ffmpeg_exe,
+    monkeypatch.setitem(
+        sys.modules,
+        "imageio_ffmpeg",
+        SimpleNamespace(get_ffmpeg_exe=fake_get_ffmpeg_exe),
     )
     monkeypatch.setattr(voice_note_converter.subprocess, "run", fake_run)
 

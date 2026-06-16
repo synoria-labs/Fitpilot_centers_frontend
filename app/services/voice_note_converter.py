@@ -5,8 +5,6 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
-import imageio_ffmpeg
-
 
 class VoiceNoteConversionError(RuntimeError):
     """Raised when a recorded audio file cannot be converted to OGG/Opus."""
@@ -23,6 +21,14 @@ def convert_wav_to_ogg_opus(
 
     output = Path(output_path) if output_path is not None else source.with_suffix(".ogg")
     output.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        import imageio_ffmpeg
+    except ImportError as exc:
+        raise VoiceNoteConversionError(
+            "Falta instalar imageio-ffmpeg en el entorno del frontend. "
+            "Ejecuta: python -m pip install -r requirements.txt"
+        ) from exc
 
     command = [
         imageio_ffmpeg.get_ffmpeg_exe(),
