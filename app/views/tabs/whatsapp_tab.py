@@ -81,6 +81,301 @@ def _media_header_info(components: Optional[List[Any]]) -> tuple[Optional[str], 
     return None, ""
 
 
+def _header_format_from_components(components: Optional[List[Any]]) -> Optional[str]:
+    """Return the top-level HEADER format (IMAGE/VIDEO/DOCUMENT/TEXT/LOCATION) or None."""
+    for comp in components or []:
+        if isinstance(comp, dict) and str(comp.get("type") or "").upper() == "HEADER":
+            return str(comp.get("format") or "").upper() or None
+    return None
+
+
+def _header_text_from_components(components: Optional[List[Any]]) -> tuple[str, str]:
+    """Return (text, example) for a TEXT header component."""
+    for comp in components or []:
+        if not isinstance(comp, dict):
+            continue
+        if str(comp.get("type") or "").upper() != "HEADER":
+            continue
+        if str(comp.get("format") or "").upper() != "TEXT":
+            return "", ""
+        text = str(comp.get("text") or "")
+        example = ""
+        ex = comp.get("example")
+        if isinstance(ex, dict):
+            values = ex.get("header_text")
+            if isinstance(values, list) and values:
+                example = str(values[0])
+        return text, example
+    return "", ""
+
+
+def _parse_buttons(components: Optional[List[Any]]) -> List[Dict[str, Any]]:
+    """Extract top-level BUTTONS into editor dicts: {type, text, value, example}."""
+    for comp in components or []:
+        if not isinstance(comp, dict) or str(comp.get("type") or "").upper() != "BUTTONS":
+            continue
+        result: List[Dict[str, Any]] = []
+        for button in comp.get("buttons") or []:
+            if not isinstance(button, dict):
+                continue
+            btype = str(button.get("type") or "").upper()
+            example = button.get("example")
+            example_str = str(example[0]) if isinstance(example, list) and example else ""
+            result.append(
+                {
+                    "type": btype,
+                    "text": str(button.get("text") or ""),
+                    "value": str(button.get("url") or button.get("phone_number") or ""),
+                    "example": example_str,
+                }
+            )
+        return result
+    return []
+
+
+def _parse_carousel_cards(components: Optional[List[Any]]) -> List[Dict[str, Any]]:
+    """Extract CAROUSEL cards into editor dicts: {header_format, asset_id, body_text, body_examples}."""
+    for comp in components or []:
+        if not isinstance(comp, dict) or str(comp.get("type") or "").upper() != "CAROUSEL":
+            continue
+        cards: List[Dict[str, Any]] = []
+        for card in comp.get("cards") or []:
+            if not isinstance(card, dict):
+                continue
+            header_format = ""
+            asset_id = None
+            body_text = ""
+            body_examples: List[str] = []
+            for sub in card.get("components") or []:
+                if not isinstance(sub, dict):
+                    continue
+                stype = str(sub.get("type") or "").upper()
+                if stype == "HEADER":
+                    header_format = str(sub.get("format") or "").upper()
+                    if sub.get("fitpilot_asset_id") is not None:
+                        asset_id = int(sub["fitpilot_asset_id"])
+                elif stype == "BODY":
+                    body_text = str(sub.get("text") or "")
+                    ex = sub.get("example")
+                    if isinstance(ex, dict):
+                        rows = ex.get("body_text")
+                        if isinstance(rows, list) and rows and isinstance(rows[0], list):
+                            body_examples = [str(v) for v in rows[0]]
+            cards.append(
+                {
+                    "header_format": header_format,
+                    "header_media_asset_id": asset_id,
+                    "body_text": body_text,
+                    "body_examples": body_examples,
+                }
+            )
+        return cards
+    return []
+
+
+class CarouselCardWidget(QFrame):
+    """One carousel card editor: media format + asset picker + body + examples."""
+
+    changed = Signal()
+    upload_requested = Signal(object, str)  # (this card, media kind)
+
+    def __init__(self, index: int, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self.setFrameShape(QFrame.Shape.StyledPanel)
+        self._assets_by_kind: Dict[str, List[Dict[str, Any]]] = {}
+        # Remembered selection so an async asset load can restore it after load_from().
+        self._desired_asset_id: Optional[int] = None
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
+
+        self.title_label = QLabel(f"Tarjeta {index}")
+        self.title_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        layout.addWidget(self.title_label)
+
+        media_row = QHBoxLayout()
+        media_row.addWidget(QLabel("Media:"))
+        self.format_combo = QComboBox()
+        self.format_combo.addItem("Imagen", "IMAGE")
+        self.format_combo.addItem("Video", "VIDEO")
+        self.format_combo.currentIndexChanged.connect(self._on_format_changed)
+        media_row.addWidget(self.format_combo)
+        self.asset_combo = QComboBox()
+        self.asset_combo.currentIndexChanged.connect(lambda *_: self.changed.emit())
+        media_row.addWidget(self.asset_combo, 1)
+        self.upload_btn = QPushButton("Subir")
+        self.upload_btn.clicked.connect(lambda: self.upload_requested.emit(self, self.current_kind()))
+        media_row.addWidget(self.upload_btn)
+        layout.addLayout(media_row)
+
+        self.body_input = QLineEdit()
+        self.body_input.setPlaceholderText("Cuerpo de la tarjeta (admite {{1}})")
+        self.body_input.textChanged.connect(lambda *_: self.changed.emit())
+        layout.addWidget(self.body_input)
+
+        self.example_input = QLineEdit()
+        self.example_input.setPlaceholderText("Ejemplos de variables separados por |")
+        self.example_input.textChanged.connect(lambda *_: self.changed.emit())
+        layout.addWidget(self.example_input)
+
+    def set_index(self, index: int) -> None:
+        self.title_label.setText(f"Tarjeta {index}")
+
+    def current_kind(self) -> str:
+        return "image" if self.format_combo.currentData() == "IMAGE" else "video"
+
+    def _on_format_changed(self) -> None:
+        self._populate_assets()
+        self.changed.emit()
+
+    def set_assets(self, kind: str, assets: List[Dict[str, Any]]) -> None:
+        self._assets_by_kind[kind] = assets or []
+        if kind == self.current_kind():
+            restore = self.selected_asset_id()
+            if restore is None:
+                restore = self._desired_asset_id
+            self._populate_assets(restore)
+
+    def _populate_assets(self, selected_id: Optional[int] = None) -> None:
+        self.asset_combo.blockSignals(True)
+        self.asset_combo.clear()
+        self.asset_combo.addItem("(Selecciona media)", None)
+        selected_index = 0
+        for i, asset in enumerate(self._assets_by_kind.get(self.current_kind(), []), start=1):
+            label = (
+                asset.get("display_name")
+                or asset.get("original_filename")
+                or f"Asset {asset.get('id')}"
+            )
+            self.asset_combo.addItem(label, asset.get("id"))
+            if selected_id is not None and asset.get("id") == selected_id:
+                selected_index = i
+        self.asset_combo.setCurrentIndex(selected_index)
+        self.asset_combo.blockSignals(False)
+
+    def select_asset(self, asset_id: int) -> None:
+        self._desired_asset_id = asset_id
+        self._populate_assets(asset_id)
+
+    def selected_asset_id(self) -> Optional[int]:
+        value = self.asset_combo.currentData()
+        return int(value) if value is not None else None
+
+    def set_format(self, header_format: Optional[str]) -> None:
+        index = self.format_combo.findData((header_format or "IMAGE").upper())
+        self.format_combo.setCurrentIndex(index if index >= 0 else 0)
+
+    def load_from(self, card: Dict[str, Any]) -> None:
+        self.set_format(card.get("header_format"))
+        self.body_input.setText(card.get("body_text") or "")
+        self.example_input.setText(" | ".join(card.get("body_examples") or []))
+        asset_id = card.get("header_media_asset_id")
+        if asset_id is not None:
+            self.select_asset(int(asset_id))
+
+    def to_card(self) -> Dict[str, Any]:
+        examples = [e.strip() for e in self.example_input.text().split("|") if e.strip()]
+        return {
+            "header_format": self.format_combo.currentData(),
+            "header_media_asset_id": self.selected_asset_id(),
+            "body_text": self.body_input.text().strip(),
+            "body_examples": examples,
+            "buttons": [],
+        }
+
+
+class CarouselEditor(QGroupBox):
+    """Checkable group holding the carousel cards. Carousel replaces top-level header/footer/buttons."""
+
+    changed = Signal()
+    card_upload_requested = Signal(object, str)  # (card, kind)
+
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__("Carrusel", parent)
+        self.setCheckable(True)
+        self.setChecked(False)
+        self.toggled.connect(self._on_toggled)
+        self._cards: List[CarouselCardWidget] = []
+        self._assets_by_kind: Dict[str, List[Dict[str, Any]]] = {}
+
+        layout = QVBoxLayout(self)
+        hint = QLabel(
+            "Entre 1 y 10 tarjetas; todas con el mismo formato (Imagen o Video). "
+            "Un carrusel reemplaza el encabezado, footer y botones de nivel superior."
+        )
+        hint.setStyleSheet("color: #5d6d7e; font-size: 11px;")
+        hint.setWordWrap(True)
+        layout.addWidget(hint)
+
+        self.cards_container = QVBoxLayout()
+        layout.addLayout(self.cards_container)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        self.add_card_btn = QPushButton("+ Tarjeta")
+        self.add_card_btn.clicked.connect(lambda: self.add_card())
+        btn_row.addWidget(self.add_card_btn)
+        self.remove_card_btn = QPushButton("- Tarjeta")
+        self.remove_card_btn.clicked.connect(self.remove_card)
+        btn_row.addWidget(self.remove_card_btn)
+        layout.addLayout(btn_row)
+
+    def _on_toggled(self, checked: bool) -> None:
+        if checked and not self._cards:
+            self.add_card()
+        self.changed.emit()
+
+    def add_card(self, card_data: Optional[Dict[str, Any]] = None) -> CarouselCardWidget:
+        card = CarouselCardWidget(len(self._cards) + 1, self)
+        card.changed.connect(self.changed)
+        card.upload_requested.connect(self.card_upload_requested)
+        for kind, assets in self._assets_by_kind.items():
+            card.set_assets(kind, assets)
+        self.cards_container.addWidget(card)
+        self._cards.append(card)
+        if card_data:
+            card.load_from(card_data)
+        self.changed.emit()
+        return card
+
+    def remove_card(self) -> None:
+        if len(self._cards) <= 1:
+            return
+        card = self._cards.pop()
+        self.cards_container.removeWidget(card)
+        card.deleteLater()
+        self.changed.emit()
+
+    def set_assets(self, kind: str, assets: List[Dict[str, Any]]) -> None:
+        self._assets_by_kind[kind] = assets or []
+        for card in self._cards:
+            card.set_assets(kind, assets)
+
+    def cards(self) -> List[CarouselCardWidget]:
+        return list(self._cards)
+
+    def to_cards(self) -> List[Dict[str, Any]]:
+        return [c.to_card() for c in self._cards]
+
+    def load_cards(self, cards_data: List[Dict[str, Any]]) -> None:
+        self.clear()
+        self.blockSignals(True)
+        self.setChecked(bool(cards_data))
+        self.blockSignals(False)
+        for card_data in cards_data:
+            self.add_card(card_data)
+
+    def clear(self) -> None:
+        for card in self._cards:
+            self.cards_container.removeWidget(card)
+            card.deleteLater()
+        self._cards = []
+        self.blockSignals(True)
+        self.setChecked(False)
+        self.blockSignals(False)
+
+
 class TemplateAiSuggestionDialog(QDialog):
     """Preview dialog for an AI-generated WhatsApp template suggestion."""
 
@@ -158,6 +453,8 @@ class WhatsAppTab(QWidget):
         self._media_assets_by_kind: Dict[str, List[Dict[str, Any]]] = {}
         self._media_assets_by_id: Dict[int, Dict[str, Any]] = {}
         self._pending_header_asset_id: Optional[int] = None
+        self._pending_carousel_card: Optional["CarouselCardWidget"] = None
+        self._syncing_buttons_table = False
         self._baseline_snapshot: Optional[Dict[str, Any]] = None
         self._variable_examples_by_index: Dict[int, str] = {}
         self._syncing_variable_table = False
@@ -381,11 +678,14 @@ class WhatsAppTab(QWidget):
         content_layout.addLayout(footer_layout)
 
         header_format_layout = QHBoxLayout()
-        header_format_layout.addWidget(QLabel("Header media:"))
+        header_format_layout.addWidget(QLabel("Encabezado:"))
         self.header_format_combo = QComboBox()
         self.header_format_combo.addItem("Ninguno", None)
-        for fmt, (label, _kind) in _HEADER_FORMATS.items():
-            self.header_format_combo.addItem(label, fmt)
+        self.header_format_combo.addItem("Texto", "TEXT")
+        self.header_format_combo.addItem("Imagen", "IMAGE")
+        self.header_format_combo.addItem("Video", "VIDEO")
+        self.header_format_combo.addItem("Documento", "DOCUMENT")
+        self.header_format_combo.addItem("Ubicación", "LOCATION")
         self.header_format_combo.currentIndexChanged.connect(self.on_header_format_changed)
         header_format_layout.addWidget(self.header_format_combo)
 
@@ -398,7 +698,94 @@ class WhatsAppTab(QWidget):
         header_format_layout.addWidget(self.upload_asset_btn)
         content_layout.addLayout(header_format_layout)
 
+        # Encabezado de TEXTO (hasta 60 chars, una variable {{1}} opcional).
+        self.header_text_row = QWidget()
+        header_text_layout = QHBoxLayout(self.header_text_row)
+        header_text_layout.setContentsMargins(0, 0, 0, 0)
+        header_text_layout.addWidget(QLabel("Texto:"))
+        self.header_text_input = QLineEdit()
+        self.header_text_input.setMaxLength(60)
+        self.header_text_input.setPlaceholderText("Hasta 60 caracteres. Admite una variable {{1}}.")
+        self.header_text_input.textChanged.connect(self._on_header_text_changed)
+        header_text_layout.addWidget(self.header_text_input, 1)
+        self.header_text_example_label = QLabel("Ejemplo {{1}}:")
+        header_text_layout.addWidget(self.header_text_example_label)
+        self.header_text_example_input = QLineEdit()
+        self.header_text_example_input.setPlaceholderText("Valor de ejemplo")
+        self.header_text_example_input.textChanged.connect(self.update_preview)
+        header_text_layout.addWidget(self.header_text_example_input, 1)
+        self.header_text_row.setVisible(False)
+        content_layout.addWidget(self.header_text_row)
+
+        # Encabezado de UBICACIÓN (lat/long requeridos al enviar).
+        self.header_location_row = QWidget()
+        location_layout = QHBoxLayout(self.header_location_row)
+        location_layout.setContentsMargins(0, 0, 0, 0)
+        location_layout.addWidget(QLabel("Lat:"))
+        self.loc_lat_input = QLineEdit()
+        self.loc_lat_input.setPlaceholderText("19.4326")
+        self.loc_lat_input.textChanged.connect(self.update_preview)
+        location_layout.addWidget(self.loc_lat_input)
+        location_layout.addWidget(QLabel("Long:"))
+        self.loc_lng_input = QLineEdit()
+        self.loc_lng_input.setPlaceholderText("-99.1332")
+        self.loc_lng_input.textChanged.connect(self.update_preview)
+        location_layout.addWidget(self.loc_lng_input)
+        location_layout.addWidget(QLabel("Nombre:"))
+        self.loc_name_input = QLineEdit()
+        self.loc_name_input.textChanged.connect(self.update_preview)
+        location_layout.addWidget(self.loc_name_input, 1)
+        location_layout.addWidget(QLabel("Dirección:"))
+        self.loc_address_input = QLineEdit()
+        self.loc_address_input.textChanged.connect(self.update_preview)
+        location_layout.addWidget(self.loc_address_input, 1)
+        self.header_location_row.setVisible(False)
+        content_layout.addWidget(self.header_location_row)
+
+        # Botones (QUICK_REPLY / URL estática o dinámica / PHONE_NUMBER).
+        buttons_header_layout = QHBoxLayout()
+        buttons_header_layout.addWidget(QLabel("Botones (opcional):"))
+        buttons_header_layout.addStretch()
+        self.add_button_btn = QPushButton("+ Botón")
+        self.add_button_btn.clicked.connect(self.on_add_button)
+        buttons_header_layout.addWidget(self.add_button_btn)
+        self.remove_button_btn = QPushButton("- Quitar botón")
+        self.remove_button_btn.clicked.connect(self.on_remove_button)
+        buttons_header_layout.addWidget(self.remove_button_btn)
+        content_layout.addLayout(buttons_header_layout)
+
+        buttons_hint = QLabel(
+            "Máx 10 botones. URL con {{1}} al final = dinámica (1 por plantilla). "
+            "Valor = URL para URL, número para llamada."
+        )
+        buttons_hint.setWordWrap(True)
+        buttons_hint.setStyleSheet("color: #5d6d7e; font-size: 11px;")
+        content_layout.addWidget(buttons_hint)
+
+        self.buttons_table = QTableWidget(0, 4)
+        self.buttons_table.setHorizontalHeaderLabels(
+            ["Tipo", "Texto", "URL / Teléfono", "Ejemplo {{1}}"]
+        )
+        self.buttons_table.verticalHeader().setVisible(False)
+        self.buttons_table.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.ResizeMode.Stretch
+        )
+        self.buttons_table.horizontalHeader().setSectionResizeMode(
+            2, QHeaderView.ResizeMode.Stretch
+        )
+        self.buttons_table.setMaximumHeight(170)
+        self.buttons_table.setVisible(False)
+        self.buttons_table.itemChanged.connect(self._on_buttons_changed)
+        content_layout.addWidget(self.buttons_table)
+
         editor_layout.addWidget(content_group)
+
+        # Editor de carrusel (tarjetas con media + cuerpo).
+        self.carousel_group = CarouselEditor(self)
+        self.carousel_group.changed.connect(self.update_preview)
+        self.carousel_group.toggled.connect(self._on_carousel_toggled)
+        self.carousel_group.card_upload_requested.connect(self.on_carousel_card_upload)
+        editor_layout.addWidget(self.carousel_group)
 
         # Enviar prueba
         test_group = QGroupBox("Enviar Prueba (envía la plantilla aprobada a un número)")
@@ -779,6 +1166,11 @@ class WhatsAppTab(QWidget):
             "footer_text": self.footer_input.text().strip(),
             "header_format": self._current_header_format(),
             "header_media_asset_id": self._effective_header_asset_id(),
+            "header_text": self._header_text(),
+            "header_text_example": self._header_text_example(),
+            "location": self._location_dict(),
+            "buttons": self._collect_buttons(),
+            "carousel": self.carousel_group.to_cards() if self.carousel_group.isChecked() else [],
         }
 
     def _capture_baseline(self) -> None:
@@ -794,8 +1186,23 @@ class WhatsAppTab(QWidget):
             return False
         if not self.body_editor.toPlainText().strip():
             return False
-        if self._current_header_format() and self._selected_header_asset_id() is None:
+        if self.carousel_group.isChecked():
+            cards = self.carousel_group.to_cards()
+            if not cards:
+                return False
+            return all(
+                (card.get("body_text") or "").strip() and card.get("header_media_asset_id") is not None
+                for card in cards
+            )
+        header_format = self._current_header_format()
+        if header_format in {"IMAGE", "VIDEO", "DOCUMENT"} and self._selected_header_asset_id() is None:
             return False
+        if header_format == "TEXT" and not self._header_text():
+            return False
+        if header_format == "LOCATION":
+            loc = self._location_dict()
+            if not loc or not loc.get("latitude") or not loc.get("longitude"):
+                return False
         return True
 
     def _existing_template_ready(self) -> bool:
@@ -806,6 +1213,14 @@ class WhatsAppTab(QWidget):
         self.footer_input.setReadOnly(not editable)
         self.header_asset_combo.setEnabled(editable)
         self.upload_asset_btn.setEnabled(editable)
+        self.header_text_input.setReadOnly(not editable)
+        self.header_text_example_input.setReadOnly(not editable)
+        for widget in (self.loc_lat_input, self.loc_lng_input, self.loc_name_input, self.loc_address_input):
+            widget.setReadOnly(not editable)
+        self.buttons_table.setEnabled(editable)
+        self.add_button_btn.setEnabled(editable)
+        self.remove_button_btn.setEnabled(editable)
+        self.carousel_group.setEnabled(editable)
         self._update_body_toolbar_cta()
         self._update_ai_cta()
 
@@ -849,10 +1264,15 @@ class WhatsAppTab(QWidget):
         self._refresh_header_asset_controls()
 
     def _refresh_header_asset_controls(self) -> None:
-        kind = self._current_header_kind()
-        visible = bool(kind)
-        self.header_asset_combo.setVisible(visible)
-        self.upload_asset_btn.setVisible(visible)
+        header_format = self._current_header_format()
+        kind = self._current_header_kind()  # truthy only for media headers
+        media_visible = bool(kind)
+        self.header_asset_combo.setVisible(media_visible)
+        self.upload_asset_btn.setVisible(media_visible)
+        self.header_text_row.setVisible(header_format == "TEXT")
+        self.header_location_row.setVisible(header_format == "LOCATION")
+        if header_format == "TEXT":
+            self._refresh_header_text_example_visibility()
         if not kind:
             self.header_asset_combo.clear()
             self._pending_header_asset_id = None
@@ -862,6 +1282,124 @@ class WhatsAppTab(QWidget):
         self._populate_asset_combo(kind, self._pending_header_asset_id)
         self.controller.load_media_assets(kind)
         self._refresh_test_media_controls()
+
+    def _refresh_header_text_example_visibility(self) -> None:
+        has_var = bool(_PLACEHOLDER_RE.search(self.header_text_input.text() or ""))
+        self.header_text_example_label.setVisible(has_var)
+        self.header_text_example_input.setVisible(has_var)
+
+    def _on_header_text_changed(self) -> None:
+        self._refresh_header_text_example_visibility()
+        self.update_preview()
+
+    # --- Header text / location accessors -----------------------------------------
+    def _header_text(self) -> str:
+        return self.header_text_input.text().strip()
+
+    def _header_text_example(self) -> str:
+        return self.header_text_example_input.text().strip()
+
+    def _location_dict(self) -> Optional[Dict[str, Any]]:
+        lat = self.loc_lat_input.text().strip()
+        lng = self.loc_lng_input.text().strip()
+        name = self.loc_name_input.text().strip()
+        address = self.loc_address_input.text().strip()
+        if not (lat or lng or name or address):
+            return None
+        return {"latitude": lat, "longitude": lng, "name": name, "address": address}
+
+    # --- Buttons editor -----------------------------------------------------------
+    def _make_button_type_combo(self) -> QComboBox:
+        combo = QComboBox()
+        combo.addItem("Respuesta rápida", "QUICK_REPLY")
+        combo.addItem("URL", "URL")
+        combo.addItem("Llamada", "PHONE_NUMBER")
+        combo.currentIndexChanged.connect(self._on_buttons_changed)
+        return combo
+
+    def on_add_button(self) -> None:
+        if self.buttons_table.rowCount() >= 10:
+            show_error(self, "Máximo 10 botones por plantilla.")
+            return
+        self._syncing_buttons_table = True
+        row = self.buttons_table.rowCount()
+        self.buttons_table.insertRow(row)
+        self.buttons_table.setCellWidget(row, 0, self._make_button_type_combo())
+        for col in (1, 2, 3):
+            self.buttons_table.setItem(row, col, QTableWidgetItem(""))
+        self._syncing_buttons_table = False
+        self.buttons_table.setVisible(True)
+        self.update_preview()
+
+    def on_remove_button(self) -> None:
+        row = self.buttons_table.currentRow()
+        if row < 0:
+            row = self.buttons_table.rowCount() - 1
+        if row < 0:
+            return
+        self.buttons_table.removeRow(row)
+        self.buttons_table.setVisible(self.buttons_table.rowCount() > 0)
+        self.update_preview()
+
+    def _on_buttons_changed(self, *_args) -> None:
+        if self._syncing_buttons_table:
+            return
+        self.update_preview()
+
+    def _table_text(self, row: int, col: int) -> str:
+        item = self.buttons_table.item(row, col)
+        return item.text() if item is not None else ""
+
+    def _collect_buttons(self) -> List[Dict[str, Any]]:
+        buttons: List[Dict[str, Any]] = []
+        for row in range(self.buttons_table.rowCount()):
+            combo = self.buttons_table.cellWidget(row, 0)
+            btype = combo.currentData() if combo else None
+            text = (self._table_text(row, 1) or "").strip()
+            value = (self._table_text(row, 2) or "").strip()
+            example = (self._table_text(row, 3) or "").strip()
+            if not btype or not text:
+                continue
+            button: Dict[str, Any] = {"type": btype, "text": text}
+            if btype == "URL":
+                button["url"] = value
+                if example:
+                    button["example"] = example
+            elif btype == "PHONE_NUMBER":
+                button["phone_number"] = value
+            buttons.append(button)
+        return buttons
+
+    def _load_buttons(self, buttons: List[Dict[str, Any]]) -> None:
+        self._syncing_buttons_table = True
+        self.buttons_table.setRowCount(0)
+        for button in buttons or []:
+            row = self.buttons_table.rowCount()
+            self.buttons_table.insertRow(row)
+            combo = self._make_button_type_combo()
+            idx = combo.findData((button.get("type") or "").upper())
+            combo.setCurrentIndex(idx if idx >= 0 else 0)
+            self.buttons_table.setCellWidget(row, 0, combo)
+            self.buttons_table.setItem(row, 1, QTableWidgetItem(button.get("text") or ""))
+            self.buttons_table.setItem(row, 2, QTableWidgetItem(button.get("value") or ""))
+            self.buttons_table.setItem(row, 3, QTableWidgetItem(button.get("example") or ""))
+        self._syncing_buttons_table = False
+        self.buttons_table.setVisible(self.buttons_table.rowCount() > 0)
+
+    # --- Carousel -----------------------------------------------------------------
+    def _on_carousel_toggled(self, checked: bool) -> None:
+        if checked:
+            self.controller.load_media_assets("image")
+            self.controller.load_media_assets("video")
+        self.update_preview()
+        self._update_review_cta()
+
+    def on_carousel_card_upload(self, card: "CarouselCardWidget", kind: str) -> None:
+        path, _ = QFileDialog.getOpenFileName(self, "Seleccionar archivo multimedia")
+        if not path:
+            return
+        self._pending_carousel_card = card
+        self.controller.upload_media_asset(path, kind)
 
     def _populate_asset_combo(self, kind: str, selected_id: Optional[int] = None) -> None:
         self.header_asset_combo.blockSignals(True)
@@ -902,7 +1440,9 @@ class WhatsAppTab(QWidget):
             self.test_default_media_label.setText(f"Default: asset #{default_id}")
 
     def _refresh_test_media_controls(self) -> None:
-        has_media_header = bool(self.current and self._current_header_format())
+        has_media_header = bool(
+            self.current and self._current_header_format() in {"IMAGE", "VIDEO", "DOCUMENT"}
+        )
         self.test_media_row.setVisible(has_media_header)
         if not has_media_header:
             self.test_asset_combo.setVisible(False)
@@ -991,9 +1531,30 @@ class WhatsAppTab(QWidget):
         self.body_editor.setPlainText(body)
         self._set_variable_examples(examples)
         self.footer_input.setText(footer)
-        media_format, _media_url = _media_header_info(tpl.get("components"))
+
+        components = tpl.get("components")
+        carousel_cards = _parse_carousel_cards(components)
+        ht_text, ht_example = _header_text_from_components(components)
+        self.header_text_input.blockSignals(True)
+        self.header_text_input.setText(ht_text)
+        self.header_text_input.blockSignals(False)
+        self.header_text_example_input.blockSignals(True)
+        self.header_text_example_input.setText(ht_example)
+        self.header_text_example_input.blockSignals(False)
+        for widget in (self.loc_lat_input, self.loc_lng_input, self.loc_name_input, self.loc_address_input):
+            widget.blockSignals(True)
+            widget.clear()
+            widget.blockSignals(False)
+        self._load_buttons(_parse_buttons(components))
+        if carousel_cards:
+            self.carousel_group.load_cards(carousel_cards)
+            self.controller.load_media_assets("image")
+            self.controller.load_media_assets("video")
+        else:
+            self.carousel_group.clear()
+
         self._pending_header_asset_id = tpl.get("default_header_media_asset_id")
-        self._set_header_format(media_format)
+        self._set_header_format(None if carousel_cards else _header_format_from_components(components))
         self._set_status(tpl.get("template_status"))
         self._set_identity_editable(False)
 
@@ -1022,9 +1583,16 @@ class WhatsAppTab(QWidget):
         self.body_editor.clear()
         self._set_variable_examples([])
         self.footer_input.clear()
+        self.header_text_input.clear()
+        self.header_text_example_input.clear()
+        for widget in (self.loc_lat_input, self.loc_lng_input, self.loc_name_input, self.loc_address_input):
+            widget.clear()
+        self._load_buttons([])
+        self.carousel_group.clear()
         self.test_media_row.setVisible(False)
         self.test_media_input.clear()
         self._pending_header_asset_id = None
+        self._pending_carousel_card = None
         self._set_header_format(None)
         self.preview_widget.set_preview(body="")
         self._set_status("Nueva plantilla")
@@ -1059,18 +1627,54 @@ class WhatsAppTab(QWidget):
             "body_examples": self._example_values(),
             "footer_text": self.footer_input.text().strip() or None,
         }
-        header_format = self._current_header_format()
-        header_asset_id = self._selected_header_asset_id()
-        if self.current is None and header_format and not header_asset_id:
-            show_error(self, "Selecciona o sube un asset para el header de media.")
-            return
-        if self.current is None and header_format:
-            data["header_format"] = header_format
-            data["header_media_asset_id"] = header_asset_id
-        elif self.current is not None and header_format and header_asset_id:
-            data["header_media_asset_id"] = header_asset_id
+        is_new = self.current is None
 
-        if self.current is None:
+        if self.carousel_group.isChecked():
+            if not is_new:
+                show_error(self, "Las plantillas de carrusel se editan eliminándolas y recreándolas.")
+                return
+            cards = self.carousel_group.to_cards()
+            if not cards:
+                show_error(self, "Agrega al menos una tarjeta al carrusel.")
+                return
+            for index, card in enumerate(cards, start=1):
+                if not (card.get("body_text") or "").strip():
+                    show_error(self, f"La tarjeta {index} del carrusel requiere un cuerpo.")
+                    return
+                if card.get("header_media_asset_id") is None:
+                    show_error(self, f"La tarjeta {index} del carrusel requiere media.")
+                    return
+            data["footer_text"] = None
+            data["carousel_cards"] = cards
+        else:
+            header_format = self._current_header_format()
+            buttons = self._collect_buttons()
+            if buttons:
+                data["buttons"] = buttons
+            if header_format in {"IMAGE", "VIDEO", "DOCUMENT"}:
+                header_asset_id = self._selected_header_asset_id()
+                if is_new and header_asset_id is None:
+                    show_error(self, "Selecciona o sube un asset para el encabezado de media.")
+                    return
+                if is_new:
+                    data["header_format"] = header_format
+                if header_asset_id is not None:
+                    data["header_media_asset_id"] = header_asset_id
+            elif header_format == "TEXT":
+                header_text = self._header_text()
+                if not header_text:
+                    show_error(self, "Escribe el texto del encabezado.")
+                    return
+                if is_new:
+                    data["header_format"] = "TEXT"
+                data["header_text"] = header_text
+                if _PLACEHOLDER_RE.search(header_text):
+                    data["header_text_example"] = self._header_text_example() or "ejemplo"
+            elif header_format == "LOCATION":
+                if is_new:
+                    data["header_format"] = "LOCATION"
+
+        if is_new:
             name = self.name_input.text().strip()
             if not name:
                 show_error(self, "El nombre es obligatorio.")
@@ -1165,26 +1769,57 @@ class WhatsAppTab(QWidget):
             return
         if not self._validate_variable_samples():
             return
+
         header_asset_id = None
         header_media_url = None
-        if self._current_header_format():
-            mode = self.test_media_mode.currentData() or "default"
-            if mode == "asset":
-                header_asset_id = self._selected_test_asset_id()
-                if not header_asset_id:
-                    show_error(self, "Selecciona un asset para usarlo como override.")
+        header_text_param = None
+        button_url_param = None
+        location = None
+        carousel_overrides = None
+        header_format = self._current_header_format()
+
+        if self.carousel_group.isChecked():
+            carousel_overrides = []
+            for card in self.carousel_group.cards():
+                examples = [e.strip() for e in card.example_input.text().split("|") if e.strip()]
+                carousel_overrides.append(
+                    {"media_asset_id": card.selected_asset_id(), "body_params": examples}
+                )
+        else:
+            if header_format in {"IMAGE", "VIDEO", "DOCUMENT"}:
+                mode = self.test_media_mode.currentData() or "default"
+                if mode == "asset":
+                    header_asset_id = self._selected_test_asset_id()
+                    if not header_asset_id:
+                        show_error(self, "Selecciona un asset para usarlo como override.")
+                        return
+                elif mode == "url":
+                    header_media_url = self.test_media_input.text().strip()
+                    if not header_media_url.startswith("https://"):
+                        show_error(self, "La URL de media debe ser pública y empezar con https://.")
+                        return
+            elif header_format == "TEXT" and self.header_text_example_input.isVisible():
+                header_text_param = self._header_text_example() or None
+            elif header_format == "LOCATION":
+                location = self._location_dict()
+                if not location or not location.get("latitude") or not location.get("longitude"):
+                    show_error(self, "Ingresa latitud y longitud para enviar la ubicación.")
                     return
-            elif mode == "url":
-                header_media_url = self.test_media_input.text().strip()
-                if not header_media_url.startswith("https://"):
-                    show_error(self, "La URL de media debe ser pública y empezar con https://.")
-                    return
+            for button in self._collect_buttons():
+                if button.get("type") == "URL" and _PLACEHOLDER_RE.search(button.get("url") or ""):
+                    button_url_param = button.get("example") or None
+                    break
+
         self.controller.send_test(
             phone,
             self.current.get("id"),
             self._example_values(),
             header_media_url=header_media_url,
             header_media_asset_id=header_asset_id,
+            header_text_param=header_text_param,
+            button_url_param=button_url_param,
+            location=location,
+            carousel_card_overrides=carousel_overrides,
         )
 
     def update_preview(self):
@@ -1198,20 +1833,59 @@ class WhatsAppTab(QWidget):
                 return values[idx]
             return match.group(0)
 
+        carousel = self._preview_carousel()
+        header_format = self._current_header_format()
         footer = self.footer_input.text().strip()
-        asset = self._selected_header_asset()
-        media_url = (asset or {}).get("public_url")
-        media_name = (asset or {}).get("display_name") or (asset or {}).get("original_filename")
-        if self.current is not None:
-            media_url, media_name = self._test_preview_media()
+        media_format = None
+        media_url = None
+        media_name = None
+        header_text = None
+        location = None
+        if not carousel:
+            if header_format in {"IMAGE", "VIDEO", "DOCUMENT"}:
+                media_format = header_format
+                asset = self._selected_header_asset()
+                media_url = (asset or {}).get("public_url")
+                media_name = (asset or {}).get("display_name") or (asset or {}).get("original_filename")
+                if self.current is not None:
+                    media_url, media_name = self._test_preview_media()
+            elif header_format == "TEXT":
+                ex = self._header_text_example()
+                header_text = _PLACEHOLDER_RE.sub(
+                    lambda m: ex or m.group(0), self.header_text_input.text()
+                )
+            elif header_format == "LOCATION":
+                location = self._location_dict()
+
         self.preview_widget.set_preview(
             body=_PLACEHOLDER_RE.sub(repl, body),
-            footer=footer,
-            media_format=self._current_header_format(),
+            footer="" if carousel else footer,
+            media_format=media_format,
             media_url=media_url,
             media_name=media_name,
+            header_text=header_text,
+            buttons=None if carousel else self._collect_buttons(),
+            location=location,
+            carousel=carousel,
         )
         self._update_review_cta()
+
+    def _preview_carousel(self) -> Optional[List[Dict[str, Any]]]:
+        if not self.carousel_group.isChecked():
+            return None
+        cards: List[Dict[str, Any]] = []
+        for card in self.carousel_group.to_cards():
+            asset = self._media_assets_by_id.get(card.get("header_media_asset_id"))
+            cards.append(
+                {
+                    "media_format": card.get("header_format"),
+                    "media_url": (asset or {}).get("public_url"),
+                    "media_name": (asset or {}).get("display_name")
+                    or (asset or {}).get("original_filename"),
+                    "body": card.get("body_text"),
+                }
+            )
+        return cards
 
     # ------------------------------------------------------------------
     # Callbacks del controller
@@ -1288,9 +1962,11 @@ class WhatsAppTab(QWidget):
         for asset in assets or []:
             if asset.get("id") is not None:
                 self._media_assets_by_id[asset["id"]] = asset
+        self.carousel_group.set_assets(kind, assets or [])
         if kind == self._current_header_kind():
             self._populate_asset_combo(kind, self._pending_header_asset_id)
             self._refresh_test_media_controls()
+        self.update_preview()
 
     def _on_media_asset_uploaded(self, kind: str, asset: Dict[str, Any]):
         if not asset:
@@ -1300,6 +1976,17 @@ class WhatsAppTab(QWidget):
         self._media_assets_by_kind[kind] = assets
         if asset.get("id") is not None:
             self._media_assets_by_id[asset["id"]] = asset
+        self.carousel_group.set_assets(kind, assets)
+        # A carousel card requested this upload: select it on that card only.
+        if self._pending_carousel_card is not None:
+            card = self._pending_carousel_card
+            self._pending_carousel_card = None
+            if asset.get("id") is not None:
+                card.select_asset(asset["id"])
+            self.update_preview()
+            show_info(self, "Media subida correctamente.")
+            return
+        if asset.get("id") is not None:
             self._pending_header_asset_id = asset["id"]
         if kind == self._current_header_kind():
             self._populate_asset_combo(kind, self._pending_header_asset_id)

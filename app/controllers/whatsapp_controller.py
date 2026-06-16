@@ -81,6 +81,10 @@ class WhatsAppController(BaseController):
                 footer_text=data.get("footer_text"),
                 header_format=data.get("header_format"),
                 header_media_asset_id=data.get("header_media_asset_id"),
+                header_text=data.get("header_text"),
+                header_text_example=data.get("header_text_example"),
+                buttons=data.get("buttons"),
+                carousel_cards=data.get("carousel_cards"),
             )
         else:
             self._execute_authenticated_operation(
@@ -93,6 +97,9 @@ class WhatsAppController(BaseController):
                 body_examples=data.get("body_examples"),
                 footer_text=data.get("footer_text"),
                 header_media_asset_id=data.get("header_media_asset_id"),
+                header_text=data.get("header_text"),
+                header_text_example=data.get("header_text_example"),
+                buttons=data.get("buttons"),
             )
 
     def assist_template(self, action: str, data: Dict[str, Any]) -> None:
@@ -144,6 +151,10 @@ class WhatsAppController(BaseController):
         body_params: List[str],
         header_media_url: Optional[str] = None,
         header_media_asset_id: Optional[int] = None,
+        header_text_param: Optional[str] = None,
+        button_url_param: Optional[str] = None,
+        location: Optional[Dict[str, Any]] = None,
+        carousel_card_overrides: Optional[List[Dict[str, Any]]] = None,
     ) -> None:
         if not self._service:
             self.error_occurred.emit("Servicio de WhatsApp no disponible")
@@ -159,6 +170,10 @@ class WhatsAppController(BaseController):
             body_params=body_params,
             header_media_url=header_media_url,
             header_media_asset_id=header_media_asset_id,
+            header_text_param=header_text_param,
+            button_url_param=button_url_param,
+            location=location,
+            carousel_card_overrides=carousel_card_overrides,
         )
 
     def load_media_assets(self, kind: Optional[str]) -> None:

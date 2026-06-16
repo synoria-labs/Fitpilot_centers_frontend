@@ -98,6 +98,38 @@ def _map_asset(node: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     }
 
 
+def _button_to_input(button: Dict[str, Any]) -> Dict[str, Any]:
+    """Map a snake_case button dict from the editor to the GraphQL TemplateButtonInput."""
+    return {
+        "type": (button.get("type") or "").upper(),
+        "text": button.get("text") or "",
+        "url": button.get("url"),
+        "phoneNumber": button.get("phone_number"),
+        "example": button.get("example"),
+    }
+
+
+def _card_to_input(card: Dict[str, Any]) -> Dict[str, Any]:
+    """Map a snake_case carousel card dict from the editor to TemplateCarouselCardInput."""
+    return {
+        "headerFormat": (card.get("header_format") or "").upper(),
+        "headerMediaAssetId": card.get("header_media_asset_id"),
+        "bodyText": card.get("body_text") or "",
+        "bodyExamples": card.get("body_examples") or [],
+        "buttons": [_button_to_input(b) for b in card.get("buttons") or []],
+    }
+
+
+def _card_override_to_input(card: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "mediaAssetId": card.get("media_asset_id"),
+        "mediaUrl": card.get("media_url"),
+        "mediaId": card.get("media_id"),
+        "bodyParams": card.get("body_params") or [],
+        "buttonUrlParam": card.get("button_url_param"),
+    }
+
+
 def _map_ai_suggestion(node: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     if not node:
         return None
@@ -156,6 +188,10 @@ class WhatsAppService:
         footer_text: Optional[str] = None,
         header_format: Optional[str] = None,
         header_media_asset_id: Optional[int] = None,
+        header_text: Optional[str] = None,
+        header_text_example: Optional[str] = None,
+        buttons: Optional[List[Dict[str, Any]]] = None,
+        carousel_cards: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """Crea una plantilla en Meta y la guarda localmente."""
         mutation = f"""
@@ -177,6 +213,12 @@ class WhatsAppService:
                 "footerText": footer_text,
                 "headerFormat": header_format,
                 "headerMediaAssetId": header_media_asset_id,
+                "headerText": header_text,
+                "headerTextExample": header_text_example,
+                "buttons": [_button_to_input(b) for b in buttons] if buttons else None,
+                "carouselCards": (
+                    [_card_to_input(c) for c in carousel_cards] if carousel_cards else None
+                ),
             }
         }
         result = await self.client.execute(mutation, variables)
@@ -232,6 +274,9 @@ class WhatsAppService:
         body_examples: Optional[List[str]] = None,
         footer_text: Optional[str] = None,
         header_media_asset_id: Optional[int] = None,
+        header_text: Optional[str] = None,
+        header_text_example: Optional[str] = None,
+        buttons: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """Edita los components de una plantilla (Meta vuelve a revisar -> PENDING)."""
         mutation = f"""
@@ -250,6 +295,9 @@ class WhatsAppService:
                 "bodyExamples": body_examples or [],
                 "footerText": footer_text,
                 "headerMediaAssetId": header_media_asset_id,
+                "headerText": header_text,
+                "headerTextExample": header_text_example,
+                "buttons": [_button_to_input(b) for b in buttons] if buttons else None,
             }
         }
         result = await self.client.execute(mutation, variables)
@@ -275,6 +323,10 @@ class WhatsAppService:
         body_params: Optional[List[str]] = None,
         header_media_url: Optional[str] = None,
         header_media_asset_id: Optional[int] = None,
+        header_text_param: Optional[str] = None,
+        button_url_param: Optional[str] = None,
+        location: Optional[Dict[str, Any]] = None,
+        carousel_card_overrides: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """Envía una plantilla aprobada al número indicado."""
         mutation = """
@@ -286,6 +338,14 @@ class WhatsAppService:
                 }
             }
         """
+        location_input = None
+        if location:
+            location_input = {
+                "latitude": str(location.get("latitude") or ""),
+                "longitude": str(location.get("longitude") or ""),
+                "name": location.get("name"),
+                "address": location.get("address"),
+            }
         variables = {
             "input": {
                 "phone": phone,
@@ -293,6 +353,14 @@ class WhatsAppService:
                 "bodyParams": body_params or [],
                 "headerMediaUrl": header_media_url,
                 "headerMediaAssetId": header_media_asset_id,
+                "headerTextParam": header_text_param,
+                "buttonUrlParam": button_url_param,
+                "location": location_input,
+                "carouselCardOverrides": (
+                    [_card_override_to_input(c) for c in carousel_card_overrides]
+                    if carousel_card_overrides
+                    else None
+                ),
             }
         }
         result = await self.client.execute(mutation, variables)
