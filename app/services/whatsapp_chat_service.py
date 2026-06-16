@@ -76,6 +76,7 @@ CONVERSATIONS_QUERY = """
             status
             lastActivity
             unreadCount
+            botEnabled
             contact { %s }
             lastMessage { %s }
         }
@@ -89,6 +90,7 @@ CONVERSATIONS_MEMBER_QUERY = """
             status
             lastActivity
             unreadCount
+            botEnabled
             contact { %s }
             lastMessage { %s }
         }
@@ -102,6 +104,7 @@ CONVERSATIONS_COMPAT_QUERY = """
             status
             lastActivity
             unreadCount
+            botEnabled
             contact { %s }
             lastMessage { %s }
         }
@@ -115,6 +118,7 @@ CONVERSATION_QUERY = """
             status
             lastActivity
             unreadCount
+            botEnabled
             contact { %s }
             lastMessage { %s }
         }
@@ -128,6 +132,7 @@ CONVERSATION_MEMBER_QUERY = """
             status
             lastActivity
             unreadCount
+            botEnabled
             contact { %s }
             lastMessage { %s }
         }
@@ -141,6 +146,7 @@ CONVERSATION_COMPAT_QUERY = """
             status
             lastActivity
             unreadCount
+            botEnabled
             contact { %s }
             lastMessage { %s }
         }
@@ -344,6 +350,31 @@ class WhatsAppChatService:
         except Exception as exc:  # noqa: BLE001
             logger.error("Error sending media message: %s", exc)
             return {"success": False, "error": str(exc), "message": None}
+
+    async def set_conversation_bot_enabled(
+        self, conversation_id: int, enabled: bool
+    ) -> Dict[str, Any]:
+        """Enable/disable the WhatsApp bot for one conversation (robot button)."""
+        mutation = """
+            mutation SetBot($conversationId: Int!, $enabled: Boolean!) {
+                setConversationBotEnabled(conversationId: $conversationId, enabled: $enabled) {
+                    id
+                    botEnabled
+                }
+            }
+        """
+        try:
+            result = await self.client.execute(
+                mutation, {"conversationId": conversation_id, "enabled": enabled}
+            )
+            payload = (result or {}).get("setConversationBotEnabled") or {}
+            return {
+                "success": bool(payload),
+                "bot_enabled": bool(payload.get("botEnabled", enabled)),
+            }
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Error toggling conversation bot: %s", exc)
+            return {"success": False, "error": str(exc)}
 
     async def send_reaction(
         self,

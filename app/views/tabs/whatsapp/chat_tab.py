@@ -203,6 +203,7 @@ class ChatTab(QWidget):
         self.conversation_list.load_more_requested.connect(self._on_load_more)
         self.composer.send_requested.connect(self._on_send)
         self.composer.attachment_requested.connect(self._on_send_media)
+        self.composer.bot_toggle_requested.connect(self._on_bot_toggle)
         self.thread.retry_requested.connect(self._on_retry_media)
         self.thread.reaction_requested.connect(self._on_reaction_requested)
 
@@ -270,6 +271,7 @@ class ChatTab(QWidget):
         conv = self.conversation_list.get_conversation(conversation_id)
         if conv:
             self._update_header(conv)
+        self.composer.set_bot_enabled(conv.bot_enabled if conv else True)
         self.right_stack.setCurrentIndex(1)
         self.controller.load_messages(conversation_id)
 
@@ -300,6 +302,11 @@ class ChatTab(QWidget):
         if self._current_conversation_id is None:
             return
         self.controller.send_text(self._current_conversation_id, text)
+
+    def _on_bot_toggle(self, enabled: bool) -> None:
+        if self._current_conversation_id is None:
+            return
+        self.controller.set_conversation_bot_enabled(self._current_conversation_id, enabled)
 
     def _on_send_media(self, file_path: str, caption: str) -> None:
         if self._current_conversation_id is None:

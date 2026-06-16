@@ -218,6 +218,7 @@ class ChatConversation:
     last_message: Optional[ChatMessage] = None
     last_activity: Optional[datetime] = None
     unread_count: int = 0
+    bot_enabled: bool = True
 
     @property
     def display_name(self) -> str:
@@ -234,4 +235,5 @@ class ChatConversation:
             last_message=ChatMessage.from_dict(last_message) if last_message else None,
             last_activity=_parse_chat_timestamp(d.get("lastActivity")),
             unread_count=int(d.get("unreadCount") or 0),
+            bot_enabled=bool(d.get("botEnabled", True)),
         )
