@@ -104,3 +104,33 @@ def test_convert_wav_to_ogg_opus_uses_packaged_ffmpeg(monkeypatch, tmp_path):
     ]
     assert captured["kwargs"]["shell"] is False
     assert captured["kwargs"]["check"] is False
+
+
+def test_load_imageio_ffmpeg_installs_when_missing(monkeypatch):
+    fake_module = SimpleNamespace(get_ffmpeg_exe=lambda: "ffmpeg-bin")
+    import_calls = []
+    run_calls = []
+
+    def fake_import_module(name):
+        import_calls.append(name)
+        if len(import_calls) == 1:
+            raise ImportError("missing")
+        return fake_module
+
+    def fake_run(command, **kwargs):
+        run_calls.append((command, kwargs))
+        return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(voice_note_converter.importlib, "import_module", fake_import_module)
+    monkeypatch.setattr(voice_note_converter.subprocess, "run", fake_run)
+
+    assert voice_note_converter._load_imageio_ffmpeg() is fake_module
+    assert import_calls == ["imageio_ffmpeg", "imageio_ffmpeg"]
+    assert run_calls[0][0] == [
+        sys.executable,
+        "-m",
+        "pip",
+        "install",
+        "imageio-ffmpeg",
+    ]
+    assert run_calls[0][1]["shell"] is False

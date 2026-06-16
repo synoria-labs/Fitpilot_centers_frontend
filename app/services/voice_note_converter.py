@@ -1,13 +1,50 @@
 """Audio conversion helpers for WhatsApp voice notes."""
 from __future__ import annotations
 
+import importlib
 import subprocess
+import sys
 from pathlib import Path
 from typing import Optional
+
+from ..core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class VoiceNoteConversionError(RuntimeError):
     """Raised when a recorded audio file cannot be converted to OGG/Opus."""
+
+
+def _load_imageio_ffmpeg():
+    try:
+        return importlib.import_module("imageio_ffmpeg")
+    except ImportError:
+        logger.warning("imageio-ffmpeg is missing; attempting runtime install")
+
+    result = subprocess.run(
+        [sys.executable, "-m", "pip", "install", "imageio-ffmpeg"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=False,
+        shell=False,
+    )
+    if result.returncode != 0:
+        details = (result.stderr or result.stdout or "").strip()
+        raise VoiceNoteConversionError(
+            "Falta instalar imageio-ffmpeg en el entorno del frontend. "
+            "Ejecuta: python -m pip install -r requirements.txt"
+            + (f"\n\nDetalle: {details}" if details else "")
+        )
+
+    try:
+        return importlib.import_module("imageio_ffmpeg")
+    except ImportError as exc:
+        raise VoiceNoteConversionError(
+            "imageio-ffmpeg se instalo, pero Python no pudo importarlo. "
+            "Reinicia el frontend e intenta de nuevo."
+        ) from exc
 
 
 def convert_wav_to_ogg_opus(
@@ -22,13 +59,7 @@ def convert_wav_to_ogg_opus(
     output = Path(output_path) if output_path is not None else source.with_suffix(".ogg")
     output.parent.mkdir(parents=True, exist_ok=True)
 
-    try:
-        import imageio_ffmpeg
-    except ImportError as exc:
-        raise VoiceNoteConversionError(
-            "Falta instalar imageio-ffmpeg en el entorno del frontend. "
-            "Ejecuta: python -m pip install -r requirements.txt"
-        ) from exc
+    imageio_ffmpeg = _load_imageio_ffmpeg()
 
     command = [
         imageio_ffmpeg.get_ffmpeg_exe(),
