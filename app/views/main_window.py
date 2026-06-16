@@ -195,6 +195,8 @@ class MainWindow(QMainWindow):
             lambda checked: self.sidebar.set_collapsed(checked)
         )
         view_menu.addAction(collapse_action)
+        # Reflejar el estado colapsado persistido (restaurado por la sidebar) en el menú.
+        collapse_action.setChecked(self.sidebar.is_collapsed())
 
         # Menú Ayuda
         help_menu = menubar.addMenu("&Ayuda")

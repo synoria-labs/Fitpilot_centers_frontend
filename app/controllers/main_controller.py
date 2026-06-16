@@ -27,6 +27,7 @@ class MainWindowLike(Protocol):
     nav_changed: Any
     refresh_requested: Any
     content_stack: Any
+    sidebar: Any
 
     def show(self) -> None: ...
     def hide(self) -> None: ...
@@ -57,6 +58,10 @@ class MainController(QObject):
         self._active_workers: Dict[str, Any] = {}
         self._startup_restore_signals: Optional[QObject] = None
         self._app_ready_emitted = False
+
+        # Suscripción global de WhatsApp en tiempo real para el badge de "Chats".
+        self._chat_badge_controller: Optional[Any] = None
+        self._unread_chat_count: int = 0
 
         self.login_view: Optional[LoginViewLike] = None
         self.main_window: Optional[MainWindowLike] = None
@@ -217,6 +222,8 @@ class MainController(QObject):
             self.main_window.show()
             self.load_initial_tabs(user_data.get("role"))
 
+        self._start_chat_badge_watch()
+
     @Slot()
     def on_logout_success(self) -> None:
         """Maneja el logout exitoso."""
@@ -225,6 +232,7 @@ class MainController(QObject):
         self.tab_controllers.clear()
         self.loaded_tabs.clear()
         self.loading_tabs.clear()
+        self._stop_chat_badge_watch()
         self.show_login()
 
     def load_initial_tabs(self, user_role: Optional[str] = None) -> None:
@@ -370,9 +378,69 @@ class MainController(QObject):
     @Slot(str)
     def on_nav_changed(self, tab_id: str) -> None:
         """Maneja el cambio de sección desde la sidebar o el menú Configuración."""
+        # Al abrir Chats, marcar como leídos (resetear el badge).
+        if tab_id == "whatsapp_chat":
+            self._unread_chat_count = 0
+            self._update_chat_badge()
         if tab_id and tab_id not in self.loaded_tabs:
             logger.info("Section '%s' not loaded, loading now...", tab_id)
             self.load_tab_async(tab_id)
+
+    # ------------------------------------------------------------------
+    # Badge de mensajes de WhatsApp no leídos (suscripción global en tiempo real)
+    # ------------------------------------------------------------------
+    def _start_chat_badge_watch(self) -> None:
+        """Suscribe una conexión realtime global para contar mensajes entrantes no vistos.
+
+        Cuenta inbound que llegan mientras NO se está viendo la sección Chats, y se resetea al
+        abrirla. Es independiente de la suscripción del propio tab de Chats (cada controller
+        escucha solo su conexión, así que no hay doble conteo)."""
+        if self._chat_badge_controller is not None:
+            return
+        try:
+            from ..core.di import container
+            from .whatsapp_chat_controller import WhatsAppChatController
+
+            chat_service = container.get('whatsapp_chat_service')
+            if not chat_service:
+                return
+            controller = WhatsAppChatController(chat_service, self)
+            controller.new_message.connect(self._on_realtime_chat_message)
+            controller.start_realtime()
+            self._chat_badge_controller = controller
+            self._unread_chat_count = 0
+        except Exception as e:  # noqa: BLE001 - nunca romper el login por el badge
+            logger.warning("No se pudo iniciar el watcher de badge de chat: %s", e)
+
+    def _stop_chat_badge_watch(self) -> None:
+        if self._chat_badge_controller is not None:
+            try:
+                self._chat_badge_controller.stop_realtime()
+            except Exception:  # noqa: BLE001
+                pass
+            self._chat_badge_controller = None
+        self._unread_chat_count = 0
+        self._update_chat_badge()
+
+    def _on_realtime_chat_message(self, message: Any) -> None:
+        """Incrementa el badge si el mensaje es entrante y no se está viendo Chats."""
+        try:
+            if not getattr(message, "is_inbound", False):
+                return
+            active = getattr(self.main_window, "_active_tab_id", None) if self.main_window else None
+            if active == "whatsapp_chat":
+                return
+            self._unread_chat_count += 1
+            self._update_chat_badge()
+        except Exception as e:  # noqa: BLE001
+            logger.debug("Actualización de badge omitida: %s", e)
+
+    def _update_chat_badge(self) -> None:
+        if self.main_window is not None:
+            try:
+                self.main_window.sidebar.set_badge("whatsapp_chat", self._unread_chat_count)
+            except Exception as e:  # noqa: BLE001
+                logger.debug("No se pudo actualizar el badge: %s", e)
 
     def cleanup(self) -> None:
         """Limpia recursos antes de cerrar."""

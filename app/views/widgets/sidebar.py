@@ -1,27 +1,30 @@
 """Barra lateral de navegación moderna (estilo Discord/Slack/Teams/WhatsApp-Desktop).
 
-Reemplaza la navegación por pestañas. Reutiliza los tokens de diseño de la pantalla de Chat
-(`app/views/tabs/whatsapp/theme.py`) e iconos Material Design (`mdi6`) vía QtAwesome — sin
-dependencias nuevas. Pensada para escalar: soporta estado expandido/colapsado, tooltips, badges
-de notificación y (modelo listo) submenús futuros.
+Reemplaza la navegación por pestañas. Usa los **colores del sistema** (roles de `palette()`,
+igual que la pantalla de Chat y Notificaciones, de modo que se adapta al tema claro/oscuro del
+SO) y reserva el verde de marca (`theme.ACCENT`) solo para los acentos: el indicador de sección
+activa y los badges. Iconos Material Design (`mdi6`) vía QtAwesome — sin dependencias nuevas.
+
+Soporta: estado expandido/colapsado (animado y **persistido**), tooltips, badges de
+notificación, un **indicador activo deslizante**, y (modelo listo) submenús futuros.
 
 Contrato con el resto de la app:
 - `Sidebar.add_item(SidebarItem)` registra un ítem (conserva el concepto `tab_id`).
 - `Sidebar.item_selected = Signal(str)` emite el `tab_id` al seleccionar.
-- `set_active / set_enabled / set_badge / set_collapsed` permiten sincronizar desde el controller.
-- El footer expone `user_label`, `session_label` (clicable) y `logout_button` para que
-  `MainWindow` los pueble/conecte igual que hacía con el antiguo header.
+- `set_active / set_enabled / set_badge / set_collapsed / is_collapsed` para sincronizar.
+- El footer expone `user_label`, `session_label` (clicable) y `logout_button`.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 import qtawesome as qta
 from PySide6.QtCore import (
-    Qt, Signal, QSize, QPropertyAnimation, QParallelAnimationGroup, QEasingCurve,
+    Qt, Signal, QSize, QRect, QTimer, QSettings,
+    QPropertyAnimation, QParallelAnimationGroup, QEasingCurve,
 )
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QPalette
 from PySide6.QtWidgets import (
     QFrame, QWidget, QLabel, QHBoxLayout, QVBoxLayout, QScrollArea, QToolButton,
     QPushButton,
@@ -32,8 +35,7 @@ from ..tabs.whatsapp import theme
 EXPANDED_WIDTH = 240
 COLLAPSED_WIDTH = 64
 ICON_SIZE = 22
-_DISABLED_ICON = "#4A555C"
-_DISABLED_TEXT = "#5A656D"
+_SETTINGS_COLLAPSED_KEY = "sidebar/collapsed"
 
 
 @dataclass
@@ -113,12 +115,16 @@ class SidebarItemWidget(QFrame):
             self.icon_label.setText("•")
 
     def _refresh_visual(self) -> None:
+        # Colores del sistema (adaptables a tema claro/oscuro); verde de marca solo en activo.
         if not self.isEnabled():
-            icon_color, text_color = _DISABLED_ICON, _DISABLED_TEXT
+            icon_color = theme.secondary_text_hex(foreground_weight=0.40)
+            text_color = icon_color
         elif self._active:
-            icon_color, text_color = theme.ACCENT, theme.TEXT_PRIMARY
+            icon_color = theme.ACCENT
+            text_color = theme.ACCENT
         else:
-            icon_color, text_color = theme.TEXT_SECONDARY, theme.TEXT_PRIMARY
+            icon_color = theme.secondary_text_hex()
+            text_color = theme.palette_hex(QPalette.ColorRole.Text)
         self._apply_icon(icon_color)
         self.text_label.setStyleSheet(f"color: {text_color}; background: transparent;")
 
@@ -203,13 +209,18 @@ class Sidebar(QFrame):
         bl.addWidget(self.brand_text, 1)
         root.addWidget(self.brand)
 
-        # --- Ítems (scroll)
+        # --- Ítems (scroll) + indicador activo deslizante
         self.items_container = QWidget()
         self.items_container.setObjectName("sidebarItems")
         self.items_layout = QVBoxLayout(self.items_container)
         self.items_layout.setContentsMargins(8, 8, 8, 8)
         self.items_layout.setSpacing(4)
         self.items_layout.addStretch()
+
+        self.indicator = QFrame(self.items_container)
+        self.indicator.setObjectName("sidebarIndicator")
+        self.indicator.setFixedWidth(3)
+        self.indicator.hide()
 
         scroll = QScrollArea()
         scroll.setObjectName("sidebarScroll")
@@ -255,22 +266,33 @@ class Sidebar(QFrame):
         fl.addLayout(actions)
         root.addWidget(self.footer)
 
+        # Restaurar estado colapsado persistido (sin animación al arrancar).
+        try:
+            restored = bool(QSettings().value(_SETTINGS_COLLAPSED_KEY, False, type=bool))
+        except Exception:  # noqa: BLE001
+            restored = False
+        if restored:
+            self._apply_collapsed(True)
+
     # ------------------------------------------------------------------
     # API pública
     # ------------------------------------------------------------------
     def add_item(self, item: SidebarItem) -> SidebarItemWidget:
         widget = SidebarItemWidget(item, self)
         widget.clicked.connect(self._on_item_clicked)
+        if self._collapsed:
+            widget.set_collapsed(True)
         self._items[item.tab_id] = widget
         # insertar antes del stretch final
         self.items_layout.insertWidget(self.items_layout.count() - 1, widget)
         return widget
 
     def set_active(self, tab_id: Optional[str]) -> None:
-        """Marca el ítem activo sin emitir señal (para sincronizar desde el controller)."""
+        """Marca el ítem activo sin emitir señal y mueve el indicador deslizante."""
         self._active_tab_id = tab_id
         for tid, widget in self._items.items():
             widget.set_active(tid == tab_id)
+        self._move_indicator_to(self._items.get(tab_id) if tab_id else None, animate=True)
 
     def active_tab_id(self) -> Optional[str]:
         return self._active_tab_id
@@ -285,9 +307,21 @@ class Sidebar(QFrame):
         if widget is not None:
             widget.set_badge(count)
 
+    def is_collapsed(self) -> bool:
+        return self._collapsed
+
     def set_collapsed(self, collapsed: bool) -> None:
         if collapsed == self._collapsed:
             return
+        self._apply_collapsed(collapsed, animate=True)
+        try:
+            QSettings().setValue(_SETTINGS_COLLAPSED_KEY, collapsed)
+        except Exception:  # noqa: BLE001
+            pass
+        self.collapse_toggled.emit(collapsed)
+
+    # ------------------------------------------------------------------
+    def _apply_collapsed(self, collapsed: bool, animate: bool = False) -> None:
         self._collapsed = collapsed
         self.brand_text.setVisible(not collapsed)
         self.user_label.setVisible(not collapsed)
@@ -297,8 +331,12 @@ class Sidebar(QFrame):
             widget.set_collapsed(collapsed)
         self._set_collapse_icon()
 
-        start = self.width()
         end = COLLAPSED_WIDTH if collapsed else EXPANDED_WIDTH
+        if not animate:
+            self.setFixedWidth(end)
+            return
+
+        start = self.width()
         group = QParallelAnimationGroup(self)
         for prop in (b"minimumWidth", b"maximumWidth"):
             anim = QPropertyAnimation(self, prop, self)
@@ -310,9 +348,7 @@ class Sidebar(QFrame):
         group.finished.connect(lambda: self.setFixedWidth(end))
         self._collapse_anim = group  # referencia fuerte
         group.start()
-        self.collapse_toggled.emit(collapsed)
 
-    # ------------------------------------------------------------------
     def _on_item_clicked(self, tab_id: str) -> None:
         self.set_active(tab_id)
         self.item_selected.emit(tab_id)
@@ -320,20 +356,51 @@ class Sidebar(QFrame):
     def _set_collapse_icon(self) -> None:
         name = "mdi6.chevron-double-right" if self._collapsed else "mdi6.chevron-double-left"
         try:
-            self.collapse_button.setIcon(qta.icon(name, color=theme.TEXT_SECONDARY))
+            self.collapse_button.setIcon(qta.icon(name, color=theme.secondary_text_hex()))
         except Exception:  # noqa: BLE001
             self.collapse_button.setText(">" if self._collapsed else "<")
 
+    # ------------------------------------------------------------------
+    # Indicador activo deslizante (un único QFrame animado)
+    # ------------------------------------------------------------------
+    def _move_indicator_to(self, widget: Optional[QWidget], animate: bool = True) -> None:
+        if widget is None:
+            self.indicator.hide()
+            return
+        if widget.height() <= 1:
+            # El layout aún no calculó geometrías; reintentar tras el ciclo de eventos.
+            QTimer.singleShot(0, lambda: self._move_indicator_to(widget, animate=False))
+            return
+        target = QRect(2, widget.y() + 6, 3, max(widget.height() - 12, 8))
+        self.indicator.show()
+        self.indicator.raise_()
+        current = self.indicator.geometry()
+        if animate and current.height() > 0 and current != target:
+            anim = QPropertyAnimation(self.indicator, b"geometry", self)
+            anim.setDuration(160)
+            anim.setStartValue(current)
+            anim.setEndValue(target)
+            anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+            self._indicator_anim = anim  # referencia fuerte
+            anim.start()
+        else:
+            self.indicator.setGeometry(target)
+
+    def showEvent(self, event):  # noqa: N802 (Qt override)
+        super().showEvent(event)
+        if self._active_tab_id:
+            widget = self._items.get(self._active_tab_id)
+            QTimer.singleShot(0, lambda: self._move_indicator_to(widget, animate=False))
+
 
 def _style() -> str:
+    # Fondos = colores del sistema (palette), igual que Chat/Notificaciones. Verde de marca
+    # (theme.ACCENT) solo para el indicador activo y los badges.
     return f"""
-#sidebar {{
-    background-color: {theme.BG_APP};
-    border-right: 1px solid {theme.DIVIDER};
-}}
-#sidebarBrand {{ background-color: {theme.BG_APP}; }}
-#sidebarBrandText {{ color: {theme.TEXT_PRIMARY}; background: transparent; }}
-#sidebarItems {{ background-color: {theme.BG_APP}; }}
+#sidebar {{ background-color: palette(window); border-right: 1px solid palette(mid); }}
+#sidebarBrand {{ background-color: palette(window); }}
+#sidebarBrandText {{ color: palette(text); background: transparent; }}
+#sidebarItems {{ background-color: palette(window); }}
 #sidebarScroll {{ background: transparent; border: none; }}
 #sidebarItem {{
     background-color: transparent;
@@ -341,11 +408,9 @@ def _style() -> str:
     border-left: 3px solid transparent;
     border-radius: 8px;
 }}
-#sidebarItem:hover {{ background-color: {theme.ITEM_HOVER}; }}
-#sidebarItem[active="true"] {{
-    background-color: {theme.ITEM_SELECTED};
-    border-left: 3px solid {theme.ACCENT};
-}}
+#sidebarItem:hover {{ background-color: palette(alternate-base); }}
+#sidebarItem[active="true"] {{ background-color: palette(alternate-base); }}
+#sidebarIndicator {{ background-color: {theme.ACCENT}; border-radius: 1px; }}
 #sidebarBadge {{
     background-color: {theme.ACCENT};
     color: #0b141a;
@@ -356,21 +421,13 @@ def _style() -> str:
     font-size: 10px;
     font-weight: bold;
 }}
-#sidebarFooter {{
-    background-color: {theme.BG_PANEL};
-    border-top: 1px solid {theme.DIVIDER};
-}}
-#sidebarUser {{
-    color: {theme.TEXT_PRIMARY};
-    background: transparent;
-    font-size: 12px;
-    font-weight: 600;
-}}
-#sidebarSession {{ color: {theme.TEXT_SECONDARY}; background: transparent; font-size: 11px; }}
+#sidebarFooter {{ background-color: palette(window); border-top: 1px solid palette(mid); }}
+#sidebarUser {{ color: palette(text); background: transparent; font-size: 12px; font-weight: 600; }}
+#sidebarSession {{ color: palette(mid); background: transparent; font-size: 11px; }}
 #sidebarLogout {{
     background-color: transparent;
     color: #E57373;
-    border: 1px solid {theme.DIVIDER};
+    border: 1px solid palette(mid);
     border-radius: 8px;
     padding: 6px 10px;
     font-weight: 600;
@@ -382,5 +439,5 @@ def _style() -> str:
     border-radius: 6px;
     padding: 5px;
 }}
-#sidebarCollapse:hover {{ background-color: {theme.ITEM_HOVER}; }}
+#sidebarCollapse:hover {{ background-color: palette(alternate-base); }}
 """
