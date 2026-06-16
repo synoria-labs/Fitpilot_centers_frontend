@@ -8,6 +8,8 @@ and swallowed every error).
 """
 from __future__ import annotations
 
+import html
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -28,6 +30,29 @@ from ....services.media_loader import get_media_loader
 from . import theme
 
 logger = get_logger(__name__)
+
+
+def _render_whatsapp_markup(text: str) -> str:
+    """Render a small, safe subset of WhatsApp formatting for previews."""
+    escaped = html.escape(text or "")
+    code_blocks: list[str] = []
+
+    def stash_code(match: re.Match[str]) -> str:
+        code_blocks.append(match.group(1))
+        return f"\uE000CODE{len(code_blocks) - 1}\uE001"
+
+    rendered = re.sub(r"```(.+?)```", stash_code, escaped, flags=re.DOTALL)
+    rendered = re.sub(r"(?<!\*)\*([^*\n]+?)\*(?!\*)", r"<strong>\1</strong>", rendered)
+    rendered = re.sub(r"(?<!_)_([^_\n]+?)_(?!_)", r"<em>\1</em>", rendered)
+    rendered = re.sub(r"~([^~\n]+?)~", r"<s>\1</s>", rendered)
+
+    for index, code in enumerate(code_blocks):
+        rendered = rendered.replace(
+            f"\uE000CODE{index}\uE001",
+            f'<code style="font-family: Consolas, monospace;">{code}</code>',
+        )
+
+    return rendered.replace("\n", "<br>")
 
 
 class TemplatePreviewWidget(QWidget):
@@ -160,9 +185,10 @@ class TemplatePreviewWidget(QWidget):
         media_url: Optional[str] = None,
         media_name: Optional[str] = None,
     ) -> None:
-        self._body.setPlainText(body or "")
+        self._body.setHtml(_render_whatsapp_markup(body or ""))
         footer = (footer or "").strip()
-        self._footer.setText(footer)
+        self._footer.setTextFormat(Qt.TextFormat.RichText)
+        self._footer.setText(_render_whatsapp_markup(footer))
         self._footer.setVisible(bool(footer))
         self._update_body_height()
         self._render_media(media_format, media_url, media_name)
