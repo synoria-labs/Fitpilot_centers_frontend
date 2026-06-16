@@ -14,10 +14,13 @@ from PySide6.QtMultimedia import (
 )
 
 from ....core.config import Config
+from ....core.logging import get_logger
 from ....services.voice_note_converter import (
     VoiceNoteConversionError,
     convert_wav_to_ogg_opus,
 )
+
+logger = get_logger(__name__)
 
 
 class VoiceNoteRecorder(QObject):
@@ -53,7 +56,8 @@ class VoiceNoteRecorder(QObject):
         return state == QMediaRecorder.RecorderState.RecordingState
 
     def start(self) -> None:
-        if self.is_recording:
+        if self._recorder is not None:
+            logger.info("Voice note start ignored: recorder already active")
             return
 
         if not self.can_record():
@@ -64,6 +68,7 @@ class VoiceNoteRecorder(QObject):
         output_dir.mkdir(parents=True, exist_ok=True)
         self._recording_path = output_dir / f"voice_note_{uuid4().hex}.wav"
         self._pending_action = None
+        logger.info("Starting voice note recording: %s", self._recording_path)
 
         try:
             device = QMediaDevices.defaultAudioInput()
@@ -98,6 +103,7 @@ class VoiceNoteRecorder(QObject):
             self.error.emit("No hay una nota de voz grabandose.")
             return
         self._pending_action = "send"
+        logger.info("Finishing voice note recording: %s", self._recording_path)
         self._recorder.stop()
 
     def cancel(self) -> None:
@@ -106,6 +112,7 @@ class VoiceNoteRecorder(QObject):
             self.canceled.emit()
             return
         self._pending_action = "cancel"
+        logger.info("Canceling voice note recording: %s", self._recording_path)
         self._recorder.stop()
 
     def _on_duration_changed(self, duration_ms: int) -> None:
@@ -130,11 +137,13 @@ class VoiceNoteRecorder(QObject):
             if source is None or not source.exists() or source.stat().st_size <= 0:
                 raise VoiceNoteConversionError("La nota de voz esta vacia.")
             output = convert_wav_to_ogg_opus(source)
+            logger.info("Voice note converted: %s -> %s", source, output)
             self._delete_path(source)
             self._recording_path = None
             self.ready.emit(str(output))
         except VoiceNoteConversionError as exc:
             self._cleanup_recording()
+            logger.warning("Voice note conversion failed: %s", exc)
             self.error.emit(str(exc))
         finally:
             self._teardown()
@@ -142,6 +151,7 @@ class VoiceNoteRecorder(QObject):
     def _on_recorder_error(self, _error, error_string: str = "") -> None:
         self._cleanup_recording()
         self._teardown()
+        logger.warning("Voice note recorder error: %s", error_string)
         self.error.emit(error_string or "No se pudo grabar la nota de voz.")
 
     @staticmethod
