@@ -124,6 +124,7 @@ class WhatsAppChatController(BaseController):
         file_path: str,
         caption: Optional[str] = None,
         wa_id: Optional[str] = None,
+        voice_note: bool = False,
     ) -> None:
         self._execute_authenticated_operation(
             self._service,
@@ -134,6 +135,7 @@ class WhatsAppChatController(BaseController):
             wa_id=wa_id,
             file_path=file_path,
             caption=caption,
+            voice_note=voice_note,
         )
 
     def send_reaction(
