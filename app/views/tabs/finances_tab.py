@@ -52,10 +52,12 @@ class FinancesTab(QWidget):
         header_layout.addStretch()
 
         self.edit_btn = QPushButton("Editar Pago")
+        self.edit_btn.setObjectName("actionButton")
         self.edit_btn.setEnabled(False)
         header_layout.addWidget(self.edit_btn)
 
         self.delete_btn = QPushButton("Eliminar Pago")
+        self.delete_btn.setObjectName("dangerButton")
         self.delete_btn.setEnabled(False)
         header_layout.addWidget(self.delete_btn)
 

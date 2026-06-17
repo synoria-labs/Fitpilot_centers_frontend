@@ -81,10 +81,12 @@ class SessionsDialog(QDialog):
         button_layout.addStretch()
 
         refresh_btn = QPushButton("Actualizar")
+        refresh_btn.setObjectName("actionButton")
         refresh_btn.clicked.connect(self._load_sessions)
         button_layout.addWidget(refresh_btn)
 
         close_btn = QPushButton("Cerrar")
+        close_btn.setObjectName("actionButton")
         close_btn.clicked.connect(self.accept)
         button_layout.addWidget(close_btn)
 

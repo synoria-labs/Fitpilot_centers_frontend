@@ -121,9 +121,11 @@ class MembersTab(QWidget):
         toolbar_layout.addStretch()
 
         self.new_button = QPushButton("+ Nuevo Socio")
+        self.new_button.setObjectName("primaryButton")
         toolbar_layout.addWidget(self.new_button)
 
         self.renew_button = QPushButton("Renovar suscripcion")
+        self.renew_button.setObjectName("actionButton")
         self.renew_button.setEnabled(False)
         toolbar_layout.addWidget(self.renew_button)
 

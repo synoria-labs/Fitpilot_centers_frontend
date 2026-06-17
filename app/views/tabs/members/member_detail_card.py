@@ -311,6 +311,7 @@ class MemberDetailCard(QWidget):
         layout.addWidget(self.center_value)
 
         self.change_schedule_button = QPushButton("Cambiar clase")
+        self.change_schedule_button.setObjectName("actionButton")
         self.change_schedule_button.clicked.connect(self._on_reschedule_clicked)
         self.change_schedule_button.setEnabled(False)
         self.change_schedule_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -362,10 +363,12 @@ class MemberDetailCard(QWidget):
         buttons_layout.addStretch()
 
         self.cancel_button = QPushButton("Cancelar")
+        self.cancel_button.setObjectName("actionButton")
         self.cancel_button.clicked.connect(self._cancel_edit)
         buttons_layout.addWidget(self.cancel_button)
 
         self.save_button = QPushButton("Guardar")
+        self.save_button.setObjectName("primaryButton")
         self.save_button.clicked.connect(self._on_save_clicked)
         self.save_button.setEnabled(False)
         buttons_layout.addWidget(self.save_button)

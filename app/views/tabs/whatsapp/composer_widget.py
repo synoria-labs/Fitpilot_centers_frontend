@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import theme
+from ...input_glow import set_neon_glow
 from .attachment_preview_dialog import AttachmentPreviewDialog, FILE_DIALOG_FILTER
 from .emoji_picker import EmojiPicker
 from .voice_note_recorder import VoiceNoteRecorder
@@ -126,6 +127,9 @@ class ComposerWidget(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(_STYLE)
         self._emoji_picker = None  # lazily created, reused across openings
+        # Estado del halo neon de la pill (se activa en hover o focus del input).
+        self._pill_hover = False
+        self._pill_focus = False
         self._recording = False
         self._recording_paused = False
         self._voice_recorder = voice_recorder or VoiceNoteRecorder(self)
@@ -237,6 +241,9 @@ class ComposerWidget(QWidget):
         self.input.setPlaceholderText("Escribe un mensaje...")
         self.input.returnPressed.connect(self._emit)
         self.input.installEventFilter(self)
+        # Instalar el filtro de la pill solo despues de crear self.input, para que
+        # eventFilter nunca se ejecute antes de que existan sus atributos.
+        self.pill.installEventFilter(self)  # hover de la pill -> halo neon
         pill_layout.addWidget(self.input, 1)
 
         self.mic_button = QToolButton()
@@ -333,17 +340,32 @@ class ComposerWidget(QWidget):
     def eventFilter(self, obj, event) -> bool:
         # Mirror the text field's focus onto the pill so the whole pill shows the
         # focus ring (the QLineEdit itself is borderless inside the pill).
-        if obj is self.input:
+        if obj is getattr(self, "input", None):
             if event.type() == QEvent.Type.FocusIn:
+                self._pill_focus = True
                 self._set_pill_focused(True)
             elif event.type() == QEvent.Type.FocusOut:
+                self._pill_focus = False
                 self._set_pill_focused(False)
+        elif obj is getattr(self, "pill", None):
+            # Halo neon en hover de la pill (igual que el resto de inputs).
+            if event.type() == QEvent.Type.Enter:
+                self._pill_hover = True
+                self._update_pill_glow()
+            elif event.type() == QEvent.Type.Leave:
+                self._pill_hover = False
+                self._update_pill_glow()
         return super().eventFilter(obj, event)
 
     def _set_pill_focused(self, focused: bool) -> None:
         self.pill.setProperty("focused", focused)
         self.pill.style().unpolish(self.pill)
         self.pill.style().polish(self.pill)
+        self._update_pill_glow()
+
+    def _update_pill_glow(self) -> None:
+        active = (self._pill_hover or self._pill_focus) and self.input.isEnabled()
+        set_neon_glow(self.pill, active)
 
     # ------------------------------------------------------------------
     # Voice notes

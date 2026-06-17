@@ -24,6 +24,7 @@ def app_qss() -> str:
         (
             _selectable_item_states_qss(),
             _text_input_qss(),
+            _button_qss(),
             _dropdown_qss(),
             _table_qss(),
             _scrollbar_qss(),
@@ -100,6 +101,67 @@ QTextEdit:disabled,
 QPlainTextEdit:disabled,
 QAbstractSpinBox:disabled {{
     background-color: palette(window);
+    color: palette(mid);
+    border: 1px solid palette(mid);
+}}
+"""
+
+
+def _button_qss() -> str:
+    """Variantes de boton globales (object names sin prefijo).
+
+    Replican el lenguaje visual canonico de ``screen_qss`` para que cualquier
+    boton de la app pueda adoptarlo con solo ``setObjectName``.
+    """
+    danger = theme.DANGER
+    danger_hover = _rgba(theme.DANGER, 36)
+    return f"""
+QPushButton#primaryButton {{
+    background-color: {theme.ACCENT_STRONG};
+    color: #ffffff;
+    border: none;
+    border-radius: 7px;
+    padding: 8px 14px;
+    font-weight: 700;
+}}
+QPushButton#primaryButton:hover {{
+    background-color: {theme.ACCENT_STRONG_HOVER};
+}}
+QPushButton#primaryButton:pressed {{
+    background-color: {theme.ACCENT_STRONG_PRESSED};
+}}
+QPushButton#primaryButton:disabled {{
+    background-color: palette(mid);
+    color: palette(window);
+}}
+
+QPushButton#actionButton {{
+    background-color: transparent;
+    color: palette(text);
+    border: 1px solid palette(mid);
+    border-radius: 7px;
+    padding: 7px 12px;
+    font-weight: 600;
+}}
+QPushButton#actionButton:hover {{
+    background-color: palette(alternate-base);
+}}
+QPushButton#actionButton:disabled {{
+    color: palette(mid);
+}}
+
+QPushButton#dangerButton {{
+    background-color: transparent;
+    color: {danger};
+    border: 1px solid {danger};
+    border-radius: 7px;
+    padding: 7px 12px;
+    font-weight: 600;
+}}
+QPushButton#dangerButton:hover {{
+    background-color: {danger_hover};
+}}
+QPushButton#dangerButton:disabled {{
     color: palette(mid);
     border: 1px solid palette(mid);
 }}

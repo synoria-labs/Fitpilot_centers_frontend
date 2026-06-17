@@ -4,7 +4,7 @@ Controlador principal para coordinar toda la aplicacion.
 from importlib import import_module
 from typing import Any, Dict, Optional, Protocol, Set, cast, runtime_checkable
 
-from PySide6.QtCore import QObject, QThreadPool, Qt, Signal, Slot
+from PySide6.QtCore import QObject, QThreadPool, Qt, QTimer, Signal, Slot
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
 from ..core.logging import get_logger
@@ -57,6 +57,7 @@ class MainController(QObject):
 
         self._active_workers: Dict[str, Any] = {}
         self._startup_restore_signals: Optional[QObject] = None
+        self._startup_login_fallback: Optional[QTimer] = None
         self._app_ready_emitted = False
 
         # Suscripción global de WhatsApp en tiempo real para el badge de "Chats".
@@ -94,9 +95,16 @@ class MainController(QObject):
                 self._emit_app_ready()
                 return
 
+            # Si hay sesión recordada (token en keyring), restaurarla manteniendo el
+            # splash visible y SIN mostrar el login, para evitar el parpadeo. El login
+            # solo se muestra si no hay token, si el restore falla, o si vence el
+            # timeout de respaldo (ver _on_session_restore_* y el fallback timer).
+            if self.try_restore_session_async():
+                self._start_login_fallback_timer()
+                return
+
             self.show_login()
             self._emit_app_ready()
-            self.try_restore_session_async()
 
         except Exception as e:
             logger.exception(f"Startup error: {e}")
@@ -172,6 +180,7 @@ class MainController(QObject):
             from ..auth.persistent_storage import clear_refresh_token
 
             clear_refresh_token()
+            self._show_login_and_ready()
         except Exception as e:
             logger.error(f"Error handling restored session result: {e}")
             self.app_error.emit(str(e))
@@ -186,11 +195,43 @@ class MainController(QObject):
             clear_refresh_token()
         except Exception:
             logger.debug("No se pudo limpiar la sesion persistente tras error de refresh")
+        # El restore falló: mostrar el login y cerrar el splash.
+        self._show_login_and_ready()
 
     @Slot()
     def _clear_startup_restore_signals(self) -> None:
         """Libera la referencia fuerte al restore al finalizar."""
         self._startup_restore_signals = None
+
+    def _start_login_fallback_timer(self, delay_ms: int = 3000) -> None:
+        """Respaldo: si el restore de sesión tarda demasiado, muestra el login para
+        no dejar el splash colgado (el refresh GraphQL puede tardar hasta 30s)."""
+        self._cancel_login_fallback_timer()
+        timer = QTimer(self)
+        timer.setSingleShot(True)
+        timer.setInterval(delay_ms)
+        timer.timeout.connect(self._on_startup_login_fallback)
+        self._startup_login_fallback = timer
+        timer.start()
+
+    def _cancel_login_fallback_timer(self) -> None:
+        if self._startup_login_fallback is not None:
+            self._startup_login_fallback.stop()
+            self._startup_login_fallback.deleteLater()
+            self._startup_login_fallback = None
+
+    @Slot()
+    def _on_startup_login_fallback(self) -> None:
+        """El restore tardó más que el timeout: caer al login (si el restore
+        completa después, on_login_success pasará a la ventana principal)."""
+        logger.info("Session restore is slow; showing login as fallback")
+        self._show_login_and_ready()
+
+    def _show_login_and_ready(self) -> None:
+        """Muestra el login y cierra el splash (app_ready es idempotente)."""
+        self._cancel_login_fallback_timer()
+        self.show_login()
+        self._emit_app_ready()
 
     def show_login(self) -> None:
         """Muestra la pantalla de login."""
@@ -213,6 +254,7 @@ class MainController(QObject):
         """Maneja el login exitoso."""
         logger.info("User logged in: %s", user_data.get("username"))
         self.current_user = user_data
+        self._cancel_login_fallback_timer()
 
         if self.login_view:
             self.login_view.hide()
@@ -223,6 +265,9 @@ class MainController(QObject):
             self.load_initial_tabs(user_data.get("role"))
 
         self._start_chat_badge_watch()
+        # Asegura cerrar el splash si el login vino del restore de sesión
+        # (en ese camino app_ready no se emitió en start()). Idempotente.
+        self._emit_app_ready()
 
     @Slot()
     def on_logout_success(self) -> None:

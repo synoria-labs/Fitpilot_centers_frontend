@@ -142,9 +142,11 @@ class DashboardTab(QWidget):
         header_layout.addWidget(self.period_combo)
 
         self.refresh_btn = QPushButton("🔄 Actualizar")
+        self.refresh_btn.setObjectName("actionButton")
         header_layout.addWidget(self.refresh_btn)
 
         self.export_btn = QPushButton("📥 Exportar")
+        self.export_btn.setObjectName("actionButton")
         header_layout.addWidget(self.export_btn)
 
         layout.addLayout(header_layout)

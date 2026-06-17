@@ -29,6 +29,7 @@ from app.core import container
 from app.views.login_view import LoginView
 from app.views.main_window import MainWindow
 from app.views.app_styles import app_qss
+from app.views.input_glow import install_neon_input_glow
 from app.views.tabs.whatsapp import theme
 from app.views.widgets.brand_logo import logo_pixmap
 from app.controllers.main_controller import MainController
@@ -168,6 +169,10 @@ class FitPilotApp:
             if self.app is None:
                 raise RuntimeError("QApplication is not initialized")
             self.app.setStyleSheet(app_qss())
+
+            # Glow neon en hover/focus de los inputs de texto (app-wide).
+            # Guardar la referencia para que el GC no recoja el event filter.
+            self._neon_glow = install_neon_input_glow(self.app)
 
             # Usar el estilo por defecto del sistema (no forzar Fusion)
             # PySide6 automÃ¡ticamente detectarÃ¡ el mejor estilo para cada plataforma

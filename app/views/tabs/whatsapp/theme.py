@@ -22,6 +22,9 @@ ACCENT = "#67b6df"
 ACCENT_STRONG = "#2E86C1"
 ACCENT_STRONG_HOVER = "#3A93D0"
 ACCENT_STRONG_PRESSED = "#256FA0"
+# Soft red for destructive/danger actions (delete, logout). Same tone as the
+# sidebar logout button.
+DANGER = "#E57373"
 # Deep brand navy (logo) and dark splash background, for brand surfaces.
 BRAND_NAVY = "#182f50"
 SPLASH_BG = "#121212"

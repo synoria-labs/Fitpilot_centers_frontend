@@ -146,10 +146,12 @@ class SubscriptionsTab(QWidget):
         toolbar_layout.addStretch()
 
         self.new_button = QPushButton("+ Nueva Suscripción")
+        self.new_button.setObjectName("primaryButton")
         self.new_button.clicked.connect(self.on_new_subscription_clicked)
         toolbar_layout.addWidget(self.new_button)
 
         self.renew_button = QPushButton("Renovar Suscripción")
+        self.renew_button.setObjectName("actionButton")
         self.renew_button.clicked.connect(self.on_renew_clicked)
         self.renew_button.setEnabled(False)
         toolbar_layout.addWidget(self.renew_button)

@@ -25,6 +25,7 @@ import qtawesome as qta
 from ..core import get_logger
 from .tabs.whatsapp import theme
 from .widgets.brand_logo import logo_pixmap
+from .widgets.qr_mock import render_qr_mock
 
 logger = get_logger(__name__)
 
@@ -302,43 +303,48 @@ class LoginView(QWidget):
         page = QWidget()
         lay = QVBoxLayout(page)
         lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(12)
+        lay.setSpacing(10)
         lay.addStretch()
 
-        box = QFrame()
-        box.setObjectName("qrBox")
-        box.setFixedSize(210, 210)
-        box_lay = QVBoxLayout(box)
-        box_lay.setContentsMargins(16, 16, 16, 16)
-        box_lay.setSpacing(8)
-        box_lay.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
+        # El propio QR (tarjeta blanca) es la "caja": se renderiza como pixmap.
         self._qr_image = QLabel()
+        self._qr_image.setObjectName("qrImage")
         self._qr_image.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._qr_image.setPixmap(
-            qta.icon("mdi6.qrcode-scan", color=theme.TEXT_SECONDARY).pixmap(QSize(96, 96))
-        )
-        box_lay.addWidget(self._qr_image)
-
-        self._qr_status = QLabel("Próximamente")
-        self._qr_status.setObjectName("qrTitle")
-        self._qr_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        box_lay.addWidget(self._qr_status)
-
+        self._qr_image.setPixmap(self._render_qr())
         row = QHBoxLayout()
         row.addStretch()
-        row.addWidget(box)
+        row.addWidget(self._qr_image)
         row.addStretch()
         lay.addLayout(row)
 
-        hint = QLabel("Escanea el código con la app de FitPilot\npara iniciar sesión sin contraseña.")
+        lay.addSpacing(6)
+
+        self._qr_status = QLabel("Escanea el código para iniciar sesión")
+        self._qr_status.setObjectName("qrTitle")
+        self._qr_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._qr_status.setWordWrap(True)
+        lay.addWidget(self._qr_status)
+
+        hint = QLabel(
+            "Desde tu teléfono, abre la cámara o el escáner de QR para escanear este código."
+        )
         hint.setObjectName("qrHint")
         hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         hint.setWordWrap(True)
         lay.addWidget(hint)
 
+        lay.addSpacing(2)
+        preview = QLabel("VISTA PREVIA")
+        preview.setObjectName("qrPreview")
+        preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lay.addWidget(preview)
+
         lay.addStretch()
         return page
+
+    def _render_qr(self):
+        """Pixmap del QR de maqueta (decorativo) a la resolución de pantalla."""
+        return render_qr_mock(188, self._device_pixel_ratio())
 
     # --------------------------------------------------------------- Estilos
     def setup_styles(self) -> None:
@@ -439,9 +445,9 @@ class LoginView(QWidget):
         }}
 
         /* ----- QR ----- */
-        #qrBox {{ background-color: {theme.INPUT_BG}; border: 2px dashed #3a4a54; border-radius: 16px; }}
-        #qrTitle {{ color: {theme.TEXT_PRIMARY}; font-size: 15px; font-weight: 700; }}
+        #qrTitle {{ color: {theme.TEXT_PRIMARY}; font-size: 16px; font-weight: 700; }}
         #qrHint {{ color: {theme.TEXT_SECONDARY}; font-size: 12px; }}
+        #qrPreview {{ color: {theme.TEXT_SECONDARY}; font-size: 10px; font-weight: 600; letter-spacing: 1.5px; }}
 
         /* ----- Botones de ventana ----- */
         #winBtn, #winClose {{ background: transparent; border: none; border-radius: 8px; }}
@@ -561,10 +567,8 @@ class LoginView(QWidget):
         self.show_qr_pending()
 
     def show_qr_pending(self) -> None:
-        self._qr_image.setPixmap(
-            qta.icon("mdi6.qrcode-scan", color=theme.TEXT_SECONDARY).pixmap(QSize(96, 96))
-        )
-        self._qr_status.setText("Próximamente")
+        self._qr_image.setPixmap(self._render_qr())
+        self._qr_status.setText("Escanea el código para iniciar sesión")
 
     def show_qr_expired(self) -> None:
         self._qr_image.setPixmap(
@@ -576,7 +580,7 @@ class LoginView(QWidget):
         """Coloca un QR real (cuando exista backend)."""
         if pixmap is not None:
             self._qr_image.setPixmap(pixmap)
-            self._qr_status.setText("Escanea para entrar")
+            self._qr_status.setText("Escanea el código para iniciar sesión")
 
     # ----------------------------------------------- Ventana frameless
     def _device_pixel_ratio(self) -> float:

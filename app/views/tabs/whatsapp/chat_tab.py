@@ -28,6 +28,12 @@ from .composer_widget import ComposerWidget
 
 logger = get_logger(__name__)
 
+# Client-side membership filters keep few rows from each server page, so a short
+# filtered list may not produce a scrollbar (which is what normally triggers the
+# next page). Auto-fill pulls pages until we have enough visible rows or run out.
+_MIN_VISIBLE_TARGET = 15
+_MAX_AUTOFILL_PAGES = 25
+
 
 def _style() -> str:
     return f"""
@@ -86,6 +92,7 @@ class ChatTab(QWidget):
         self._has_more: bool = True
         self._loading: bool = False
         self._current_search: Optional[str] = None
+        self._autofill_pages: int = 0
 
         self._build_ui()
         self._connect_signals()
@@ -204,6 +211,7 @@ class ChatTab(QWidget):
         self.conversation_list.conversation_selected.connect(self._on_conversation_selected)
         self.conversation_list.search_changed.connect(self._on_search)
         self.conversation_list.load_more_requested.connect(self._on_load_more)
+        self.conversation_list.filter_changed.connect(self._on_filter_changed)
         self.composer.send_requested.connect(self._on_send)
         self.composer.attachment_requested.connect(self._on_send_media)
         self.composer.voice_note_requested.connect(self._on_send_voice_note)
@@ -255,9 +263,30 @@ class ChatTab(QWidget):
         self._has_more = has_more
         if reset:
             self.conversation_list.reset_conversations(conversations)
+            self._autofill_pages = 0
         else:
             self.conversation_list.append_conversations(conversations)
         self._refresh_open_header()
+        self._maybe_autofill()
+
+    def _on_filter_changed(self, _key: str) -> None:
+        # The widget already applied the proxy filter; (re)start auto-fill so a sparse
+        # filtered result still pulls enough rows to be usable.
+        self._autofill_pages = 0
+        self._maybe_autofill()
+
+    def _maybe_autofill(self) -> None:
+        """Pull another page while a filter leaves the visible list too short."""
+        if not self.conversation_list.is_filtered():
+            return
+        if self._loading or not self._has_more:
+            return
+        if self.conversation_list.visible_count() >= _MIN_VISIBLE_TARGET:
+            return
+        if self._autofill_pages >= _MAX_AUTOFILL_PAGES:
+            return
+        self._autofill_pages += 1
+        self._on_load_more()
 
     def _on_single_conversation_loaded(self, conversation: ChatConversation) -> None:
         self.conversation_list.upsert_conversation(conversation)

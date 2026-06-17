@@ -45,15 +45,18 @@ class MembershipsTab(QWidget):
         
         # Botones de acción
         self.new_btn = QPushButton("+ Nueva Membresía")
+        self.new_btn.setObjectName("primaryButton")
         self.new_btn.clicked.connect(self.on_new_clicked)
         header_layout.addWidget(self.new_btn)
-        
+
         self.edit_btn = QPushButton("Editar")
+        self.edit_btn.setObjectName("actionButton")
         self.edit_btn.setEnabled(False)
         self.edit_btn.clicked.connect(self.on_edit_clicked)
         header_layout.addWidget(self.edit_btn)
-        
+
         self.delete_btn = QPushButton("Eliminar")
+        self.delete_btn.setObjectName("dangerButton")
         self.delete_btn.setEnabled(False)
         self.delete_btn.clicked.connect(self.on_delete_clicked)
         header_layout.addWidget(self.delete_btn)

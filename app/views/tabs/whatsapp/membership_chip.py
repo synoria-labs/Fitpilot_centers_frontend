@@ -19,6 +19,26 @@ def _status_key(membership: Optional[ChatMembershipSnapshot]) -> str:
     return (membership.status if membership else "").strip().lower()
 
 
+def membership_status_category(membership: Optional[ChatMembershipSnapshot]) -> str:
+    """Normalize a membership snapshot to a single filter category.
+
+    Returns one of: 'active', 'expired', 'pending', 'canceled', 'none'.
+    'none' covers a missing membership (no linked member) or an unrecognized status.
+    """
+    status = _status_key(membership)
+    if not status:
+        return "none"
+    if "active" in status or "activo" in status:
+        return "active"
+    if "expired" in status or "vencido" in status or "vencida" in status:
+        return "expired"
+    if "pending" in status or "pendiente" in status:
+        return "pending"
+    if "canceled" in status or "cancel" in status:
+        return "canceled"
+    return "none"
+
+
 def membership_chip_text(membership: Optional[ChatMembershipSnapshot]) -> str:
     status = _status_key(membership)
     if not status:

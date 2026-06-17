@@ -10,10 +10,12 @@ import qtawesome as qta
 from PySide6.QtCore import Qt, Signal, QTimer, QSize, QModelIndex
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
+    QButtonGroup,
     QLabel,
     QHBoxLayout,
     QLineEdit,
     QListView,
+    QPushButton,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -22,6 +24,7 @@ from PySide6.QtWidgets import (
 from ....models.chat import ChatConversation, ChatMessage
 from . import theme
 from .conversation_list_model import CONVERSATION_ROLE, ConversationListModel
+from .conversation_filter_proxy import ConversationFilterProxy
 from .conversation_item_delegate import ConversationItemDelegate
 
 # How close to the bottom (px) before requesting the next page.
@@ -73,6 +76,14 @@ def _style() -> str:
     color: palette(text);
     background-color: transparent;
 }}
+#convChip:hover {{
+    background-color: palette(alternate-base);
+}}
+#convChip:checked {{
+    color: palette(text);
+    background-color: palette(alternate-base);
+    border-color: palette(mid);
+}}
 #convChipActive {{
     color: palette(text);
     background-color: palette(alternate-base);
@@ -98,9 +109,22 @@ def _make_icon_button(icon_name: str, tooltip: str) -> QToolButton:
     return button
 
 
-def _make_chip(label: str, active: bool = False) -> QLabel:
+def _make_chip(label: str, active: bool = False) -> QPushButton:
+    """A clickable, checkable filter chip (single-select via a QButtonGroup)."""
+    chip = QPushButton(label)
+    chip.setObjectName("convChip")
+    chip.setCheckable(True)
+    chip.setChecked(active)
+    chip.setCursor(Qt.CursorShape.PointingHandCursor)
+    chip.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+    chip.setFixedHeight(30)
+    return chip
+
+
+def _make_static_chip(label: str) -> QLabel:
+    """A purely decorative chip (no behavior yet), kept for visual parity."""
     chip = QLabel(label)
-    chip.setObjectName("convChipActive" if active else "convChip")
+    chip.setObjectName("convChip")
     chip.setAlignment(Qt.AlignmentFlag.AlignCenter)
     chip.setFixedHeight(30)
     return chip
@@ -110,6 +134,7 @@ class ConversationListWidget(QWidget):
     conversation_selected = Signal(int)
     search_changed = Signal(str)
     load_more_requested = Signal()
+    filter_changed = Signal(str)  # "all" | "active" | "expired" | "none"
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -154,20 +179,37 @@ class ConversationListWidget(QWidget):
         filter_layout = QHBoxLayout(filters)
         filter_layout.setContentsMargins(20, 0, 20, 10)
         filter_layout.setSpacing(8)
-        for label, active in (
-            ("Todos", True),
-            ("No leidos", False),
-            ("Favoritos", False),
-            ("Grupos", False),
-            ("Etiquetas", False),
+
+        # Functional membership filters are single-select via an exclusive group;
+        # "No leidos" and "Etiquetas" stay decorative (no behavior yet).
+        self._filter_buttons: dict[str, QPushButton] = {}
+        self._filter_group = QButtonGroup(self)
+        self._filter_group.setExclusive(True)
+        # (label, filter_key | None for static, default_active)
+        for label, key, active in (
+            ("Todos", "all", True),
+            ("No leidos", None, False),
+            ("Activos", "active", False),
+            ("Vencidas", "expired", False),
+            ("No es socio", "none", False),
+            ("Etiquetas", None, False),
         ):
-            filter_layout.addWidget(_make_chip(label, active))
+            if key is None:
+                filter_layout.addWidget(_make_static_chip(label))
+                continue
+            chip = _make_chip(label, active)
+            self._filter_buttons[key] = chip
+            self._filter_group.addButton(chip)
+            chip.clicked.connect(lambda _checked, k=key: self._on_filter_clicked(k))
+            filter_layout.addWidget(chip)
         filter_layout.addStretch()
         layout.addWidget(filters)
 
         self._model = ConversationListModel(self)
+        self._proxy = ConversationFilterProxy(self)
+        self._proxy.setSourceModel(self._model)
         self.list_view = QListView()
-        self.list_view.setModel(self._model)
+        self.list_view.setModel(self._proxy)
         self.list_view.setItemDelegate(ConversationItemDelegate(self.list_view))
         self.list_view.setVerticalScrollMode(QListView.ScrollMode.ScrollPerPixel)
         self.list_view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -191,6 +233,15 @@ class ConversationListWidget(QWidget):
     # ------------------------------------------------------------------
     def current_search(self) -> str:
         return self._search_text
+
+    def current_filter(self) -> str:
+        return self._proxy.filter_key()
+
+    def is_filtered(self) -> bool:
+        return self._proxy.filter_key() != "all"
+
+    def visible_count(self) -> int:
+        return self._proxy.rowCount()
 
     def reset_conversations(self, conversations: List[ChatConversation]) -> None:
         """Replace the whole list (first page / new search), preserving selection."""
@@ -233,10 +284,17 @@ class ConversationListWidget(QWidget):
     # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------
+    def _on_filter_clicked(self, key: str) -> None:
+        self._proxy.set_filter_key(key)
+        self.filter_changed.emit(key)
+
     def _select_conversation(self, conversation_id: int) -> None:
         row = self._model.index_of(conversation_id)
-        if row is not None:
-            self.list_view.setCurrentIndex(self._model.index(row))
+        if row is None:
+            return
+        proxy_index = self._proxy.mapFromSource(self._model.index(row))
+        if proxy_index.isValid():  # may be filtered out of the current view
+            self.list_view.setCurrentIndex(proxy_index)
 
     def _on_item_clicked(self, index: QModelIndex) -> None:
         if not index.isValid():

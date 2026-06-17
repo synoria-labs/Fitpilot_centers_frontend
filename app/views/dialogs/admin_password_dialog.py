@@ -41,11 +41,12 @@ class AdminPasswordDialog(QDialog):
         )
         confirm_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
         confirm_button.setText("Eliminar")
+        confirm_button.setObjectName("dangerButton")
         confirm_button.setDefault(True)
-        confirm_button.setStyleSheet(
-            "QPushButton {background-color: #d32f2f; color: white; padding: 6px 16px; border-radius: 6px;}"
-            "QPushButton:hover {background-color: #b71c1c;}"
-        )
+
+        cancel_button = buttons.button(QDialogButtonBox.StandardButton.Cancel)
+        if cancel_button is not None:
+            cancel_button.setObjectName("actionButton")
 
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
