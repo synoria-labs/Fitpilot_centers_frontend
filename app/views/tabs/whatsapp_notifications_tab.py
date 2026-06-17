@@ -25,7 +25,7 @@ from ...core import container, get_logger
 from ...controllers.whatsapp_notifications_controller import WhatsAppNotificationsController
 from ...utils.dialog_helpers import show_error, show_info
 from .whatsapp import theme
-from .whatsapp.screen_style import screen_qss
+from ..screen_style import screen_qss
 from .whatsapp.template_preview_widget import TemplatePreviewWidget
 
 logger = get_logger(__name__)

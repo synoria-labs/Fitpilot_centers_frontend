@@ -33,9 +33,12 @@ class MessageThreadWidget(QScrollArea):
         self._layout.addStretch()  # index 0: keeps bubbles stacked from the top
 
         self.setWidget(self._container)
+        # Show the conversation pane's painted background through the scroll area:
+        # transparent frame + container, and a non-autofilled viewport.
+        self.viewport().setAutoFillBackground(False)
         self.setStyleSheet(
-            "#threadScroll { border: none; background-color: palette(window); }"
-            " #threadContainer { background-color: palette(window); }"
+            "#threadScroll { border: none; background: transparent; }"
+            " #threadContainer { background: transparent; }"
         )
 
         self._seen_ids: Set[int] = set()

@@ -13,7 +13,19 @@ BUBBLE_IN = "#202C33"
 BUBBLE_OUT = "#005C4B"
 TEXT_PRIMARY = "#E9EDEF"
 TEXT_SECONDARY = "#8696A0"
-ACCENT = "#00A884"
+
+# Brand accent (FitPilot blue, from the logo). Used for highlights, focus rings,
+# active indicators, icons and badges that paint dark text on top.
+ACCENT = "#67b6df"
+# Stronger blue for *fills behind white text/icons* (the light ACCENT fails WCAG
+# contrast against white). Use these for primary buttons.
+ACCENT_STRONG = "#2E86C1"
+ACCENT_STRONG_HOVER = "#3A93D0"
+ACCENT_STRONG_PRESSED = "#256FA0"
+# Deep brand navy (logo) and dark splash background, for brand surfaces.
+BRAND_NAVY = "#182f50"
+SPLASH_BG = "#121212"
+
 INPUT_BG = "#2A3942"
 DIVIDER = "#222D34"
 

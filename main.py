@@ -20,15 +20,17 @@ if sys.platform.startswith('win'):
 sys.path.insert(0, str(Path(__file__).parent))
 
 from PySide6.QtWidgets import QApplication, QSplashScreen, QMessageBox
-from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QPixmap, QColor, QIcon
+from PySide6.QtCore import Qt, QSize, QRectF, QTimer, QPropertyAnimation
+from PySide6.QtGui import QPixmap, QColor, QIcon, QPainter, QFont, QPen
 
 from app.core import Config
 from app.core import get_logger
 from app.core import container
 from app.views.login_view import LoginView
 from app.views.main_window import MainWindow
-from app.views.selectable_styles import selectable_item_states_qss
+from app.views.app_styles import app_qss
+from app.views.tabs.whatsapp import theme
+from app.views.widgets.brand_logo import logo_pixmap
 from app.controllers.main_controller import MainController
 from app.auth.session_store import SessionStore
 from app.graphql.client import GraphQLClient
@@ -46,6 +48,12 @@ class FitPilotApp:
         self.main_controller: Optional[MainController] = None
         self.login_view: Optional[LoginView] = None
         self.main_window: Optional[MainWindow] = None
+        # Estado del splash animado
+        self._splash_timer: Optional[QTimer] = None
+        self._splash_fade: Optional[QPropertyAnimation] = None
+        self._splash_base: Optional[QPixmap] = None
+        self._splash_angle: int = 0
+        self._splash_dpr: float = 1.0
     
     def initialize_services(self):
         """Inicializa los servicios de la aplicación."""
@@ -129,23 +137,21 @@ class FitPilotApp:
 
             app_icon = QIcon()
             icon_loaded = False
+            # Icono multi-resolución (16→256px) con el tile degradado de marca.
+            icon_path = Path(__file__).parent / "app" / "assets" / "icons" / "fitpilot.ico"
             favicon_path = Path(__file__).parent / "app" / "assets" / "icons" / "favicon.ico"
-            logo_path = Path(__file__).parent / "app" / "assets" / "FitPilot-Logo.svg"
 
-            if favicon_path.exists():
+            if icon_path.exists():
+                app_icon = QIcon(str(icon_path))
+                icon_loaded = not app_icon.isNull()
+
+            if not icon_loaded and favicon_path.exists():
+                app_icon = QIcon()
                 app_icon.addFile(str(favicon_path), QSize(16, 16))
                 icon_loaded = True
-            else:
-                logger.warning("Favicon icon not found at %s", favicon_path)
 
-            if logo_path.exists():
-                app_icon.addFile(str(logo_path), QSize(32, 32))
-                app_icon.addFile(str(logo_path), QSize(64, 64))
-                app_icon.addFile(str(logo_path), QSize(128, 128))
-                app_icon.addFile(str(logo_path), QSize(256, 256))
-                icon_loaded = True
-            else:
-                logger.warning("App logo not found at %s", logo_path)
+            if not icon_loaded:
+                logger.warning("App icon not found at %s", icon_path)
 
             if icon_loaded:
                 self.app_icon = app_icon
@@ -161,37 +167,137 @@ class FitPilotApp:
             """Configura el tema de la aplicación para usar el diseño por defecto del sistema."""
             if self.app is None:
                 raise RuntimeError("QApplication is not initialized")
-            self.app.setStyleSheet(selectable_item_states_qss())
+            self.app.setStyleSheet(app_qss())
 
             # Usar el estilo por defecto del sistema (no forzar Fusion)
             # PySide6 automÃ¡ticamente detectarÃ¡ el mejor estilo para cada plataforma
         
+    # Dimensiones lógicas del splash
+    _SPLASH_W = 460
+    _SPLASH_H = 320
+
     def show_splash(self) -> None:
-            """Muestra la pantalla de splash."""
+            """Muestra un splash oscuro con logo, nombre y spinner animado."""
             if self.app is None:
                 raise RuntimeError("QApplication is not initialized")
 
-            # Crear splash screen simple (sin imagen por ahora)
+            screen = self.app.primaryScreen()
+            self._splash_dpr = screen.devicePixelRatio() if screen else 1.0
+
             self.splash = QSplashScreen()
             if self.app_icon:
                 self.splash.setWindowIcon(self.app_icon)
-            self.splash.setWindowFlags(Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.FramelessWindowHint)
-            
-            # Usar un QPixmap vací­o con color de fondo
-            pixmap = QPixmap(400, 300)
-            pixmap.fill(QColor(44, 62, 80))  # Color de fondo
-            self.splash.setPixmap(pixmap)
-            
-            # Mostrar mensajes
-            self.splash.showMessage(
-                "FitPilot\nSistema de Gestión para Gimnasios\n\nCargando...",
-                Qt.AlignmentFlag.AlignCenter,
-                Qt.GlobalColor.white
+            self.splash.setWindowFlags(
+                Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.FramelessWindowHint
             )
+
+            # Capa base (fondo + logo + texto), reusada en cada frame del spinner
+            self._splash_base = self._render_splash_base()
+            self._splash_angle = 0
+            self.splash.setPixmap(self._compose_splash(0))
+
+            # Fade-in
+            self.splash.setWindowOpacity(0.0)
             self.splash.show()
-            
+            self._splash_fade = QPropertyAnimation(self.splash, b"windowOpacity", self.splash)
+            self._splash_fade.setDuration(300)
+            self._splash_fade.setStartValue(0.0)
+            self._splash_fade.setEndValue(1.0)
+            self._splash_fade.start()
+
+            # Spinner: re-pinta el arco cada 60ms
+            self._splash_timer = QTimer(self.splash)
+            self._splash_timer.setInterval(60)
+            self._splash_timer.timeout.connect(self._tick_splash)
+            self._splash_timer.start()
+
             # Procesar eventos para que se muestre
             self.app.processEvents()
+
+    def _render_splash_base(self) -> QPixmap:
+            """Pixmap base del splash (fondo oscuro + chip con logo + textos)."""
+            dpr = self._splash_dpr
+            w, h = self._SPLASH_W, self._SPLASH_H
+            pm = QPixmap(int(w * dpr), int(h * dpr))
+            pm.setDevicePixelRatio(dpr)
+            pm.fill(QColor(theme.SPLASH_BG))
+
+            p = QPainter(pm)
+            p.setRenderHint(QPainter.RenderHint.Antialiasing)
+            p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+
+            # Chip blanco con el logo (el navy del logo no se vería sobre el fondo)
+            logo = logo_pixmap(78, dpr)
+            chip_y = 56
+            if logo is not None and not logo.isNull():
+                lw = logo.width() / dpr
+                lh = logo.height() / dpr
+                pad = 16
+                chip_w = lw + pad * 2
+                chip_h = lh + pad * 2
+                chip_x = (w - chip_w) / 2
+                p.setPen(Qt.PenStyle.NoPen)
+                p.setBrush(QColor("#ffffff"))
+                p.drawRoundedRect(QRectF(chip_x, chip_y, chip_w, chip_h), 18, 18)
+                p.drawPixmap(int(chip_x + pad), int(chip_y + pad), logo)
+                text_top = chip_y + chip_h + 22
+            else:
+                text_top = chip_y + 20
+
+            # Nombre de la app
+            p.setPen(QColor(theme.TEXT_PRIMARY))
+            title_font = QFont("Segoe UI", 20, QFont.Weight.Bold)
+            p.setFont(title_font)
+            p.drawText(
+                QRectF(0, text_top, w, 32),
+                Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop,
+                "FitPilot",
+            )
+
+            # Subtítulo
+            p.setPen(QColor(theme.TEXT_SECONDARY))
+            sub_font = QFont("Segoe UI", 10)
+            p.setFont(sub_font)
+            p.drawText(
+                QRectF(0, text_top + 34, w, 22),
+                Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop,
+                "Sistema de Gestión para Gimnasios",
+            )
+            p.end()
+            return pm
+
+    def _compose_splash(self, angle: int) -> QPixmap:
+            """Copia la base y dibuja el arco del spinner en el ángulo dado."""
+            base = self._splash_base
+            if base is None:
+                base = self._render_splash_base()
+            pm = QPixmap(base)  # copy-on-write
+            p = QPainter(pm)
+            p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+            w = self._SPLASH_W
+            rect = QRectF(w / 2 - 15, self._SPLASH_H - 56, 30, 30)
+
+            # Anillo tenue de fondo
+            bg_pen = QPen(QColor(255, 255, 255, 28))
+            bg_pen.setWidth(4)
+            p.setPen(bg_pen)
+            p.drawArc(rect, 0, 360 * 16)
+
+            # Arco de acento giratorio
+            pen = QPen(QColor(theme.ACCENT))
+            pen.setWidth(4)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            p.setPen(pen)
+            p.drawArc(rect, int(-angle * 16), int(270 * 16))
+            p.end()
+            return pm
+
+    def _tick_splash(self) -> None:
+            if self.splash is None:
+                return
+            self._splash_angle = (self._splash_angle + 18) % 360
+            self.splash.setPixmap(self._compose_splash(self._splash_angle))
         
     def create_views(self):
             """Crea las vistas principales."""
@@ -235,6 +341,16 @@ class FitPilotApp:
         
     def on_app_ready(self) -> None:
             """Cierra el splash cuando la UI base ya esta lista."""
+            # Detener el spinner ANTES de destruir el splash (evita disparos huérfanos)
+            if self._splash_timer is not None:
+                self._splash_timer.stop()
+                self._splash_timer.deleteLater()
+                self._splash_timer = None
+            if self._splash_fade is not None:
+                self._splash_fade.stop()
+                self._splash_fade = None
+            self._splash_base = None
+
             if self.splash:
                 self.splash.close()
                 self.splash.deleteLater()

@@ -22,9 +22,10 @@ from PySide6.QtGui import QFont
 from ...core import container, get_logger
 from ...controllers.whatsapp_controller import WhatsAppController
 from ...utils.dialog_helpers import show_confirmation, show_error, show_info
+from ..table_widget_helpers import configure_table_widget
 from .whatsapp import theme
 from .whatsapp.emoji_picker import EmojiPicker
-from .whatsapp.screen_style import screen_qss
+from ..screen_style import screen_qss
 from .whatsapp.template_preview_widget import TemplatePreviewWidget
 
 logger = get_logger(__name__)
@@ -715,6 +716,7 @@ class WhatsAppTab(QWidget):
         self.variables_table = QTableWidget(0, 2)
         self.variables_table.setObjectName("tplTable")
         self.variables_table.setHorizontalHeaderLabels(["Variable", "Valor de ejemplo"])
+        configure_table_widget(self.variables_table, editable=True)
         self.variables_table.verticalHeader().setVisible(False)
         self.variables_table.horizontalHeader().setSectionResizeMode(
             0, QHeaderView.ResizeMode.ResizeToContents
@@ -724,7 +726,6 @@ class WhatsAppTab(QWidget):
         )
         self.variables_table.setMinimumHeight(86)
         self.variables_table.setMaximumHeight(180)
-        self.variables_table.setAlternatingRowColors(True)
         self.variables_table.itemChanged.connect(self._on_variable_sample_changed)
         self.variables_table.setVisible(False)
         content_layout.addWidget(self.variables_table)
@@ -835,6 +836,7 @@ class WhatsAppTab(QWidget):
         self.buttons_table.setHorizontalHeaderLabels(
             ["Tipo", "Texto", "URL / Teléfono", "Ejemplo {{1}}"]
         )
+        configure_table_widget(self.buttons_table, editable=True)
         self.buttons_table.verticalHeader().setVisible(False)
         self.buttons_table.horizontalHeader().setSectionResizeMode(
             1, QHeaderView.ResizeMode.Stretch

@@ -14,6 +14,7 @@ from ...core.logging import get_logger
 from ...core.di import container
 from ...threads.authenticated_operations import AuthenticatedOperation, start_authenticated_operation
 from ...utils.dialog_helpers import show_confirmation, show_info, show_warning
+from ..table_widget_helpers import configure_table_widget
 
 logger = get_logger(__name__)
 
@@ -62,6 +63,7 @@ class SessionsDialog(QDialog):
         self.sessions_table.setHorizontalHeaderLabels([
             "Dispositivo", "IP", "Última Actividad", "Creado", "Acciones"
         ])
+        configure_table_widget(self.sessions_table)
 
         # Configurar tamaño de columnas
         header = self.sessions_table.horizontalHeader()

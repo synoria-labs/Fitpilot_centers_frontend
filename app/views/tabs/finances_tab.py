@@ -4,7 +4,6 @@ from datetime import datetime
 from PySide6.QtCore import Qt, Slot
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
-    QAbstractItemView,
     QDialog,
     QHBoxLayout,
     QLabel,
@@ -19,6 +18,7 @@ from ...controllers.finances_controller import FinancesController
 from ...core import container, get_logger
 from ...utils.dialog_helpers import show_confirmation, show_error, show_info
 from ..dialogs.payment_dialog import PaymentDialog
+from ..table_widget_helpers import configure_table_widget
 from ..widgets.payments_filter_bar import PaymentsFilterBar
 from ..widgets.payments_metrics_panel import PaymentsMetricsPanel
 
@@ -75,10 +75,8 @@ class FinancesTab(QWidget):
         self.table.setHorizontalHeaderLabels(
             ["ID", "Fecha", "Socio", "Monto", "Método", "Estado", "Comentario", "ID Socio"]
         )
-        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table.setAlternatingRowColors(True)
+        configure_table_widget(self.table)
         self.table.horizontalHeader().setStretchLastSection(True)
-        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.hideColumn(7)  # Hide Person ID
         layout.addWidget(self.table)
 

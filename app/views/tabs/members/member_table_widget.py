@@ -3,14 +3,10 @@
 from typing import Iterable, Optional, Sequence
 
 from PySide6.QtCore import Qt, Signal, QEvent, QModelIndex
-from PySide6.QtWidgets import (
-    QAbstractItemView,
-    QHeaderView,
-    QTableWidget,
-    QTableWidgetItem,
-)
+from PySide6.QtWidgets import QHeaderView, QTableWidget, QTableWidgetItem
 
 from ....viewmodels.members_state import MemberSummary
+from ...table_widget_helpers import configure_table_widget
 from .status_badge import create_status_icon
 
 
@@ -89,25 +85,15 @@ class MemberTableWidget(QTableWidget):
         self.setColumnCount(2)
         self.setHorizontalHeaderLabels(["Nombre", "Estado"])
 
-        self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.setAlternatingRowColors(True)
+        configure_table_widget(self)
         self.setSortingEnabled(True)
-        self.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
 
         header = self.horizontalHeader()
         header.setStretchLastSection(False)
-        header.setDefaultAlignment(Qt.AlignmentFlag.AlignCenter)
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
 
         self.setColumnWidth(1, 140)
-
-        self.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
-        self.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
-        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
         # Señales existentes
         self.itemSelectionChanged.connect(self._on_selection_changed)

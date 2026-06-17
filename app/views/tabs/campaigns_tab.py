@@ -11,18 +11,21 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Optional
 
-from PySide6.QtCore import Qt, QDateTime
-from PySide6.QtGui import QFont
+import qtawesome as qta
+from PySide6.QtCore import Qt, QDateTime, QSize
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QSplitter, QTableWidget, QTableWidgetItem,
     QPushButton, QLabel, QLineEdit, QComboBox, QCheckBox, QSpinBox, QTextEdit,
     QFormLayout, QGroupBox, QScrollArea, QFrame, QRadioButton, QButtonGroup,
-    QDateTimeEdit, QHeaderView, QAbstractItemView,
+    QDateTimeEdit, QHeaderView,
 )
 
 from ...core import container, get_logger
 from ...controllers.campaigns_controller import CampaignsController
 from ...utils.dialog_helpers import show_error, show_info, show_confirmation
+from ..screen_style import screen_qss
+from ..table_widget_helpers import configure_table_widget
+from .whatsapp import theme
 
 logger = get_logger(__name__)
 
@@ -33,6 +36,22 @@ _STATUS_LABELS = {
     "paused": "Pausada", "completed": "Completada", "canceled": "Cancelada",
 }
 _MEMBERSHIP_STATES = [("expired", "Vencidos"), ("active", "Activos"), ("pending", "Pendientes")]
+
+
+def _set_button_icon(button: QPushButton, icon_name: str, *, primary: bool = False) -> None:
+    color = "#ffffff" if primary else theme.palette_hex()
+    button.setIcon(qta.icon(icon_name, color=color))
+    button.setIconSize(QSize(14, 14))
+
+
+def _style_action_button(button: QPushButton, icon_name: str) -> None:
+    button.setObjectName("campActionButton")
+    _set_button_icon(button, icon_name)
+
+
+def _style_primary_button(button: QPushButton, icon_name: str) -> None:
+    button.setObjectName("campPrimaryButton")
+    _set_button_icon(button, icon_name, primary=True)
 
 
 def _body_placeholder_count(components: Optional[List[Any]]) -> int:
@@ -70,28 +89,48 @@ class CampaignsTab(QWidget):
 
     # ================================================================== UI
     def _build_ui(self) -> None:
-        self.setObjectName("campaignsTab")
+        self.setObjectName("campTab")
+        self.setStyleSheet(screen_qss("camp"))
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
         header = QWidget()
+        header.setObjectName("campHeader")
         h = QVBoxLayout(header)
-        h.setContentsMargins(20, 16, 20, 8)
-        h.setSpacing(4)
+        h.setContentsMargins(20, 16, 14, 12)
+        h.setSpacing(8)
+
+        header_row = QHBoxLayout()
+        header_row.setContentsMargins(0, 0, 0, 0)
+        header_row.setSpacing(10)
         title = QLabel("Campañas")
-        title.setFont(QFont("Arial", 14, QFont.Weight.Bold))
-        h.addWidget(title)
+        title.setObjectName("campTitle")
+        header_row.addWidget(title)
+        header_row.addStretch()
+
+        self.new_btn = QPushButton("Nueva campaña")
+        _style_action_button(self.new_btn, "fa5s.plus")
+        self.new_btn.clicked.connect(self._on_new_clicked)
+        header_row.addWidget(self.new_btn)
+
+        self.refresh_btn = QPushButton("Actualizar")
+        _style_action_button(self.refresh_btn, "fa5s.sync")
+        self.refresh_btn.clicked.connect(lambda: self.controller.load_campaigns())
+        header_row.addWidget(self.refresh_btn)
+        h.addLayout(header_row)
         hint = QLabel(
             "Crea campañas de difusión por WhatsApp para recapturar socios (vencidos, por vencer) "
             "y mide entregas, lecturas y conversiones (pagos en la ventana). Reutiliza tus "
             "plantillas aprobadas de Meta."
         )
+        hint.setObjectName("campHint")
         hint.setWordWrap(True)
         h.addWidget(hint)
         root.addWidget(header)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.setObjectName("campSplitter")
         splitter.addWidget(self._build_list_panel())
         splitter.addWidget(self._build_editor_panel())
         splitter.setStretchFactor(0, 1)
@@ -100,25 +139,19 @@ class CampaignsTab(QWidget):
 
     def _build_list_panel(self) -> QWidget:
         panel = QWidget()
+        panel.setObjectName("campListPane")
         v = QVBoxLayout(panel)
-        v.setContentsMargins(16, 8, 8, 12)
-        v.setSpacing(8)
+        v.setContentsMargins(20, 16, 12, 14)
+        v.setSpacing(10)
 
-        bar = QHBoxLayout()
-        self.new_btn = QPushButton("Nueva campaña")
-        self.new_btn.clicked.connect(self._on_new_clicked)
-        self.refresh_btn = QPushButton("Actualizar")
-        self.refresh_btn.clicked.connect(lambda: self.controller.load_campaigns())
-        bar.addWidget(self.new_btn)
-        bar.addWidget(self.refresh_btn)
-        bar.addStretch()
-        v.addLayout(bar)
+        list_title = QLabel("Campañas")
+        list_title.setObjectName("campPanelTitle")
+        v.addWidget(list_title)
 
         self.table = QTableWidget(0, 5)
+        self.table.setObjectName("campTable")
         self.table.setHorizontalHeaderLabels(["Nombre", "Objetivo", "Estado", "Enviados", "Conv."])
-        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        configure_table_widget(self.table)
         self.table.verticalHeader().setVisible(False)
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.table.itemSelectionChanged.connect(self._on_row_selected)
@@ -127,16 +160,22 @@ class CampaignsTab(QWidget):
 
     def _build_editor_panel(self) -> QWidget:
         scroll = QScrollArea()
+        scroll.setObjectName("campConfigScroll")
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         body = QWidget()
+        body.setObjectName("campConfigPane")
         v = QVBoxLayout(body)
-        v.setContentsMargins(16, 8, 20, 12)
+        v.setContentsMargins(14, 16, 20, 14)
         v.setSpacing(12)
 
         # --- Datos básicos
         basics = QGroupBox("Objetivo y nombre")
+        basics.setObjectName("campGroup")
         bf = QFormLayout(basics)
+        bf.setContentsMargins(10, 10, 10, 10)
+        bf.setHorizontalSpacing(10)
+        bf.setVerticalSpacing(8)
         self.name_edit = QLineEdit()
         bf.addRow("Nombre", self.name_edit)
         self.objective_combo = QComboBox()
@@ -147,7 +186,10 @@ class CampaignsTab(QWidget):
 
         # --- Audiencia
         aud = QGroupBox("Audiencia (socios)")
+        aud.setObjectName("campGroup")
         af = QVBoxLayout(aud)
+        af.setContentsMargins(10, 10, 10, 10)
+        af.setSpacing(8)
         states = QHBoxLayout()
         states.addWidget(QLabel("Estado:"))
         self.state_checks: Dict[str, QCheckBox] = {}
@@ -197,6 +239,7 @@ class CampaignsTab(QWidget):
 
         prev_row = QHBoxLayout()
         self.preview_btn = QPushButton("Vista previa de audiencia")
+        _style_action_button(self.preview_btn, "fa5s.eye")
         self.preview_btn.clicked.connect(self._on_preview_clicked)
         self.preview_label = QLabel("—")
         prev_row.addWidget(self.preview_btn)
@@ -207,7 +250,11 @@ class CampaignsTab(QWidget):
 
         # --- Mensaje
         msg = QGroupBox("Mensaje")
+        msg.setObjectName("campGroup")
         mf = QFormLayout(msg)
+        mf.setContentsMargins(10, 10, 10, 10)
+        mf.setHorizontalSpacing(10)
+        mf.setVerticalSpacing(8)
         self.template_combo = QComboBox()
         self.template_combo.currentIndexChanged.connect(self._rebuild_param_mapping)
         mf.addRow("Plantilla", self.template_combo)
@@ -219,7 +266,10 @@ class CampaignsTab(QWidget):
 
         # --- Programación
         sched = QGroupBox("Programación")
+        sched.setObjectName("campGroup")
         sf = QVBoxLayout(sched)
+        sf.setContentsMargins(10, 10, 10, 10)
+        sf.setSpacing(8)
         self.send_now_radio = QRadioButton("Enviar ahora (al pulsar Enviar)")
         self.send_now_radio.setChecked(True)
         self.schedule_radio = QRadioButton("Programar")
@@ -233,6 +283,7 @@ class CampaignsTab(QWidget):
         self.schedule_dt.setCalendarPopup(True)
         srow.addWidget(self.schedule_dt)
         self.schedule_btn = QPushButton("Programar")
+        _style_action_button(self.schedule_btn, "fa5s.clock")
         self.schedule_btn.clicked.connect(self._on_schedule_clicked)
         srow.addWidget(self.schedule_btn)
         srow.addStretch()
@@ -242,12 +293,16 @@ class CampaignsTab(QWidget):
         # --- Acciones
         actions = QHBoxLayout()
         self.save_btn = QPushButton("Guardar")
+        _style_primary_button(self.save_btn, "fa5s.save")
         self.save_btn.clicked.connect(self._on_save_clicked)
         self.build_btn = QPushButton("Construir audiencia")
+        _style_action_button(self.build_btn, "fa5s.users")
         self.build_btn.clicked.connect(self._on_build_clicked)
         self.dryrun_btn = QPushButton("Prueba (dry run)")
+        _style_action_button(self.dryrun_btn, "fa5s.vial")
         self.dryrun_btn.clicked.connect(self._on_dryrun_clicked)
         self.send_btn = QPushButton("Enviar")
+        _style_action_button(self.send_btn, "fa5s.paper-plane")
         self.send_btn.clicked.connect(self._on_send_clicked)
         for b in (self.save_btn, self.build_btn, self.dryrun_btn, self.send_btn):
             actions.addWidget(b)
@@ -256,12 +311,16 @@ class CampaignsTab(QWidget):
 
         actions2 = QHBoxLayout()
         self.pause_btn = QPushButton("Pausar")
+        _style_action_button(self.pause_btn, "fa5s.pause")
         self.pause_btn.clicked.connect(lambda: self._status_action("pause"))
         self.resume_btn = QPushButton("Reanudar")
+        _style_action_button(self.resume_btn, "fa5s.play")
         self.resume_btn.clicked.connect(lambda: self._status_action("resume"))
         self.cancel_btn = QPushButton("Cancelar campaña")
+        _style_action_button(self.cancel_btn, "fa5s.ban")
         self.cancel_btn.clicked.connect(lambda: self._status_action("cancel"))
         self.retry_btn = QPushButton("Reintentar fallidos")
+        _style_action_button(self.retry_btn, "fa5s.redo")
         self.retry_btn.clicked.connect(lambda: self._status_action("retry"))
         for b in (self.pause_btn, self.resume_btn, self.cancel_btn, self.retry_btn):
             actions2.addWidget(b)
@@ -270,11 +329,15 @@ class CampaignsTab(QWidget):
 
         # --- Resultados
         results = QGroupBox("Resultados")
+        results.setObjectName("campGroup")
         rf = QVBoxLayout(results)
+        rf.setContentsMargins(10, 10, 10, 10)
+        rf.setSpacing(8)
         self.metrics_label = QLabel("Selecciona o guarda una campaña para ver métricas.")
         self.metrics_label.setWordWrap(True)
         rf.addWidget(self.metrics_label)
         self.refresh_metrics_btn = QPushButton("Actualizar métricas")
+        _style_action_button(self.refresh_metrics_btn, "fa5s.sync")
         self.refresh_metrics_btn.clicked.connect(self._on_refresh_metrics)
         rf.addWidget(self.refresh_metrics_btn, 0, Qt.AlignmentFlag.AlignLeft)
         v.addWidget(results)

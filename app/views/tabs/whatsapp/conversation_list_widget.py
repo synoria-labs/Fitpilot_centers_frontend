@@ -44,11 +44,12 @@ def _style() -> str:
     min-height: 40px;
     max-height: 40px;
     font-size: 13px;
-    selection-background-color: palette(highlight);
-    selection-color: palette(highlighted-text);
+    selection-background-color: {theme.ACCENT};
+    selection-color: #0b141a;
     placeholder-text-color: palette(placeholder-text);
 }}
-#convSearch:focus {{ border: 1px solid palette(highlight); }}
+#convSearch:hover {{ border: 1px solid rgba(103, 182, 223, 0.55); }}
+#convSearch:focus {{ border: 1px solid {theme.ACCENT}; }}
 #convSearch:disabled {{
     background-color: palette(window);
     color: palette(mid);

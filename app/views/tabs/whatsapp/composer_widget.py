@@ -1,10 +1,11 @@
 """Message composer (text input + attach button + voice recorder + send button)."""
 import qtawesome as qta
-from PySide6.QtCore import Signal, QSize, QPoint, Qt
+from PySide6.QtCore import Signal, QSize, QPoint, Qt, QEvent
 from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import (
     QDialog,
     QFileDialog,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -19,21 +20,26 @@ from .voice_note_recorder import VoiceNoteRecorder
 from .voice_waveform_widget import VoiceWaveformWidget
 
 _STYLE = f"""
-#composer {{ background-color: palette(window); }}
-#composerInput {{
+#composer {{ background: transparent; }}
+#composerPill {{
     background-color: palette(base);
-    color: palette(text);
     border: 1px solid transparent;
-    border-radius: 21px;
-    padding: 0 16px;
-    min-height: 42px;
-    max-height: 42px;
+    border-radius: 22px;
+}}
+#composerPill:hover {{ border: 1px solid rgba(103, 182, 223, 0.55); }}
+#composerPill[focused="true"] {{ border: 1px solid {theme.ACCENT}; }}
+#composerInput {{
+    background: transparent;
+    color: palette(text);
+    border: none;
+    padding: 0 4px;
+    min-height: 38px;
+    max-height: 38px;
     font-size: 13px;
-    selection-background-color: palette(highlight);
-    selection-color: palette(highlighted-text);
+    selection-background-color: {theme.ACCENT};
+    selection-color: #0b141a;
     placeholder-text-color: palette(placeholder-text);
 }}
-#composerInput:focus {{ border: 1px solid palette(highlight); }}
 #composerInput::placeholder {{ color: palette(placeholder-text); }}
 #composerIconButton {{
     background: transparent;
@@ -42,13 +48,14 @@ _STYLE = f"""
     border-radius: 18px;
     padding: 7px;
 }}
-#composerIconButton:hover {{ background-color: {theme.ITEM_HOVER}; }}
+#composerIconButton:hover {{ background-color: palette(alternate-base); }}
+#composerIconButton:disabled {{ background: transparent; color: palette(mid); }}
 #recordingBar {{
     background-color: palette(base);
-    border: 1px solid palette(highlight);
-    border-radius: 21px;
-    min-height: 42px;
-    max-height: 42px;
+    border: 1px solid {theme.ACCENT};
+    border-radius: 22px;
+    min-height: 44px;
+    max-height: 44px;
 }}
 QLabel#recordingDot {{
     background-color: #ff5c5c;
@@ -70,7 +77,7 @@ QLabel#recordingTime {{
     border-radius: 18px;
     padding: 7px;
 }}
-#composerPauseButton:hover {{ background-color: {theme.ITEM_HOVER}; }}
+#composerPauseButton:hover {{ background-color: palette(alternate-base); }}
 #composerPauseButton:disabled {{
     background: transparent;
     color: palette(mid);
@@ -84,21 +91,17 @@ QLabel#recordingTime {{
 }}
 #composerDangerButton:hover {{ background-color: rgba(255, 92, 92, 0.16); }}
 #composerSend {{
-    background-color: {theme.ACCENT};
+    background-color: {theme.ACCENT_STRONG};
     border: none;
     border-radius: 20px;
     padding: 8px;
 }}
-#composerSend:hover {{ background-color: #06c191; }}
+#composerSend:hover {{ background-color: {theme.ACCENT_STRONG_HOVER}; }}
 #composerSend:disabled {{
     background-color: palette(mid);
     color: palette(window);
 }}
-#composerInput:disabled {{
-    background-color: palette(window);
-    color: palette(mid);
-    border: 1px solid palette(mid);
-}}
+#composerInput:disabled {{ color: palette(mid); }}
 """
 
 
@@ -139,6 +142,16 @@ class ComposerWidget(QWidget):
         layout.setContentsMargins(16, 10, 16, 10)
         layout.setSpacing(8)
 
+        # Group the icon buttons + text field into one rounded, floating pill so
+        # the chat background shows around it (the buttons live inside the pill).
+        self.pill = QFrame()
+        self.pill.setObjectName("composerPill")
+        self.pill.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        pill_layout = QHBoxLayout(self.pill)
+        pill_layout.setContentsMargins(8, 3, 8, 3)
+        pill_layout.setSpacing(2)
+        layout.addWidget(self.pill, 1)
+
         self.attach_button = QToolButton()
         self.attach_button.setObjectName("composerIconButton")
         self.attach_button.setIcon(qta.icon("fa5s.plus", color=theme.TEXT_PRIMARY))
@@ -147,7 +160,7 @@ class ComposerWidget(QWidget):
         self.attach_button.setToolTip("Adjuntar archivo")
         self.attach_button.setAutoRaise(True)
         self.attach_button.clicked.connect(self._on_attach_clicked)
-        layout.addWidget(self.attach_button)
+        pill_layout.addWidget(self.attach_button)
 
         self.emoji_button = QToolButton()
         self.emoji_button.setObjectName("composerIconButton")
@@ -157,7 +170,7 @@ class ComposerWidget(QWidget):
         self.emoji_button.setToolTip("Emojis")
         self.emoji_button.setAutoRaise(True)
         self.emoji_button.clicked.connect(self._open_emoji_picker)
-        layout.addWidget(self.emoji_button)
+        pill_layout.addWidget(self.emoji_button)
 
         # Robot toggle: enable/disable the WhatsApp bot for the open conversation.
         self.bot_button = QToolButton()
@@ -169,7 +182,7 @@ class ComposerWidget(QWidget):
         self.bot_button.setAutoRaise(True)
         self.bot_button.toggled.connect(self._on_bot_toggled)
         self._update_bot_button(True)
-        layout.addWidget(self.bot_button)
+        pill_layout.addWidget(self.bot_button)
 
         self.recording_bar = QWidget()
         self.recording_bar.setObjectName("recordingBar")
@@ -223,7 +236,8 @@ class ComposerWidget(QWidget):
         self.input.setObjectName("composerInput")
         self.input.setPlaceholderText("Escribe un mensaje...")
         self.input.returnPressed.connect(self._emit)
-        layout.addWidget(self.input, 1)
+        self.input.installEventFilter(self)
+        pill_layout.addWidget(self.input, 1)
 
         self.mic_button = QToolButton()
         self.mic_button.setObjectName("composerIconButton")
@@ -233,7 +247,7 @@ class ComposerWidget(QWidget):
         self.mic_button.setToolTip("Grabar nota de voz")
         self.mic_button.setAutoRaise(True)
         self.mic_button.clicked.connect(self._start_voice_recording)
-        layout.addWidget(self.mic_button)
+        pill_layout.addWidget(self.mic_button)
 
         self.send_button = QToolButton()
         self.send_button.setObjectName("composerSend")
@@ -315,6 +329,21 @@ class ComposerWidget(QWidget):
     def _insert_emoji(self, emoji: str) -> None:
         # Insert at the cursor (replacing any selection); keep the picker open.
         self.input.insert(emoji)
+
+    def eventFilter(self, obj, event) -> bool:
+        # Mirror the text field's focus onto the pill so the whole pill shows the
+        # focus ring (the QLineEdit itself is borderless inside the pill).
+        if obj is self.input:
+            if event.type() == QEvent.Type.FocusIn:
+                self._set_pill_focused(True)
+            elif event.type() == QEvent.Type.FocusOut:
+                self._set_pill_focused(False)
+        return super().eventFilter(obj, event)
+
+    def _set_pill_focused(self, focused: bool) -> None:
+        self.pill.setProperty("focused", focused)
+        self.pill.style().unpolish(self.pill)
+        self.pill.style().polish(self.pill)
 
     # ------------------------------------------------------------------
     # Voice notes
@@ -408,15 +437,10 @@ class ComposerWidget(QWidget):
         self.recording_dot.setStyleSheet(f"background-color: {color};")
 
     def _set_recording_mode(self, recording: bool) -> None:
-        for widget in (
-            self.attach_button,
-            self.emoji_button,
-            self.bot_button,
-            self.input,
-            self.mic_button,
-            self.send_button,
-        ):
-            widget.setVisible(not recording)
+        # The pill (icons + input) and the send button hide while the recording
+        # bar takes over the row.
+        self.pill.setVisible(not recording)
+        self.send_button.setVisible(not recording)
         self.recording_bar.setVisible(recording)
         if not recording:
             self.voice_waveform.reset()

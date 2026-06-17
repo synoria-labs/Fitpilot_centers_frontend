@@ -20,6 +20,7 @@ from ....services.whatsapp_chat_service import PAGE_SIZE
 from ....utils.dialog_helpers import show_error
 from . import theme
 from .avatar import Avatar
+from .chat_background_widget import ChatBackgroundWidget
 from .conversation_list_widget import ConversationListWidget
 from .membership_chip import membership_chip_stylesheet, membership_chip_text
 from .message_thread_widget import MessageThreadWidget
@@ -141,7 +142,7 @@ class ChatTab(QWidget):
         return page
 
     def _build_conversation_pane(self) -> QWidget:
-        pane = QWidget()
+        pane = ChatBackgroundWidget()
         layout = QVBoxLayout(pane)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)

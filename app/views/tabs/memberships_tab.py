@@ -4,7 +4,7 @@ Vista de la pestaña de Membresías - Gestión de paquetes.
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, 
     QTableWidgetItem, QPushButton, QLabel, QDialog,
-    QHeaderView, QAbstractItemView, QFormLayout,
+    QHeaderView, QFormLayout,
     QLineEdit, QSpinBox, QComboBox, QTextEdit,
     QDialogButtonBox
 )
@@ -12,6 +12,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 from ...core import get_logger
 from ...utils.dialog_helpers import show_confirmation
+from ..table_widget_helpers import configure_table_widget
 
 logger = get_logger(__name__)
 
@@ -67,11 +68,9 @@ class MembershipsTab(QWidget):
         ])
         
         # Configurar tabla
-        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table.setAlternatingRowColors(True)
+        configure_table_widget(self.table)
         self.table.setSortingEnabled(True)
         self.table.horizontalHeader().setStretchLastSection(True)
-        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         
         # Conectar señales
         self.table.itemSelectionChanged.connect(self.on_selection_changed)

@@ -27,10 +27,11 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QFont, QPalette
 from PySide6.QtWidgets import (
     QFrame, QWidget, QLabel, QHBoxLayout, QVBoxLayout, QScrollArea, QToolButton,
-    QPushButton,
+    QPushButton, QApplication,
 )
 
 from ..tabs.whatsapp import theme
+from .brand_logo import logo_mark_pixmap_tinted
 
 EXPANDED_WIDTH = 240
 COLLAPSED_WIDTH = 64
@@ -191,13 +192,21 @@ class Sidebar(QFrame):
         bl = QHBoxLayout(self.brand)
         bl.setContentsMargins(16, 16, 12, 16)
         bl.setSpacing(10)
+        # Marca FitPilot (logo gráfico) en monocromo azul, sin chip. Se adapta al
+        # tema: el acento en oscuro y un azul más fuerte en claro (para que no se
+        # lave sobre fondos claros).
         self.brand_icon = QLabel()
-        self.brand_icon.setFixedSize(28, 28)
-        try:
-            self.brand_icon.setPixmap(
-                qta.icon("mdi6.dumbbell", color=theme.ACCENT).pixmap(QSize(26, 26))
-            )
-        except Exception:  # noqa: BLE001
+        self.brand_icon.setObjectName("sidebarBrandIcon")
+        self.brand_icon.setFixedSize(34, 34)
+        self.brand_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        screen = QApplication.primaryScreen()
+        dpr = screen.devicePixelRatio() if screen else 1.0
+        dark_theme = self.palette().color(QPalette.ColorRole.Window).lightnessF() < 0.5
+        mark_color = theme.ACCENT if dark_theme else theme.ACCENT_STRONG
+        mark = logo_mark_pixmap_tinted(24, mark_color, dpr)
+        if mark is not None:
+            self.brand_icon.setPixmap(mark)
+        else:
             self.brand_icon.setText("🏋")
         bl.addWidget(self.brand_icon)
         self.brand_text = QLabel("FitPilot")
@@ -399,6 +408,7 @@ def _style() -> str:
     return f"""
 #sidebar {{ background-color: palette(window); border-right: 1px solid palette(mid); }}
 #sidebarBrand {{ background-color: palette(window); }}
+#sidebarBrandIcon {{ background: transparent; }}
 #sidebarBrandText {{ color: palette(text); background: transparent; }}
 #sidebarItems {{ background-color: palette(window); }}
 #sidebarScroll {{ background: transparent; border: none; }}

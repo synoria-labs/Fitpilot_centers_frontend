@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget,
     QTableWidgetItem, QPushButton, QLineEdit, QLabel,
-    QHeaderView, QAbstractItemView, QSizePolicy, QComboBox,
+    QHeaderView, QSizePolicy, QComboBox,
     QFrame, QGraphicsOpacityEffect, QApplication
 )
 from PySide6.QtCore import Qt, Signal, QTimer, QEasingCurve, QParallelAnimationGroup, QPropertyAnimation
@@ -18,6 +18,7 @@ from ...core import get_logger
 from ...threads.authenticated_operations import start_authenticated_operation
 from ...utils.dialog_helpers import show_error, show_info
 from ..dialogs.new_subscription_dialog import NewSubscriptionDialog
+from ..table_widget_helpers import configure_table_widget
 
 logger = get_logger(__name__)
 
@@ -167,15 +168,11 @@ class SubscriptionsTab(QWidget):
         ])
 
         # Configuración de comportamiento
-        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.table.setAlternatingRowColors(True)
+        configure_table_widget(self.table)
         self.table.setSortingEnabled(True)
-        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
 
         # Configuración de headers
         self.table.horizontalHeader().setStretchLastSection(False)
-        self.table.horizontalHeader().setDefaultAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # Configurar anchos específicos por columna
         header = self.table.horizontalHeader()
@@ -194,11 +191,6 @@ class SubscriptionsTab(QWidget):
         self.table.setColumnWidth(5, 120)  # Vencimiento
 
         # Configuración de scroll
-        self.table.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
-        self.table.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
-        self.table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-
         # Política de tamaño para la tabla
         self.table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
@@ -208,8 +200,6 @@ class SubscriptionsTab(QWidget):
 
         # Asegurar que la tabla esté interactiva
         self.table.setEnabled(True)
-        self.table.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-
         content_layout.addWidget(self.table, 1)
 
         # Side card container setup

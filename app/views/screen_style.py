@@ -1,25 +1,22 @@
-"""Shared QSS for the WhatsApp management screens (Plantillas, Notificaciones, ...).
+"""Shared QSS for administration screens.
 
-A single source of truth so those screens stay visually consistent with each other and with
-the Chat screen (all read their colors from :mod:`theme`). ``screen_qss(prefix)`` returns the
-stylesheet for a screen whose widgets use ``{prefix}``-prefixed object names — e.g. the
-templates tab uses ``tplHeader`` / ``tplGroup`` / ``tplPrimaryButton`` and the notifications tab
-uses ``notifHeader`` / ``notifGroup`` / ``notifPrimaryButton``. Each tab applies this on itself
-via ``setStyleSheet`` so the unprefixed input rules (QComboBox/QLineEdit/QCheckBox) only affect
-that tab's own widget tree and never leak across screens.
-
-Object-name suffixes a screen can use: ``Tab`` (root), ``Header``, ``Title``, ``Hint``,
-``ListPane``, ``ConfigPane``, ``ConfigScroll``, ``PreviewRail``, ``PreviewRailTitle``,
-``PanelTitle``, ``ItemTitle``, ``List``, ``Group``, ``Card``, ``Table``, ``ActionButton``,
-``PrimaryButton``.
+``screen_qss(prefix)`` returns the stylesheet for a screen whose widgets use
+``{prefix}``-prefixed object names. The same visual language is shared by the
+WhatsApp management screens, Chatbot configuration, and Campaigns.
 """
 from __future__ import annotations
 
-from . import theme
+from pathlib import Path
+
+from .tabs.whatsapp import theme
+
+_CHECKMARK_ICON = (
+    Path(__file__).resolve().parent.parent / "assets" / "icons" / "checkmark.svg"
+).as_posix()
 
 
 def screen_qss(prefix: str) -> str:
-    """Return the shared screen stylesheet for object names prefixed with ``prefix``."""
+    """Return the shared screen stylesheet for prefixed object names."""
     secondary = theme.secondary_text_hex()
     accent = theme.ACCENT
     return f"""
@@ -88,7 +85,9 @@ QListWidget#{prefix}List::item {{
 QListWidget#{prefix}List::item:hover {{
     background-color: palette(alternate-base);
 }}
-QListWidget#{prefix}List::item:selected {{
+QListWidget#{prefix}List::item:selected,
+QListWidget#{prefix}List::item:selected:active,
+QListWidget#{prefix}List::item:selected:!active {{
     background-color: palette(alternate-base);
     color: palette(text);
 }}
@@ -112,62 +111,7 @@ QFrame#{prefix}Card {{
     border: 1px solid palette(mid);
     border-radius: 8px;
 }}
-QComboBox, QLineEdit {{
-    background-color: palette(base);
-    color: palette(text);
-    border: 1px solid palette(mid);
-    border-radius: 8px;
-    min-height: 34px;
-    padding: 0 10px;
-    selection-background-color: palette(highlight);
-    selection-color: palette(highlighted-text);
-}}
-QComboBox:focus, QLineEdit:focus {{
-    border: 1px solid {accent};
-}}
-QComboBox:disabled, QLineEdit:disabled {{
-    background-color: palette(window);
-    color: palette(mid);
-    border: 1px solid palette(mid);
-}}
-QComboBox QAbstractItemView {{
-    background-color: palette(base);
-    color: palette(text);
-    border: 1px solid palette(mid);
-    selection-background-color: palette(alternate-base);
-    selection-color: palette(text);
-    outline: 0;
-}}
-QTextEdit#{prefix}BodyEditor {{
-    background-color: palette(base);
-    color: palette(text);
-    border: 1px solid palette(mid);
-    border-radius: 8px;
-    padding: 6px 10px;
-    selection-background-color: palette(highlight);
-    selection-color: palette(highlighted-text);
-}}
-QTextEdit#{prefix}BodyEditor:focus {{
-    border: 1px solid {accent};
-}}
-QTableWidget#{prefix}Table {{
-    background-color: palette(base);
-    alternate-background-color: palette(alternate-base);
-    color: palette(text);
-    border: 1px solid palette(mid);
-    border-radius: 8px;
-    gridline-color: palette(mid);
-    outline: 0;
-}}
-QTableWidget#{prefix}Table QHeaderView::section {{
-    background-color: palette(window);
-    color: {secondary};
-    border: none;
-    border-bottom: 1px solid palette(mid);
-    padding: 4px 8px;
-    font-weight: 600;
-}}
-QCheckBox {{
+QCheckBox, QRadioButton {{
     color: palette(text);
     spacing: 8px;
     background: transparent;
@@ -179,11 +123,28 @@ QCheckBox::indicator {{
     border-radius: 4px;
     background-color: palette(base);
 }}
+QCheckBox::indicator:hover {{
+    border-color: {accent};
+}}
 QCheckBox::indicator:checked {{
     background-color: {accent};
     border-color: {accent};
+    image: url({_CHECKMARK_ICON});
 }}
-QCheckBox:disabled {{
+QCheckBox::indicator:checked:hover {{
+    background-color: {theme.ACCENT_STRONG_HOVER};
+    border-color: {theme.ACCENT_STRONG_HOVER};
+}}
+QCheckBox::indicator:disabled {{
+    background-color: palette(window);
+    border-color: palette(mid);
+}}
+QCheckBox::indicator:checked:disabled {{
+    background-color: palette(mid);
+    border-color: palette(mid);
+    image: url({_CHECKMARK_ICON});
+}}
+QCheckBox:disabled, QRadioButton:disabled {{
     color: palette(mid);
 }}
 QPushButton#{prefix}ActionButton {{
@@ -201,7 +162,7 @@ QPushButton#{prefix}ActionButton:disabled {{
     color: palette(mid);
 }}
 QPushButton#{prefix}PrimaryButton {{
-    background-color: {accent};
+    background-color: {theme.ACCENT_STRONG};
     color: #ffffff;
     border: none;
     border-radius: 7px;
@@ -209,7 +170,7 @@ QPushButton#{prefix}PrimaryButton {{
     font-weight: 700;
 }}
 QPushButton#{prefix}PrimaryButton:hover {{
-    background-color: #06c191;
+    background-color: {theme.ACCENT_STRONG_HOVER};
 }}
 QPushButton#{prefix}PrimaryButton:disabled {{
     background-color: palette(mid);
