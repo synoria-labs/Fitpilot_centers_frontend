@@ -118,6 +118,20 @@ class WhatsAppChatController(BaseController):
             enabled=enabled,
         )
 
+    def mark_conversation_read(self, conversation_id: int) -> None:
+        """Mark a conversation read on the backend (clears unread + sends read receipt).
+
+        Fire-and-forget: the list badge is cleared locally for instant feedback; backend
+        errors are logged but not surfaced (a failed read receipt must not disrupt the UI).
+        """
+        self._execute_authenticated_operation(
+            self._service,
+            "mark_conversation_read",
+            lambda _result: None,
+            lambda error: logger.warning("mark_conversation_read failed: %s", error),
+            conversation_id=conversation_id,
+        )
+
     def send_media(
         self,
         conversation_id: Optional[int],

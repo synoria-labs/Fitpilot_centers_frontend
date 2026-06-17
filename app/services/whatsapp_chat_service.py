@@ -379,6 +379,29 @@ class WhatsAppChatService:
             logger.error("Error toggling conversation bot: %s", exc)
             return {"success": False, "error": str(exc)}
 
+    async def mark_conversation_read(self, conversation_id: int) -> Dict[str, Any]:
+        """Mark a conversation read on the backend (clears unread + sends a read receipt)."""
+        mutation = """
+            mutation MarkRead($conversationId: Int!) {
+                markConversationRead(conversationId: $conversationId) {
+                    id
+                    unreadCount
+                }
+            }
+        """
+        try:
+            result = await self.client.execute(
+                mutation, {"conversationId": conversation_id}
+            )
+            payload = (result or {}).get("markConversationRead") or {}
+            return {
+                "success": bool(payload),
+                "unread_count": int(payload.get("unreadCount") or 0),
+            }
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Error marking conversation read: %s", exc)
+            return {"success": False, "error": str(exc)}
+
     async def send_reaction(
         self,
         conversation_id: Optional[int],
