@@ -96,8 +96,13 @@ class ConversationListModel(QAbstractListModel):
             idx = self.index(existing_row)
             self.dataChanged.emit(idx, idx)
 
-    def apply_message(self, message: ChatMessage) -> bool:
+    def apply_message(self, message: ChatMessage, bump_unread: bool = False) -> bool:
         """Update an already-loaded conversation from a new message and promote it.
+
+        ``bump_unread`` increments the unread badge for an inbound message that the user
+        is not currently reading. An outbound reply (bot/staff text, not a template
+        broadcast) clears the badge — this mirrors the backend marking the chat read when
+        the bot answers, keeping the count consistent without a conversation-level push.
 
         Returns False when the conversation is not loaded (caller should fetch it).
         """
@@ -108,10 +113,26 @@ class ConversationListModel(QAbstractListModel):
         conv.last_message = message
         if message.timestamp is not None:
             conv.last_activity = message.timestamp
+        if message.direction == "outbound" and message.message_type != "template":
+            conv.unread_count = 0
+        elif bump_unread and message.is_inbound and message.message_type != "reaction":
+            conv.unread_count = (conv.unread_count or 0) + 1
         if row != 0:
             self._move_to_top(row)
         else:
             idx = self.index(0)
+            self.dataChanged.emit(idx, idx)
+        return True
+
+    def mark_read(self, conversation_id: int) -> bool:
+        """Clear the unread badge for a conversation in place. No-op if not loaded."""
+        row = self._index_by_id.get(conversation_id)
+        if row is None:
+            return False
+        conv = self._items[row]
+        if conv.unread_count:
+            conv.unread_count = 0
+            idx = self.index(row)
             self.dataChanged.emit(idx, idx)
         return True
 

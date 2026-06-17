@@ -134,7 +134,7 @@ class ConversationListWidget(QWidget):
     conversation_selected = Signal(int)
     search_changed = Signal(str)
     load_more_requested = Signal()
-    filter_changed = Signal(str)  # "all" | "active" | "expired" | "none"
+    filter_changed = Signal(str)  # "all" | "unread" | "active" | "expired" | "none"
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -180,15 +180,15 @@ class ConversationListWidget(QWidget):
         filter_layout.setContentsMargins(20, 0, 20, 10)
         filter_layout.setSpacing(8)
 
-        # Functional membership filters are single-select via an exclusive group;
-        # "No leidos" and "Etiquetas" stay decorative (no behavior yet).
+        # Functional filters are single-select via an exclusive group; "Etiquetas"
+        # stays decorative (no behavior yet).
         self._filter_buttons: dict[str, QPushButton] = {}
         self._filter_group = QButtonGroup(self)
         self._filter_group.setExclusive(True)
         # (label, filter_key | None for static, default_active)
         for label, key, active in (
             ("Todos", "all", True),
-            ("No leidos", None, False),
+            ("No leídos", "unread", False),
             ("Activos", "active", False),
             ("Vencidas", "expired", False),
             ("No es socio", "none", False),
@@ -243,6 +243,14 @@ class ConversationListWidget(QWidget):
     def visible_count(self) -> int:
         return self._proxy.rowCount()
 
+    def mark_conversation_read_local(self, conversation_id: int) -> None:
+        """Clear the unread badge for a conversation in the list (no backend call)."""
+        self._model.mark_read(conversation_id)
+
+    def set_pinned_conversation(self, conversation_id: Optional[int]) -> None:
+        """Keep the open conversation visible in the active filter (e.g. 'No leídos')."""
+        self._proxy.set_pinned_conversation(conversation_id)
+
     def reset_conversations(self, conversations: List[ChatConversation]) -> None:
         """Replace the whole list (first page / new search), preserving selection."""
         selected_id = self.selected_conversation_id()
@@ -263,9 +271,9 @@ class ConversationListWidget(QWidget):
         if selected_id is not None:
             self._select_conversation(selected_id)
 
-    def apply_message(self, message: ChatMessage) -> bool:
+    def apply_message(self, message: ChatMessage, bump_unread: bool = False) -> bool:
         selected_id = self.selected_conversation_id()
-        moved = self._model.apply_message(message)
+        moved = self._model.apply_message(message, bump_unread=bump_unread)
         if moved and selected_id is not None:
             self._select_conversation(selected_id)
         return moved

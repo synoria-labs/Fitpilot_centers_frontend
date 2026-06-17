@@ -9,8 +9,8 @@ from typing import Optional
 import qtawesome as qta
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtWidgets import (
-    QWidget, QHBoxLayout, QVBoxLayout, QSplitter, QLabel, QStackedWidget, QFrame,
-    QSizePolicy, QToolButton,
+    QApplication, QWidget, QHBoxLayout, QVBoxLayout, QSplitter, QLabel, QStackedWidget,
+    QFrame, QSizePolicy, QToolButton,
 )
 
 from ....controllers.whatsapp_chat_controller import WhatsAppChatController
@@ -212,6 +212,10 @@ class ChatTab(QWidget):
         self.conversation_list.search_changed.connect(self._on_search)
         self.conversation_list.load_more_requested.connect(self._on_load_more)
         self.conversation_list.filter_changed.connect(self._on_filter_changed)
+        app = QApplication.instance()
+        if app is not None:
+            # Respect window focus: mark the open chat read only when the app is active.
+            app.applicationStateChanged.connect(self._on_app_state_changed)
         self.composer.send_requested.connect(self._on_send)
         self.composer.attachment_requested.connect(self._on_send_media)
         self.composer.voice_note_requested.connect(self._on_send_voice_note)
@@ -308,6 +312,11 @@ class ChatTab(QWidget):
         self.composer.set_bot_enabled(conv.bot_enabled if conv else True)
         self.right_stack.setCurrentIndex(1)
         self.controller.load_messages(conversation_id)
+        # Opening a chat reads it: pin it (so it doesn't vanish from the "No leídos"
+        # filter), clear the badge locally, and tell the backend (which sends a receipt).
+        self.conversation_list.set_pinned_conversation(conversation_id)
+        self.conversation_list.mark_conversation_read_local(conversation_id)
+        self.controller.mark_conversation_read(conversation_id)
 
     def _update_header(self, conv: ChatConversation) -> None:
         self._header_avatar.set_name(conv.display_name, size=40)
@@ -403,14 +412,26 @@ class ChatTab(QWidget):
         self._apply_message_to_list(message)
 
     def _on_new_message(self, message: ChatMessage) -> None:
-        if message.conversation_id == self._current_conversation_id:
+        is_open = message.conversation_id == self._current_conversation_id
+        if is_open:
             self.thread.append_message(
                 message,
                 force_scroll=False,
                 show_new_message_button=True,
             )
         # Reactions don't reorder the chat list or change its preview (WhatsApp behavior).
-        if not message.is_reaction:
+        if message.is_reaction:
+            return
+        if message.is_inbound and is_open and self._is_chat_active():
+            # New inbound on the chat we're actively viewing -> read it now, no badge.
+            self._apply_message_to_list(message)
+            self.conversation_list.mark_conversation_read_local(message.conversation_id)
+            self.controller.mark_conversation_read(message.conversation_id)
+        elif message.is_inbound:
+            # Not being read (other chat / app backgrounded) -> bump the unread badge.
+            self._apply_message_to_list(message, bump_unread=True)
+        else:
+            # Outbound (bot/staff reply) -> apply_message clears the badge locally.
             self._apply_message_to_list(message)
 
     def _on_error(self, error: str) -> None:
@@ -418,15 +439,40 @@ class ChatTab(QWidget):
         self._cleanup_pending_voice_note()
         logger.error("ChatTab error: %s", error)
 
-    def _apply_message_to_list(self, message: ChatMessage) -> None:
+    def _apply_message_to_list(self, message: ChatMessage, bump_unread: bool = False) -> None:
         """Update the list incrementally: bump the conversation, or fetch it if new.
 
         Avoids reloading the whole list on every message. When the conversation is
         not currently loaded (new chat, or beyond the loaded pages), fetch just that
-        one conversation and insert it at the top.
+        one conversation and insert it at the top (its unread count comes from backend).
         """
-        if not self.conversation_list.apply_message(message):
+        if not self.conversation_list.apply_message(message, bump_unread=bump_unread):
             self.controller.load_single_conversation(message.conversation_id)
+
+    # ------------------------------------------------------------------
+    # Read-state / window focus
+    # ------------------------------------------------------------------
+    def _is_chat_active(self) -> bool:
+        """True when the chat is the visible page AND the app window is focused."""
+        window = self.window()
+        return self.isVisible() and window is not None and window.isActiveWindow()
+
+    def _on_app_state_changed(self, state) -> None:
+        if state == Qt.ApplicationState.ApplicationActive:
+            self._mark_open_read_if_active()
+
+    def _mark_open_read_if_active(self) -> None:
+        """If a chat is open and the app is focused, mark it read (catch-up on refocus)."""
+        cid = self._current_conversation_id
+        if cid is None or not self._is_chat_active():
+            return
+        self.conversation_list.mark_conversation_read_local(cid)
+        self.controller.mark_conversation_read(cid)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        # Navigated back to the chat tab with a conversation open -> mark it read.
+        self._mark_open_read_if_active()
 
     def _cleanup_pending_voice_note(self) -> None:
         if not self._pending_voice_note_path:
