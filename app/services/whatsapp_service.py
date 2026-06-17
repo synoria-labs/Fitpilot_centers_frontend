@@ -105,6 +105,8 @@ def _button_to_input(button: Dict[str, Any]) -> Dict[str, Any]:
         "text": button.get("text") or "",
         "url": button.get("url"),
         "phoneNumber": button.get("phone_number"),
+        "offerCode": button.get("offer_code"),
+        "subtype": button.get("subtype"),
         "example": button.get("example"),
     }
 

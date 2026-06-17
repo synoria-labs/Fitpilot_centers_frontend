@@ -237,14 +237,17 @@ class TemplatePreviewWidget(QWidget):
             self._buttons.clear()
             self._buttons.setVisible(False)
             return
-        icons = {"URL": "🔗", "PHONE_NUMBER": "📞", "QUICK_REPLY": "💬"}
+        icons = {"URL": "🔗", "PHONE_NUMBER": "📞", "QUICK_REPLY": "💬", "COPY_CODE": "🏷️"}
         self._buttons.setTextFormat(Qt.TextFormat.RichText)
         lines = []
         for button in buttons:
             if not isinstance(button, dict):
                 continue
             btype = str(button.get("type") or "").upper()
-            text = html.escape(str(button.get("text") or ""))
+            text = str(button.get("text") or "")
+            if btype == "COPY_CODE" and not text:
+                text = "Copiar código"
+            text = html.escape(text)
             lines.append(f"{icons.get(btype, '•')} {text}")
         self._buttons.setText("<br>".join(lines))
         self._buttons.setVisible(bool(lines))

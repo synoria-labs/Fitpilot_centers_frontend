@@ -42,6 +42,21 @@ _HEADER_FORMATS = {
     "VIDEO": ("Video", "video"),
     "DOCUMENT": ("Documento", "document"),
 }
+_BUTTON_TYPE_COLUMN_WIDTH = 165
+_BUTTON_SUBTYPE_COLUMN_WIDTH = 220
+_BUTTON_VALUE_COLUMN_WIDTH = 260
+_BUTTON_EXAMPLE_COLUMN_WIDTH = 145
+_BUTTON_ACTION_COLUMN_WIDTH = 46
+_BUTTON_KIND_OPTIONS = (
+    ("Personalizado", "QUICK_REPLY"),
+    ("Ir al sitio web", "URL"),
+    ("Llamar a número de teléfono", "PHONE_NUMBER"),
+    ("Copiar código de oferta", "COPY_CODE"),
+)
+_QUICK_REPLY_SUBTYPES = (
+    ("Personalizado", "CUSTOM", ""),
+    ("Respuesta preconfigurada: dejar de recibir promociones", "OPT_OUT_MARKETING", "Dejar de recibir promociones"),
+)
 
 
 def _parse_components(components: Optional[List[Any]]):
@@ -123,11 +138,19 @@ def _parse_buttons(components: Optional[List[Any]]) -> List[Dict[str, Any]]:
             btype = str(button.get("type") or "").upper()
             example = button.get("example")
             example_str = str(example[0]) if isinstance(example, list) and example else ""
+            if not example_str and example is not None and not isinstance(example, list):
+                example_str = str(example)
+            value = str(button.get("url") or button.get("phone_number") or "")
+            text = str(button.get("text") or "")
+            if btype == "COPY_CODE":
+                value = str(button.get("offer_code") or example_str or "")
+                text = text or "Copiar código"
             result.append(
                 {
                     "type": btype,
-                    "text": str(button.get("text") or ""),
-                    "value": str(button.get("url") or button.get("phone_number") or ""),
+                    "subtype": str(button.get("subtype") or "CUSTOM"),
+                    "text": text,
+                    "value": value,
                     "example": example_str,
                 }
             )
@@ -805,15 +828,15 @@ class WhatsAppTab(QWidget):
         self.header_location_row.setVisible(False)
         content_layout.addWidget(self.header_location_row)
 
-        # Botones (QUICK_REPLY / URL estática o dinámica / PHONE_NUMBER).
+        # Botones (QUICK_REPLY / URL estática o dinámica / PHONE_NUMBER / COPY_CODE).
         buttons_header_layout = QHBoxLayout()
         buttons_header_layout.addWidget(QLabel("Botones (opcional):"))
         buttons_header_layout.addStretch()
-        self.add_button_btn = QPushButton("Botón")
+        self.add_button_btn = QPushButton("Agregar botón")
         self.add_button_btn.setObjectName("tplActionButton")
         self.add_button_btn.setIcon(qta.icon("fa5s.plus", color=theme.palette_hex()))
         self.add_button_btn.setIconSize(QSize(14, 14))
-        self.add_button_btn.clicked.connect(self.on_add_button)
+        self._build_add_button_menu()
         buttons_header_layout.addWidget(self.add_button_btn)
         self.remove_button_btn = QPushButton("Quitar botón")
         self.remove_button_btn.setObjectName("tplActionButton")
@@ -825,28 +848,45 @@ class WhatsAppTab(QWidget):
 
         buttons_hint = QLabel(
             "Máx 10 botones. URL con {{1}} al final = dinámica (1 por plantilla). "
-            "Valor = URL para URL, número para llamada."
+            "Valor = URL, teléfono o código de oferta según el tipo."
         )
         buttons_hint.setObjectName("tplHint")
         buttons_hint.setWordWrap(True)
         content_layout.addWidget(buttons_hint)
 
-        self.buttons_table = QTableWidget(0, 4)
+        self.buttons_table = QTableWidget(0, 6)
         self.buttons_table.setObjectName("tplTable")
         self.buttons_table.setHorizontalHeaderLabels(
-            ["Tipo", "Texto", "URL / Teléfono", "Ejemplo {{1}}"]
+            ["Tipo", "Subtipo", "Texto del botón", "Valor", "Ejemplo {{1}}", ""]
         )
         configure_table_widget(self.buttons_table, editable=True)
         self.buttons_table.verticalHeader().setVisible(False)
+        self.buttons_table.verticalHeader().setDefaultSectionSize(38)
         self.buttons_table.horizontalHeader().setSectionResizeMode(
-            1, QHeaderView.ResizeMode.Stretch
+            0, QHeaderView.ResizeMode.Fixed
+        )
+        self.buttons_table.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.ResizeMode.Fixed
         )
         self.buttons_table.horizontalHeader().setSectionResizeMode(
             2, QHeaderView.ResizeMode.Stretch
         )
-        self.buttons_table.setMaximumHeight(170)
+        self.buttons_table.horizontalHeader().setSectionResizeMode(
+            3, QHeaderView.ResizeMode.Fixed
+        )
+        self.buttons_table.horizontalHeader().setSectionResizeMode(
+            4, QHeaderView.ResizeMode.Fixed
+        )
+        self.buttons_table.horizontalHeader().setSectionResizeMode(
+            5, QHeaderView.ResizeMode.Fixed
+        )
+        self.buttons_table.setColumnWidth(0, _BUTTON_TYPE_COLUMN_WIDTH)
+        self.buttons_table.setColumnWidth(1, _BUTTON_SUBTYPE_COLUMN_WIDTH)
+        self.buttons_table.setColumnWidth(3, _BUTTON_VALUE_COLUMN_WIDTH)
+        self.buttons_table.setColumnWidth(4, _BUTTON_EXAMPLE_COLUMN_WIDTH)
+        self.buttons_table.setColumnWidth(5, _BUTTON_ACTION_COLUMN_WIDTH)
+        self.buttons_table.setMaximumHeight(220)
         self.buttons_table.setVisible(False)
-        self.buttons_table.itemChanged.connect(self._on_buttons_changed)
         content_layout.addWidget(self.buttons_table)
 
         editor_layout.addWidget(content_group)
@@ -1375,32 +1415,192 @@ class WhatsAppTab(QWidget):
         return {"latitude": lat, "longitude": lng, "name": name, "address": address}
 
     # --- Buttons editor -----------------------------------------------------------
-    def _make_button_type_combo(self) -> QComboBox:
+    def _build_add_button_menu(self) -> None:
+        menu = QMenu(self.add_button_btn)
+        menu.addAction("Personalizado").triggered.connect(
+            lambda _checked=False: self._add_button_row(kind="QUICK_REPLY")
+        )
+        menu.addAction("Ir al sitio web").triggered.connect(
+            lambda _checked=False: self._add_button_row(kind="URL")
+        )
+        voice_action = menu.addAction("Llamar en WhatsApp")
+        voice_action.setEnabled(False)
+        voice_action.setStatusTip("No soportado por esta integración.")
+        menu.addAction("Llamar a número de teléfono").triggered.connect(
+            lambda _checked=False: self._add_button_row(kind="PHONE_NUMBER")
+        )
+        menu.addAction("Copiar código de oferta").triggered.connect(
+            lambda _checked=False: self._add_button_row(kind="COPY_CODE")
+        )
+        self.add_button_btn.setMenu(menu)
+
+    def _make_button_type_combo(self, selected: str = "QUICK_REPLY") -> QComboBox:
         combo = QComboBox()
-        combo.addItem("Respuesta rápida", "QUICK_REPLY")
-        combo.addItem("URL", "URL")
-        combo.addItem("Llamada", "PHONE_NUMBER")
-        combo.currentIndexChanged.connect(self._on_buttons_changed)
+        combo.setObjectName("tplButtonTypeCombo")
+        combo.setMinimumWidth(_BUTTON_TYPE_COLUMN_WIDTH - 16)
+        combo.setMinimumContentsLength(len("Personalizado"))
+        combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+        combo.view().setMinimumWidth(_BUTTON_TYPE_COLUMN_WIDTH)
+        for label, value in _BUTTON_KIND_OPTIONS:
+            combo.addItem(label, value)
+        idx = combo.findData((selected or "QUICK_REPLY").upper())
+        combo.setCurrentIndex(idx if idx >= 0 else 0)
+        combo.currentIndexChanged.connect(lambda *_args, c=combo: self._on_button_type_changed(c))
         return combo
 
-    def on_add_button(self) -> None:
+    def _make_quick_reply_subtype_combo(self, selected: str = "CUSTOM") -> QComboBox:
+        combo = QComboBox()
+        combo.setMinimumWidth(_BUTTON_SUBTYPE_COLUMN_WIDTH - 16)
+        combo.view().setMinimumWidth(_BUTTON_SUBTYPE_COLUMN_WIDTH)
+        for label, value, _preset in _QUICK_REPLY_SUBTYPES:
+            combo.addItem(label, value)
+        idx = combo.findData((selected or "CUSTOM").upper())
+        combo.setCurrentIndex(idx if idx >= 0 else 0)
+        combo.currentIndexChanged.connect(
+            lambda *_args, c=combo: self._on_button_subtype_changed(c)
+        )
+        return combo
+
+    def _make_table_line_edit(self, text: str = "") -> QLineEdit:
+        line = QLineEdit(text)
+        line.textChanged.connect(self._on_buttons_changed)
+        return line
+
+    def _make_remove_row_button(self) -> QToolButton:
+        button = QToolButton()
+        button.setIcon(qta.icon("fa5s.times", color=theme.TEXT_SECONDARY))
+        button.setToolTip("Quitar botón")
+        button.setAutoRaise(True)
+        button.clicked.connect(lambda _checked=False, b=button: self._remove_button_for_widget(b))
+        return button
+
+    def _quick_reply_preset_text(self, subtype: str) -> str:
+        subtype = (subtype or "CUSTOM").upper()
+        for _label, value, preset in _QUICK_REPLY_SUBTYPES:
+            if value == subtype:
+                return preset
+        return ""
+
+    def _row_for_widget(self, widget: QWidget) -> int:
+        for row in range(self.buttons_table.rowCount()):
+            for col in range(self.buttons_table.columnCount()):
+                if self.buttons_table.cellWidget(row, col) is widget:
+                    return row
+        return -1
+
+    def _line_text(self, row: int, col: int) -> str:
+        widget = self.buttons_table.cellWidget(row, col)
+        if isinstance(widget, QLineEdit):
+            return widget.text()
+        return ""
+
+    def _set_line_enabled(self, row: int, col: int, enabled: bool, placeholder: str = "") -> None:
+        widget = self.buttons_table.cellWidget(row, col)
+        if not isinstance(widget, QLineEdit):
+            return
+        widget.setEnabled(enabled)
+        widget.setPlaceholderText(placeholder)
+        if not enabled:
+            widget.clear()
+
+    def _set_line_text(self, row: int, col: int, text: str) -> None:
+        widget = self.buttons_table.cellWidget(row, col)
+        if not isinstance(widget, QLineEdit):
+            return
+        widget.blockSignals(True)
+        widget.setText(text)
+        widget.blockSignals(False)
+
+    def _refresh_button_row(self, row: int, *, apply_preset: bool = False) -> None:
+        type_combo = self.buttons_table.cellWidget(row, 0)
+        subtype_combo = self.buttons_table.cellWidget(row, 1)
+        if not isinstance(type_combo, QComboBox) or not isinstance(subtype_combo, QComboBox):
+            return
+        btype = str(type_combo.currentData() or "QUICK_REPLY").upper()
+        subtype = str(subtype_combo.currentData() or "CUSTOM").upper()
+
+        subtype_combo.setEnabled(btype == "QUICK_REPLY")
+        if btype == "QUICK_REPLY":
+            self._set_line_enabled(row, 2, True, "Texto visible")
+            self._set_line_enabled(row, 3, False)
+            self._set_line_enabled(row, 4, False)
+            preset = self._quick_reply_preset_text(subtype)
+            if apply_preset and preset:
+                self._set_line_text(row, 2, preset)
+        elif btype == "URL":
+            self._set_line_enabled(row, 2, True, "Texto visible")
+            self._set_line_enabled(row, 3, True, "https://...")
+            self._set_line_enabled(row, 4, True, "Valor para {{1}}")
+        elif btype == "PHONE_NUMBER":
+            self._set_line_enabled(row, 2, True, "Texto visible")
+            self._set_line_enabled(row, 3, True, "+521...")
+            self._set_line_enabled(row, 4, False)
+        elif btype == "COPY_CODE":
+            self._set_line_enabled(row, 2, True, "Copiar código")
+            self._set_line_enabled(row, 3, True, "FIT20")
+            self._set_line_enabled(row, 4, False)
+            if apply_preset and not self._line_text(row, 2).strip():
+                self._set_line_text(row, 2, "Copiar código")
+
+    def _on_button_type_changed(self, combo: QComboBox) -> None:
+        if self._syncing_buttons_table:
+            return
+        row = self._row_for_widget(combo)
+        if row >= 0:
+            self._refresh_button_row(row, apply_preset=True)
+        self.update_preview()
+
+    def _on_button_subtype_changed(self, combo: QComboBox) -> None:
+        if self._syncing_buttons_table:
+            return
+        row = self._row_for_widget(combo)
+        if row >= 0:
+            self._refresh_button_row(row, apply_preset=True)
+        self.update_preview()
+
+    def _add_button_row(
+        self,
+        *,
+        kind: str = "QUICK_REPLY",
+        subtype: str = "CUSTOM",
+        text: str = "",
+        value: str = "",
+        example: str = "",
+        update: bool = True,
+    ) -> None:
         if self.buttons_table.rowCount() >= 10:
             show_error(self, "Máximo 10 botones por plantilla.")
             return
+        was_syncing = self._syncing_buttons_table
         self._syncing_buttons_table = True
         row = self.buttons_table.rowCount()
         self.buttons_table.insertRow(row)
-        self.buttons_table.setCellWidget(row, 0, self._make_button_type_combo())
-        for col in (1, 2, 3):
-            self.buttons_table.setItem(row, col, QTableWidgetItem(""))
-        self._syncing_buttons_table = False
+        self.buttons_table.setCellWidget(row, 0, self._make_button_type_combo(kind))
+        self.buttons_table.setCellWidget(row, 1, self._make_quick_reply_subtype_combo(subtype))
+        self.buttons_table.setCellWidget(row, 2, self._make_table_line_edit(text))
+        self.buttons_table.setCellWidget(row, 3, self._make_table_line_edit(value))
+        self.buttons_table.setCellWidget(row, 4, self._make_table_line_edit(example))
+        self.buttons_table.setCellWidget(row, 5, self._make_remove_row_button())
+        self.buttons_table.setRowHeight(row, 38)
+        self._refresh_button_row(row, apply_preset=not bool(text))
+        self._syncing_buttons_table = was_syncing
         self.buttons_table.setVisible(True)
-        self.update_preview()
+        if update and not self._syncing_buttons_table:
+            self.update_preview()
+
+    def on_add_button(self) -> None:
+        self._add_button_row(kind="QUICK_REPLY")
 
     def on_remove_button(self) -> None:
         row = self.buttons_table.currentRow()
         if row < 0:
             row = self.buttons_table.rowCount() - 1
+        self._remove_button_row(row)
+
+    def _remove_button_for_widget(self, widget: QWidget) -> None:
+        self._remove_button_row(self._row_for_widget(widget))
+
+    def _remove_button_row(self, row: int) -> None:
         if row < 0:
             return
         self.buttons_table.removeRow(row)
@@ -1412,18 +1612,16 @@ class WhatsAppTab(QWidget):
             return
         self.update_preview()
 
-    def _table_text(self, row: int, col: int) -> str:
-        item = self.buttons_table.item(row, col)
-        return item.text() if item is not None else ""
-
     def _collect_buttons(self) -> List[Dict[str, Any]]:
         buttons: List[Dict[str, Any]] = []
         for row in range(self.buttons_table.rowCount()):
             combo = self.buttons_table.cellWidget(row, 0)
+            subtype_combo = self.buttons_table.cellWidget(row, 1)
             btype = combo.currentData() if combo else None
-            text = (self._table_text(row, 1) or "").strip()
-            value = (self._table_text(row, 2) or "").strip()
-            example = (self._table_text(row, 3) or "").strip()
+            subtype = subtype_combo.currentData() if subtype_combo else None
+            text = (self._line_text(row, 2) or "").strip()
+            value = (self._line_text(row, 3) or "").strip()
+            example = (self._line_text(row, 4) or "").strip()
             if not btype or not text:
                 continue
             button: Dict[str, Any] = {"type": btype, "text": text}
@@ -1433,6 +1631,10 @@ class WhatsAppTab(QWidget):
                     button["example"] = example
             elif btype == "PHONE_NUMBER":
                 button["phone_number"] = value
+            elif btype == "COPY_CODE":
+                button["offer_code"] = value
+            else:
+                button["subtype"] = subtype or "CUSTOM"
             buttons.append(button)
         return buttons
 
@@ -1440,15 +1642,14 @@ class WhatsAppTab(QWidget):
         self._syncing_buttons_table = True
         self.buttons_table.setRowCount(0)
         for button in buttons or []:
-            row = self.buttons_table.rowCount()
-            self.buttons_table.insertRow(row)
-            combo = self._make_button_type_combo()
-            idx = combo.findData((button.get("type") or "").upper())
-            combo.setCurrentIndex(idx if idx >= 0 else 0)
-            self.buttons_table.setCellWidget(row, 0, combo)
-            self.buttons_table.setItem(row, 1, QTableWidgetItem(button.get("text") or ""))
-            self.buttons_table.setItem(row, 2, QTableWidgetItem(button.get("value") or ""))
-            self.buttons_table.setItem(row, 3, QTableWidgetItem(button.get("example") or ""))
+            self._add_button_row(
+                kind=(button.get("type") or "QUICK_REPLY").upper(),
+                subtype=(button.get("subtype") or "CUSTOM").upper(),
+                text=button.get("text") or "",
+                value=button.get("value") or button.get("offer_code") or "",
+                example=button.get("example") or "",
+                update=False,
+            )
         self._syncing_buttons_table = False
         self.buttons_table.setVisible(self.buttons_table.rowCount() > 0)
 
