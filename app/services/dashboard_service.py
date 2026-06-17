@@ -90,6 +90,8 @@ class DashboardService:
                 occupancyByClass { className capacity reserved occupancyPct }
                 newMembersByDay { day count total }
                 membershipDistribution { planId planName count total }
+                topMembershipSalesAllTime { planId planName count total }
+                topMembershipSalesPeriod { planId planName count total }
             }
         }
         """
