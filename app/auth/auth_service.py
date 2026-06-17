@@ -51,6 +51,17 @@ class AuthService:
         self.client = graphql_client
         self.session = session_store
 
+    def clear_local_session(self) -> None:
+        """Limpia todos los rastros locales de autenticacion."""
+        self.session.clear()
+
+        from ..graphql.client import GraphQLClient
+        GraphQLClient.clear_cookies()
+
+        from .persistent_storage import clear_refresh_token
+        if clear_refresh_token():
+            logger.info("Persistent tokens cleared")
+
     async def login(self, email: str, password: str, remember_me: bool = False) -> Tuple[bool, str]:
         """Realiza login con email y password."""
         try:
@@ -195,8 +206,9 @@ class AuthService:
         logger.debug("refresh_token returning False")
         return False
 
-    async def logout(self):
+    async def logout(self) -> bool:
         """Cierra la sesion actual."""
+        logout_confirmed = False
         try:
             mutation = """
                 mutation Logout {
@@ -204,20 +216,17 @@ class AuthService:
                 }
             """
 
-            await self.client.execute(mutation)
+            result = await self.client.execute(mutation)
+            logout_confirmed = bool(result and result.get("logout"))
+            if not logout_confirmed:
+                logger.warning("Logout mutation did not confirm server-side logout")
 
         except Exception as e:
             logger.error(f"Logout error: {e}")
         finally:
-            # Limpiar sesión en memoria
-            self.session.clear()
-
-            # Limpiar tokens persistentes si existen
-            from .persistent_storage import clear_refresh_token
-            if clear_refresh_token():
-                logger.info("Persistent tokens cleared")
-
+            self.clear_local_session()
             logger.info("User logged out")
+        return logout_confirmed
 
     def is_authenticated(self) -> bool:
         """Verifica si el usuario esta autenticado."""

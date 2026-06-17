@@ -2,10 +2,9 @@
 Controlador de autenticación para coordinar vista y servicios.
 
 Cambios v2:
-- LoginThread y LogoutThread usan AsyncioExecutor en lugar de crear event loops
-- Elimina Windows access violations causados por creación concurrente de loops
+- LoginThread usa AsyncioExecutor en lugar de crear event loops
+- Logout usa AuthenticatedOperation y evita QThread legacy sin referencia fuerte
 """
-import asyncio
 import threading
 from typing import Optional
 from PySide6.QtCore import Qt
@@ -13,6 +12,7 @@ from PySide6.QtCore import QObject, Signal, QThread, Slot
 from ..core.logging import get_logger
 from ..core.di import container
 from ..threads.asyncio_executor import get_global_executor
+from ..threads.authenticated_operations import start_authenticated_operation
 
 logger = get_logger(__name__)
 
@@ -30,6 +30,7 @@ class AuthController(QObject):
         self.login_view = None
         self.main_window = None
         self._login_thread = None
+        self._logout_operation = None
     
     def set_views(self, login_view, main_window):
         """Establece las vistas asociadas."""
@@ -79,10 +80,33 @@ class AuthController(QObject):
     @Slot()
     def handle_logout(self):
         """Maneja la solicitud de logout."""
-        # Crear thread para logout asíncrono
-        logout_thread = LogoutThread(self.auth_service)
-        logout_thread.finished.connect(self.on_logout_complete)
-        logout_thread.start()
+        if self._logout_operation is not None:
+            logger.debug("Logout already in progress")
+            return
+
+        self._logout_operation = start_authenticated_operation(
+            service=self.auth_service,
+            method_name="logout",
+            parent=self,
+            on_success=lambda _success: self.on_logout_complete(),
+            on_error=self.on_logout_error,
+            on_finished=self._clear_logout_operation,
+        )
+
+    @Slot(str)
+    def on_logout_error(self, error_message: str):
+        """Maneja errores al ejecutar logout."""
+        logger.error("Logout failed: %s", error_message)
+        try:
+            self.auth_service.clear_local_session()
+        except Exception:
+            logger.exception("Failed to clear local session after logout error")
+        self.on_logout_complete()
+
+    @Slot()
+    def _clear_logout_operation(self):
+        """Libera la referencia a la operacion de logout."""
+        self._logout_operation = None
     
     @Slot()
     def on_logout_complete(self):
@@ -173,54 +197,3 @@ class LoginThread(QThread):
         except Exception as e:
             logger.exception("LoginThread error: %s", e)
             self.error.emit(str(e))
-
-
-class LogoutThread(QThread):
-    """
-    Thread para realizar logout asíncrono usando AsyncioExecutor.
-
-    En lugar de crear su propio event loop, usa el AsyncioExecutor global
-    y espera el resultado sincrónicamente usando threading.Event.
-    """
-
-    def __init__(self, auth_service):
-        super().__init__()
-        self.auth_service = auth_service
-
-    def run(self):
-        """Ejecuta el logout usando AsyncioExecutor."""
-        try:
-            executor = get_global_executor()
-
-            if not executor.is_running():
-                logger.warning("AsyncioExecutor is not running, logout may be incomplete")
-                return
-
-            # Contenedor para resultado
-            done_event = threading.Event()
-            error_container = {"error": None}
-
-            def on_result(_):
-                done_event.set()
-
-            def on_error(error_msg):
-                error_container["error"] = error_msg
-                done_event.set()
-
-            # Enviar operación al executor
-            signals = executor.submit_coroutine(self.auth_service.logout())
-            # Use DirectConnection to avoid deadlock since this thread is blocked waiting
-            signals.result.connect(on_result, Qt.ConnectionType.DirectConnection)
-            signals.error.connect(on_error, Qt.ConnectionType.DirectConnection)
-
-            # Esperar resultado
-            if not done_event.wait(timeout=10.0):
-                logger.error("Logout timeout")
-                return
-
-            # Verificar si hubo error
-            if error_container["error"] is not None:
-                logger.error(f"Logout error: {error_container['error']}")
-
-        except Exception as e:
-            logger.exception("LogoutThread error: %s", e)
