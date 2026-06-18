@@ -1,19 +1,25 @@
 """Vista de la pestaña Chatbot - configuración del agente de WhatsApp."""
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+import re
+from typing import Any, Dict, List, Optional
 
 import qtawesome as qta
 from PySide6.QtCore import QSize
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QDialog,
+    QDialogButtonBox,
     QFormLayout,
     QFrame,
     QGroupBox,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QTextEdit,
@@ -44,6 +50,85 @@ def _new_form(parent: QWidget) -> QFormLayout:
     form.setSpacing(12)
     form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
     return form
+
+
+# Heurística local (sin IA) para avisar al guardar: detecta datos que el agente ya inyecta en
+# vivo desde la DB/herramientas y que NO deberían ir escritos a mano en el system prompt.
+_DB_LIKE_PATTERNS = (
+    ("precios", re.compile(r"\$\s*\d|\b\d+\s*(?:pesos|mxn)\b", re.IGNORECASE)),
+    ("horarios", re.compile(r"\b\d{1,2}:\d{2}\b", re.IGNORECASE)),
+    (
+        "días de la semana",
+        re.compile(
+            r"\b(?:lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\b",
+            re.IGNORECASE,
+        ),
+    ),
+    ("precios/planes", re.compile(r"\b(?:precio|costo|tarifa|cuesta)\w*", re.IGNORECASE)),
+    ("horarios", re.compile(r"\bhorario\w*", re.IGNORECASE)),
+    ("dirección/sedes", re.compile(r"\b(?:direcci[oó]n|sede|sucursal)\w*", re.IGNORECASE)),
+    ("teléfono", re.compile(r"\btel[eé]fono\w*", re.IGNORECASE)),
+    ("instructores", re.compile(r"\binstructor\w*", re.IGNORECASE)),
+    ("cupo/disponibilidad", re.compile(r"\b(?:cupo|disponib)\w*", re.IGNORECASE)),
+)
+
+
+def _detect_db_like_content(text: str) -> List[str]:
+    """Return the (deduped) categories of DB-injected data found in the prompt text."""
+    if not text or not text.strip():
+        return []
+    found: List[str] = []
+    for label, pattern in _DB_LIKE_PATTERNS:
+        if pattern.search(text) and label not in found:
+            found.append(label)
+    return found
+
+
+class PromptOptimizeSuggestionDialog(QDialog):
+    """Vista previa del system prompt optimizado por la IA."""
+
+    def __init__(self, suggestion: Dict[str, Any], parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self._suggestion = suggestion or {}
+        self.setWindowTitle("System prompt optimizado")
+        self.resize(560, 520)
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(10)
+
+        prompt_label = QLabel("System prompt optimizado")
+        prompt_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        layout.addWidget(prompt_label)
+        self.prompt_preview = QTextEdit()
+        self.prompt_preview.setReadOnly(True)
+        self.prompt_preview.setPlainText(self._suggestion.get("optimized_prompt") or "")
+        self.prompt_preview.setMinimumHeight(220)
+        layout.addWidget(self.prompt_preview)
+
+        meta_lines: List[str] = []
+        for item in self._suggestion.get("removed") or []:
+            meta_lines.append(f"Eliminado: {item}")
+        for note in self._suggestion.get("notes") or []:
+            meta_lines.append(f"Nota: {note}")
+        for warning in self._suggestion.get("warnings") or []:
+            meta_lines.append(f"Advertencia: {warning}")
+        if meta_lines:
+            meta = QLabel("\n".join(meta_lines))
+            meta.setWordWrap(True)
+            meta.setStyleSheet("color: #5d6d7e;")
+            layout.addWidget(meta)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Aplicar")
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("Cancelar")
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def suggestion(self) -> Dict[str, Any]:
+        return self._suggestion
 
 
 class ChatbotConfigTab(QWidget):
@@ -143,6 +228,20 @@ class ChatbotConfigTab(QWidget):
             "Instrucciones de comportamiento del asistente (contexto del negocio, tono, reglas)..."
         )
         instructions_form.addRow("System prompt", self.system_prompt_edit)
+
+        prompt_actions = QHBoxLayout()
+        prompt_actions.setContentsMargins(0, 0, 0, 0)
+        prompt_actions.addStretch()
+        self.optimize_btn = QPushButton("Optimizar")
+        self.optimize_btn.setObjectName("botActionButton")
+        self.optimize_btn.setToolTip(
+            "Reescribe el prompt con IA y quita lo que ya se toma de la base de datos "
+            "(precios, horarios, sedes, etc.)."
+        )
+        _set_button_icon(self.optimize_btn, "fa5s.magic")
+        self.optimize_btn.clicked.connect(self._on_optimize_clicked)
+        prompt_actions.addWidget(self.optimize_btn)
+        instructions_form.addRow("", prompt_actions)
         content.addWidget(instructions_group)
 
         business_group = QGroupBox("Datos del negocio")
@@ -181,11 +280,13 @@ class ChatbotConfigTab(QWidget):
     def _connect_controller(self) -> None:
         self.controller.config_loaded.connect(self._on_config_loaded)
         self.controller.config_saved.connect(self._on_config_saved)
+        self.controller.prompt_optimized.connect(self._on_prompt_optimized)
         self.controller.error_occurred.connect(self._on_error)
         self.controller.loading_changed.connect(self._on_loading)
 
     def _on_loading(self, loading: bool) -> None:
         self.save_btn.setEnabled(not loading)
+        self.optimize_btn.setEnabled(not loading)
 
     def _on_config_loaded(self, config: Optional[Dict[str, Any]]) -> None:
         if not config:
@@ -216,7 +317,38 @@ class ChatbotConfigTab(QWidget):
     def _on_error(self, message: str) -> None:
         show_error(self, message or "Ocurrió un error.", title="Chatbot")
 
+    def _on_optimize_clicked(self) -> None:
+        prompt = self.system_prompt_edit.toPlainText().strip()
+        if not prompt:
+            show_error(self, "Escribe un system prompt antes de optimizarlo.", title="Chatbot")
+            return
+        instruction, ok = QInputDialog.getMultiLineText(
+            self,
+            "Optimizar system prompt",
+            "Indicación opcional para la optimización (deja vacío para una limpieza estándar):",
+            "",
+        )
+        if not ok:
+            return
+        self.controller.optimize_prompt(
+            prompt,
+            tone=self.tone_edit.text().strip() or None,
+            instruction=(instruction or "").strip() or None,
+        )
+
+    def _on_prompt_optimized(self, suggestion: Optional[Dict[str, Any]]) -> None:
+        if not suggestion:
+            return
+        dialog = PromptOptimizeSuggestionDialog(suggestion, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        self.system_prompt_edit.setPlainText(dialog.suggestion().get("optimized_prompt") or "")
+        # No se auto-guarda: el usuario revisa y pulsa "Guardar".
+
     def _on_save_clicked(self) -> None:
+        detected = _detect_db_like_content(self.system_prompt_edit.toPlainText())
+        if detected and not self._confirm_db_like_save(detected):
+            return
         data = {
             "enabled": self.enabled_check.isChecked(),
             "require_confirmation": self.require_confirmation_check.isChecked(),
@@ -232,3 +364,26 @@ class ChatbotConfigTab(QWidget):
             "extra_info": self.extra_info_edit.toPlainText().strip(),
         }
         self.controller.save_config(data)
+
+    def _confirm_db_like_save(self, detected: List[str]) -> bool:
+        """Aviso no bloqueante al guardar. Devuelve True si debe continuar el guardado."""
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle("Chatbot")
+        box.setText(
+            "Tu system prompt parece incluir datos que el asistente ya toma automáticamente "
+            "de la base de datos ("
+            + ", ".join(detected)
+            + "). Escribirlos a mano puede contradecir la información en vivo. ¿Qué deseas hacer?"
+        )
+        save_btn = box.addButton("Guardar de todas formas", QMessageBox.ButtonRole.AcceptRole)
+        optimize_btn = box.addButton("Optimizar primero", QMessageBox.ButtonRole.ActionRole)
+        box.addButton("Cancelar", QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(optimize_btn)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked is save_btn:
+            return True
+        if clicked is optimize_btn:
+            self._on_optimize_clicked()
+        return False
