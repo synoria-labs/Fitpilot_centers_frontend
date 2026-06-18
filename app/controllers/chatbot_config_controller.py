@@ -17,6 +17,7 @@ class ChatbotConfigController(BaseController):
 
     config_loaded = Signal(object)   # dict | None
     config_saved = Signal(object)    # config dict
+    prompt_optimized = Signal(object)  # suggestion dict
     error_occurred = Signal(str)
     loading_changed = Signal(bool)
 
@@ -57,6 +58,26 @@ class ChatbotConfigController(BaseController):
             extra_info=data.get("extra_info"),
         )
 
+    def optimize_prompt(
+        self,
+        system_prompt: str,
+        tone: Optional[str] = None,
+        instruction: Optional[str] = None,
+    ) -> None:
+        if not self._service:
+            self.error_occurred.emit("Servicio del chatbot no disponible")
+            return
+        self.loading_changed.emit(True)
+        self._execute_authenticated_operation(
+            self._service,
+            "optimize_system_prompt",
+            self._on_prompt_optimized,
+            self._on_error,
+            system_prompt=system_prompt,
+            tone=tone,
+            instruction=instruction,
+        )
+
     # ------------------------------------------------------------------
     def _on_loaded(self, result: Any) -> None:
         self.loading_changed.emit(False)
@@ -68,6 +89,15 @@ class ChatbotConfigController(BaseController):
             self.config_saved.emit(result.get("config"))
         else:
             self.error_occurred.emit((result or {}).get("error") or "No se pudo guardar")
+
+    def _on_prompt_optimized(self, result: Dict[str, Any]) -> None:
+        self.loading_changed.emit(False)
+        if result and result.get("success") and result.get("suggestion"):
+            self.prompt_optimized.emit(result.get("suggestion"))
+        else:
+            self.error_occurred.emit(
+                (result or {}).get("error") or "No se pudo optimizar el prompt"
+            )
 
     def _on_error(self, message: str) -> None:
         self.loading_changed.emit(False)

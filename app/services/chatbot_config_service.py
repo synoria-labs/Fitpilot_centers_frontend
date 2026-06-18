@@ -28,6 +28,25 @@ _CONFIG_FIELDS = """
 """
 
 
+_PROMPT_SUGGESTION_FIELDS = """
+    optimizedPrompt
+    removed
+    notes
+    warnings
+"""
+
+
+def _map_prompt_suggestion(node: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not node:
+        return None
+    return {
+        "optimized_prompt": node.get("optimizedPrompt") or "",
+        "removed": node.get("removed") or [],
+        "notes": node.get("notes") or [],
+        "warnings": node.get("warnings") or [],
+    }
+
+
 def _map_config(node: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     if not node:
         return None
@@ -115,4 +134,36 @@ class ChatbotConfigService:
             "success": bool(payload.get("success")),
             "error": payload.get("error"),
             "config": _map_config(payload.get("config")),
+        }
+
+    async def optimize_system_prompt(
+        self,
+        system_prompt: str,
+        tone: Optional[str] = None,
+        instruction: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        mutation = f"""
+            mutation OptimizeSystemPrompt($input: OptimizeSystemPromptInput!) {{
+                optimizeSystemPrompt(input: $input) {{
+                    success
+                    error
+                    suggestion {{ {_PROMPT_SUGGESTION_FIELDS} }}
+                }}
+            }}
+        """
+        variables = {
+            "input": {
+                "systemPrompt": system_prompt or "",
+                "tone": tone,
+                "instruction": instruction,
+            }
+        }
+        result = await self.client.execute(mutation, variables)
+        payload = (result or {}).get("optimizeSystemPrompt")
+        if not payload:
+            return {"success": False, "error": "Sin respuesta del servidor", "suggestion": None}
+        return {
+            "success": bool(payload.get("success")),
+            "error": payload.get("error"),
+            "suggestion": _map_prompt_suggestion(payload.get("suggestion")),
         }
