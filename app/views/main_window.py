@@ -38,6 +38,7 @@ NAV_ITEMS = [
 # Sección alojada en el menú Configuración (fuera de la sidebar).
 SETTINGS_SECTIONS = [
     ("whatsapp_notifications", "Notificaciones"),
+    ("role_permissions", "Permisos"),
 ]
 
 

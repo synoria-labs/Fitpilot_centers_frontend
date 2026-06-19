@@ -132,3 +132,23 @@ class SessionStore:
         current_level = role_hierarchy.get(current_role, 0)
         required_level = role_hierarchy.get(required_role, 999)
         return current_level >= required_level
+
+    def get_roles(self) -> list:
+        """Returns the list of role codes for the cached user."""
+        user = self.get_current_user()
+        if user:
+            return list(user.get("roles") or [])
+        return []
+
+    def get_capabilities(self) -> list:
+        """Returns the list of capability codes for the cached user."""
+        user = self.get_current_user()
+        if user:
+            return list(user.get("capabilities") or [])
+        return []
+
+    def has_capability(self, capability: str) -> bool:
+        """Whether the user has a capability. Admin role implies all capabilities."""
+        if "admin" in self.get_roles():
+            return True
+        return capability in self.get_capabilities()
