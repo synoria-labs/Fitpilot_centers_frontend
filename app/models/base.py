@@ -92,7 +92,9 @@ class MembershipPlan(BaseModel):
     description: Optional[str] = None
     duration_unit: str = "day"  # day, week, month
     class_limit: Optional[int] = None
+    plan_type: str = "fixed_schedule"  # fixed_schedule | flexible | credit_pack
     fixed_time_slot: bool = False
+    is_active: bool = True
     max_sessions_per_day: Optional[int] = None
     max_sessions_per_week: Optional[int] = None
     created_at: Optional[datetime] = None
@@ -106,6 +108,15 @@ class MembershipPlan(BaseModel):
         unit_map = {"day": "días", "week": "semanas", "month": "meses"}
         unit_text = unit_map.get(self.duration_unit, self.duration_unit)
         return f"{self.duration_value} {unit_text}"
+
+    def type_display(self) -> str:
+        """Retorna el tipo de plan en texto legible."""
+        type_map = {
+            "fixed_schedule": "Horario fijo",
+            "flexible": "Acceso libre",
+            "credit_pack": "Créditos prepagados",
+        }
+        return type_map.get(self.plan_type, self.plan_type)
 
 @dataclass
 class MembershipInfo(BaseModel):

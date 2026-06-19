@@ -95,11 +95,16 @@ class AuthService:
                 user_payload = _decode_jwt_payload(access_token)
                 user_data = {}
                 if user_payload:
+                    roles = user_payload.get('roles') or []
+                    capabilities = user_payload.get('capabilities') or []
+                    primary_role = 'admin' if 'admin' in roles else (roles[0] if roles else 'usuario')
                     user_data = {
                         'username': user_payload.get('username'),
                         'person_id': user_payload.get('person_id'),
                         'session_id': user_payload.get('session_id'),
-                        'role': 'admin',  # Por defecto admin, se puede mejorar después
+                        'role': primary_role,
+                        'roles': roles,
+                        'capabilities': capabilities,
                     }
 
                 # Intentar extraer refresh_token de las cookies (si está disponible)
@@ -170,11 +175,16 @@ class AuthService:
                 user_payload = _decode_jwt_payload(access_token)
                 user_data = {}
                 if user_payload:
+                    roles = user_payload.get('roles') or []
+                    capabilities = user_payload.get('capabilities') or []
+                    primary_role = 'admin' if 'admin' in roles else (roles[0] if roles else 'usuario')
                     user_data = {
                         'username': user_payload.get('username'),
                         'person_id': user_payload.get('person_id'),
                         'session_id': user_payload.get('session_id'),
-                        'role': 'admin',  # Por defecto admin
+                        'role': primary_role,
+                        'roles': roles,
+                        'capabilities': capabilities,
                     }
 
                 # Intentar extraer refresh_token de las cookies (si está disponible)
@@ -239,6 +249,14 @@ class AuthService:
     def has_permission(self, required_role: str) -> bool:
         """Verifica si el usuario tiene el rol requerido."""
         return self.session.has_permission(required_role)
+
+    def has_capability(self, capability: str) -> bool:
+        """Verifica si el usuario tiene una capacidad concedida (admin siempre la tiene)."""
+        return self.session.has_capability(capability)
+
+    def get_roles(self) -> list:
+        """Lista de códigos de rol del usuario actual."""
+        return self.session.get_roles()
 
     async def auto_refresh_if_needed(self) -> bool:
         """Verifica estado de autenticación - el backend maneja renovación automática."""
