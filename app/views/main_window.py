@@ -38,6 +38,7 @@ NAV_ITEMS = [
 # Sección alojada en el menú Configuración (fuera de la sidebar).
 SETTINGS_SECTIONS = [
     ("whatsapp_notifications", "Notificaciones"),
+    ("owner_agent_config", "Agente Admin"),
     ("role_permissions", "Permisos"),
 ]
 
@@ -209,10 +210,12 @@ class MainWindow(QMainWindow):
         # Menú Configuración (junto a Ayuda). Despliega sus opciones al pasar el cursor,
         # igual que los demás menús. Preparado para más opciones futuras.
         self.settings_menu = menubar.addMenu("&Configuración")
+        self.settings_actions = {}
         for tab_id, label in SETTINGS_SECTIONS:
             action = QAction(label, self)
             action.triggered.connect(lambda _checked=False, t=tab_id: self.show_settings_section(t))
             self.settings_menu.addAction(action)
+            self.settings_actions[tab_id] = action
 
     def setup_toolbar(self):
         """Configura la barra de herramientas."""
@@ -282,11 +285,21 @@ class MainWindow(QMainWindow):
     def update_tabs_visibility(self, role: str):
         """Habilita/deshabilita ítems de navegación según el rol."""
         is_admin = (role == 'admin')
+        capabilities = set((self.current_user or {}).get("capabilities") or [])
         for item in NAV_ITEMS:
             self.sidebar.set_enabled(item.tab_id, item.is_public or is_admin)
-        # Notificaciones (única opción de Configuración hoy) es admin-only.
         if getattr(self, "settings_menu", None) is not None:
-            self.settings_menu.setEnabled(is_admin)
+            allowed = {
+                "whatsapp_notifications": is_admin,
+                "role_permissions": is_admin,
+                "owner_agent_config": is_admin or "manage_owner_agent" in capabilities,
+            }
+            any_enabled = False
+            for tab_id, action in getattr(self, "settings_actions", {}).items():
+                enabled = bool(allowed.get(tab_id, is_admin))
+                action.setEnabled(enabled)
+                any_enabled = any_enabled or enabled
+            self.settings_menu.setEnabled(any_enabled)
 
     def load_tab_content(self, tab_id: str, widget: QWidget):
         """Reemplaza el placeholder de una sección por su widget real en el stack."""
