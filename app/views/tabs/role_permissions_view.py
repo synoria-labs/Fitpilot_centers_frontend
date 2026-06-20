@@ -23,6 +23,7 @@ logger = get_logger(__name__)
 # Friendly labels for known capabilities.
 CAPABILITY_LABELS = {
     "manage_membership_plans": "Gestionar planes",
+    "manage_owner_agent": "Gestionar agente admin",
 }
 
 
