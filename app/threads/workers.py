@@ -97,6 +97,7 @@ class TabLoader(BaseWorker):
             "whatsapp_notifications": ("app.views.tabs.whatsapp_notifications_tab", "WhatsAppNotificationsTab"),
             "owner_agent_config": ("app.views.tabs.owner_agent_config_tab", "OwnerAgentConfigTab"),
             "role_permissions": ("app.views.tabs.role_permissions_view", "RolePermissionsView"),
+            "users": ("app.views.tabs.users_view", "UsersView"),
             "chatbot_config": ("app.views.tabs.chatbot_config_tab", "ChatbotConfigTab"),
             "campaigns": ("app.views.tabs.campaigns_tab", "CampaignsTab"),
             "whatsapp_chat": ("app.views.tabs.whatsapp.chat_tab", "ChatTab"),

@@ -24,6 +24,7 @@ logger = get_logger(__name__)
 CAPABILITY_LABELS = {
     "manage_membership_plans": "Gestionar planes",
     "manage_owner_agent": "Gestionar agente admin",
+    "manage_users": "Gestionar usuarios",
 }
 
 

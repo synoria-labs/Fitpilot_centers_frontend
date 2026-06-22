@@ -89,6 +89,7 @@ class FitPilotApp:
             from app.services.members_service import MembersService
             from app.services.memberships_service import MembershipsService
             from app.services.permissions_service import PermissionsService
+            from app.services.users_service import UsersService
             from app.services.classes_service import ClassesService
             from app.services.payments_service import PaymentsService
             from app.services.whatsapp_service import WhatsAppService
@@ -109,6 +110,7 @@ class FitPilotApp:
             container.register('members_service', service=MembersService(graphql_client))
             container.register('memberships_service', service=MembershipsService(graphql_client))
             container.register('permissions_service', service=PermissionsService(graphql_client))
+            container.register('users_service', service=UsersService(graphql_client))
             container.register('classes_service', service=ClassesService(graphql_client))
             container.register('payments_service', service=PaymentsService(graphql_client))
             container.register('whatsapp_service', service=WhatsAppService(graphql_client))

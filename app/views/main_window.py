@@ -39,6 +39,7 @@ NAV_ITEMS = [
 SETTINGS_SECTIONS = [
     ("whatsapp_notifications", "Notificaciones"),
     ("owner_agent_config", "Agente Admin"),
+    ("users", "Usuarios"),
     ("role_permissions", "Permisos"),
 ]
 
@@ -293,6 +294,7 @@ class MainWindow(QMainWindow):
                 "whatsapp_notifications": is_admin,
                 "role_permissions": is_admin,
                 "owner_agent_config": is_admin or "manage_owner_agent" in capabilities,
+                "users": is_admin or "manage_users" in capabilities,
             }
             any_enabled = False
             for tab_id, action in getattr(self, "settings_actions", {}).items():

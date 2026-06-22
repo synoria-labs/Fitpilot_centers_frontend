@@ -61,6 +61,35 @@ class User(BaseModel):
     updated_at: Optional[datetime] = None
 
 @dataclass
+class AppRole(BaseModel):
+    """A system role available to assign to login users."""
+    id: int
+    code: str
+    description: Optional[str] = None
+
+    def display(self) -> str:
+        return self.description or self.code
+
+@dataclass
+class AppUser(BaseModel):
+    """A login account (staff user): credentials + identity + roles."""
+    account_id: int
+    person_id: int
+    username: str
+    is_active: bool = True
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    phone_number: Optional[str] = None
+    created_at: Optional[datetime] = None
+    roles: List['AppRole'] = field(default_factory=list)
+
+    def roles_display(self) -> str:
+        return ", ".join(r.display() for r in self.roles) if self.roles else "—"
+
+    def role_ids(self) -> List[int]:
+        return [r.id for r in self.roles]
+
+@dataclass
 class Person(BaseModel):
     id: int
     full_name: Optional[str] = None
