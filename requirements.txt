@@ -25,6 +25,9 @@ python-dateutil>=2.8.2
 pytz>=2023.3
 keyring>=24.0.0
 
+# POS thermal-ticket printing (POS-58). Windows-only; on Linux/macOS uses `lp`.
+pywin32>=306; sys_platform == 'win32'
+
 # Development
 pytest>=7.3.0
 pytest-qt>=4.2.0

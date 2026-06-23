@@ -32,8 +32,18 @@ NAV_ITEMS = [
     SidebarItem("whatsapp", "WhatsApp", "mdi6.whatsapp", is_public=False),
     SidebarItem("chatbot_config", "Chatbot", "mdi6.robot-outline", is_public=False),
     SidebarItem("campaigns", "Campañas", "mdi6.bullhorn", is_public=False),
+    SidebarItem("pos", "Punto de Venta", "mdi6.cash-register", is_public=False),
+    SidebarItem("cash_register", "Caja", "mdi6.cash-lock-open", is_public=False),
+    SidebarItem("products", "Productos", "mdi6.package-variant-closed", is_public=False),
     SidebarItem("finances", "Finanzas", "mdi6.cash-multiple", is_public=False),
 ]
+
+# Nav items that a non-admin can access when they hold a specific capability.
+NAV_CAPABILITY_GATES = {
+    "pos": "operate_pos",
+    "cash_register": "manage_cash_session",
+    "products": "manage_products",
+}
 
 # Sección alojada en el menú Configuración (fuera de la sidebar).
 SETTINGS_SECTIONS = [
@@ -288,7 +298,9 @@ class MainWindow(QMainWindow):
         is_admin = (role == 'admin')
         capabilities = set((self.current_user or {}).get("capabilities") or [])
         for item in NAV_ITEMS:
-            self.sidebar.set_enabled(item.tab_id, item.is_public or is_admin)
+            cap = NAV_CAPABILITY_GATES.get(item.tab_id)
+            enabled = item.is_public or is_admin or (cap is not None and cap in capabilities)
+            self.sidebar.set_enabled(item.tab_id, enabled)
         if getattr(self, "settings_menu", None) is not None:
             allowed = {
                 "whatsapp_notifications": is_admin,
