@@ -207,6 +207,36 @@ class MemberListState:
     total: int = 0
     search: Optional[str] = None
     loading: bool = False
+    limit: int = 100
+    offset: int = 0
+
+    @property
+    def page(self) -> int:
+        if self.limit <= 0:
+            return 1
+        return (self.offset // self.limit) + 1
+
+    @property
+    def total_pages(self) -> int:
+        if self.total <= 0 or self.limit <= 0:
+            return 1
+        return ((self.total - 1) // self.limit) + 1
+
+    @property
+    def has_previous(self) -> bool:
+        return self.offset > 0
+
+    @property
+    def has_next(self) -> bool:
+        return self.offset + len(self.members) < self.total
+
+    @property
+    def visible_start(self) -> int:
+        return self.offset + 1 if self.members else 0
+
+    @property
+    def visible_end(self) -> int:
+        return self.offset + len(self.members)
 
     def with_loading(self, loading: bool) -> "MemberListState":
         return replace(self, loading=loading)
@@ -214,11 +244,23 @@ class MemberListState:
     def with_search(self, search: Optional[str]) -> "MemberListState":
         return replace(self, search=search)
 
-    def with_members(self, members: Sequence[MemberSummary], total: Optional[int] = None) -> "MemberListState":
+    def with_pagination(self, *, limit: int, offset: int) -> "MemberListState":
+        return replace(self, limit=max(1, int(limit)), offset=max(0, int(offset)))
+
+    def with_members(
+        self,
+        members: Sequence[MemberSummary],
+        total: Optional[int] = None,
+        *,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
+    ) -> "MemberListState":
         return replace(
             self,
             members=tuple(members),
             total=len(members) if total is None else total,
+            limit=self.limit if limit is None else max(1, int(limit)),
+            offset=self.offset if offset is None else max(0, int(offset)),
         )
 
     def upsert_member(self, summary: MemberSummary) -> "MemberListState":

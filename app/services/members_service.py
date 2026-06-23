@@ -171,35 +171,38 @@ class MembersService:
         limit: Optional[int] = None,
         offset: int = 0,
         search: Optional[str] = None
-    ) -> List[Member]:
-        """Fetch members from backend applying optional filters."""
+    ) -> Dict[str, Any]:
+        """Fetch one backend page of members plus the exact matching total."""
         query = """
             query GetMembers($limit: Int, $offset: Int, $search: String) {
-                members(limit: $limit, offset: $offset, search: $search) {
-                    id
-                    fullName
-                    email
-                    phoneNumber
-                    waId
-                    registrationDate
-                    totalPayments
-                    lastActivity
-                    activeStandingBooking {
-                        templateId
-                        templateName
-                        classTypeName
-                        weekday
-                        startTimeLocal
-                        venueName
-                        instructorName
-                    }
-                    activeMembership {
-                        subscriptionId
-                        planName
-                        startDate
-                        endDate
-                        status
-                        remainingDays
+                membersPage(limit: $limit, offset: $offset, search: $search) {
+                    total
+                    items {
+                        id
+                        fullName
+                        email
+                        phoneNumber
+                        waId
+                        registrationDate
+                        totalPayments
+                        lastActivity
+                        activeStandingBooking {
+                            templateId
+                            templateName
+                            classTypeName
+                            weekday
+                            startTimeLocal
+                            venueName
+                            instructorName
+                        }
+                        activeMembership {
+                            subscriptionId
+                            planName
+                            startDate
+                            endDate
+                            status
+                            remainingDays
+                        }
                     }
                 }
             }
@@ -213,11 +216,15 @@ class MembersService:
 
         try:
             result = await self.client.execute(query, variables)
-            raw_members = (result or {}).get("members", [])
-            return [self._parse_member(item) for item in raw_members]
+            payload = (result or {}).get("membersPage") or {}
+            raw_members = payload.get("items") or []
+            return {
+                "items": [self._parse_member(item) for item in raw_members],
+                "total": int(payload.get("total") or 0),
+            }
         except Exception as exc:  # noqa: BLE001
             logger.error("Error fetching members: %s", exc)
-            return []
+            return {"items": [], "total": 0}
 
     async def get_member_by_id(self, member_id: int) -> Optional[Dict[str, Any]]:
         """Fetch a single member by ID with their membership information."""
