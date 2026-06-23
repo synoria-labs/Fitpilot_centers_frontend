@@ -89,7 +89,6 @@ class MembersTab(QWidget):
         self._search_timer.timeout.connect(self._perform_search)
 
         self._requested_search: Optional[str] = None
-        self._pending_search_operation: Optional[object] = None  # Track pending search operations
 
         self._build_ui()
         self._connect_signals()
@@ -176,6 +175,17 @@ class MembersTab(QWidget):
         self.status_label = QLabel("0 socios")
         status_layout.addWidget(self.status_label)
         status_layout.addStretch()
+
+        self.previous_page_button = QPushButton("Anterior")
+        self.previous_page_button.setObjectName("actionButton")
+        self.previous_page_button.setEnabled(False)
+        status_layout.addWidget(self.previous_page_button)
+
+        self.next_page_button = QPushButton("Siguiente")
+        self.next_page_button.setObjectName("actionButton")
+        self.next_page_button.setEnabled(False)
+        status_layout.addWidget(self.next_page_button)
+
         layout.addLayout(status_layout)
 
         # Prepare animations
@@ -203,6 +213,8 @@ class MembersTab(QWidget):
 
         self.member_table.selection_changed.connect(self._on_table_selection_changed)
         self.member_table.activated.connect(self._on_table_activated)
+        self.previous_page_button.clicked.connect(self.controller.previous_page)
+        self.next_page_button.clicked.connect(self.controller.next_page)
 
         self.member_card.save_requested.connect(self._on_basic_info_save_requested)
         self.member_card.delete_requested.connect(self._on_delete_requested)
@@ -257,6 +269,8 @@ class MembersTab(QWidget):
             self.search_input.setEnabled(False)
             self.new_button.setEnabled(False)
             self.renew_button.setEnabled(False)
+            self.previous_page_button.setEnabled(False)
+            self.next_page_button.setEnabled(False)
             if loading:
                 self.status_label.setText("Guardando cambios...")
             else:
@@ -271,6 +285,8 @@ class MembersTab(QWidget):
         self.member_table.setEnabled(not loading and not self.member_card.is_editing())
         if loading:
             self.renew_button.setEnabled(False)
+            self.previous_page_button.setEnabled(False)
+            self.next_page_button.setEnabled(False)
             self.status_label.setText("Cargando socios...")
         else:
             self._update_action_buttons()
@@ -288,6 +304,8 @@ class MembersTab(QWidget):
         self.search_input.setEnabled(False)
         self.new_button.setEnabled(False)
         self.renew_button.setEnabled(False)
+        self.previous_page_button.setEnabled(False)
+        self.next_page_button.setEnabled(False)
 
     @Slot(object, str)
     def _on_basic_info_update_succeeded(self, summary: MemberSummary, message: str) -> None:
@@ -340,6 +358,8 @@ class MembersTab(QWidget):
         self.search_input.setEnabled(False)
         self.new_button.setEnabled(False)
         self.renew_button.setEnabled(False)
+        self.previous_page_button.setEnabled(False)
+        self.next_page_button.setEnabled(False)
         self.status_label.setText("Eliminando socio...")
 
     @Slot(int, str)
@@ -380,23 +400,8 @@ class MembersTab(QWidget):
 
     @Slot()
     def _perform_search(self) -> None:
-        # Cancelar búsqueda pendiente si existe (evitar procesar resultados obsoletos)
-        if self._pending_search_operation is not None:
-            logger.debug("Canceling pending search operation before new search")
-            try:
-                # Desconectar TODAS las señales de esta operación privada local
-                # Es seguro usar disconnect() sin parámetros porque:
-                # 1. La operación es privada (_pending_search_operation)
-                # 2. Solo este componente conecta slots a estas señales
-                # 3. Queremos cancelar TODOS los callbacks pendientes
-                self._pending_search_operation.success.disconnect()
-                self._pending_search_operation.error.disconnect()
-            except Exception:
-                pass  # Señales ya desconectadas o operación ya terminada
-            self._pending_search_operation = None
-
         logger.debug("Performing search with criteria: %s", self._requested_search)
-        self.controller.load_members(self._requested_search)
+        self.controller.load_members(self._requested_search, offset=0)
 
     @Slot(object)
     def _on_table_selection_changed(self, summary: Optional[MemberSummary]) -> None:
@@ -540,7 +545,7 @@ class MembersTab(QWidget):
             QTimer.singleShot(100, self._perform_search)
         else:
             logger.info("Reloading all members")
-            QTimer.singleShot(100, lambda: self.controller.load_members())
+            QTimer.singleShot(100, self.controller.refresh_members)
 
     def keyPressEvent(self, event) -> None:
         if event.key() == Qt.Key.Key_Escape and self.member_card.is_editing():
@@ -554,12 +559,13 @@ class MembersTab(QWidget):
     # Helpers
     # ------------------------------------------------------------------
     def _update_status_label(self, state: MemberListState) -> None:
-        visible_rows = len(state.members)
-        total = state.total or visible_rows
-        if visible_rows < total:
-            self.status_label.setText(f"{visible_rows} de {total} socios")
+        if state.total <= 0:
+            self.status_label.setText("0 socios")
         else:
-            self.status_label.setText(f"{total} socios")
+            self.status_label.setText(
+                f"{state.visible_start}-{state.visible_end} de {state.total} socios"
+            )
+        self._update_pagination_buttons()
 
     def _update_action_buttons(self) -> None:
         has_selection = self._current_member_id is not None
@@ -567,6 +573,17 @@ class MembersTab(QWidget):
         can_edit = has_selection and not controls_locked
         self.member_card.set_actions_enabled(can_edit, can_edit)
         self.renew_button.setEnabled(has_selection and not controls_locked and not self.member_card.is_editing())
+        self._update_pagination_buttons()
+
+    def _update_pagination_buttons(self) -> None:
+        controls_locked = (
+            self._loading
+            or self._delete_in_progress
+            or self._basic_update_in_progress
+            or self.member_card.is_editing()
+        )
+        self.previous_page_button.setEnabled(not controls_locked and self._state.has_previous)
+        self.next_page_button.setEnabled(not controls_locked and self._state.has_next)
 
     def _show_member_card(self) -> None:
         if self._card_visible:

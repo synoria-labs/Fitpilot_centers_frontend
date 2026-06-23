@@ -23,6 +23,9 @@ from .base_controller import BaseController
 
 logger = get_logger(__name__)
 
+DEFAULT_PAGE_SIZE = 100
+MAX_PAGE_SIZE = 500
+
 
 class MembersController(BaseController):
     """Coordinates service calls and exposes view-friendly signals."""
@@ -48,6 +51,7 @@ class MembersController(BaseController):
         self._members_service = members_service
         self._standing_bookings_service = standing_bookings_service
         self._state = MemberListState()
+        self._members_request_id = 0
 
     # ------------------------------------------------------------------
     # Public API
@@ -55,30 +59,81 @@ class MembersController(BaseController):
     def state(self) -> MemberListState:
         return self._state
 
-    def load_members(self, search: Optional[str] = None, limit: int = 100, offset: int = 0) -> None:
+    def load_members(
+        self,
+        search: Optional[str] = None,
+        limit: int = DEFAULT_PAGE_SIZE,
+        offset: int = 0,
+    ) -> None:
         """Fetch members from backend with optional filters."""
         if not self._members_service:
             logger.error("Members service not available in controller")
             self.error_occurred.emit("Servicio no disponible")
             return
 
-        logger.info("Loading members search=%s limit=%s offset=%s", search, limit, offset)
+        safe_limit = max(1, min(int(limit or DEFAULT_PAGE_SIZE), MAX_PAGE_SIZE))
+        safe_offset = max(0, int(offset or 0))
+        self._members_request_id += 1
+        request_id = self._members_request_id
 
-        self._update_state(self._state.with_loading(True).with_search(search))
+        logger.info("Loading members search=%s limit=%s offset=%s", search, safe_limit, safe_offset)
+
+        next_state = (
+            self._state
+            .with_search(search)
+            .with_pagination(limit=safe_limit, offset=safe_offset)
+            .with_loading(True)
+        )
+        self._update_state(next_state)
+
+        def on_success(result: Any) -> None:
+            self._on_members_loaded(result, request_id, safe_limit, safe_offset, search)
+
+        def on_error(error: str) -> None:
+            self._on_members_error(error, request_id)
 
         self._execute_authenticated_operation(
             self._members_service,
             "get_members",
-            self._on_members_loaded,
-            self._on_members_error,
-            limit=limit,
-            offset=offset,
+            on_success,
+            on_error,
+            limit=safe_limit,
+            offset=safe_offset,
             search=search,
+        )
+
+    def load_page(self, page: int, search: Optional[str] = None) -> None:
+        """Load a 1-based page using the current page size."""
+        page_number = max(1, int(page or 1))
+        criteria = self._state.search if search is None else search
+        offset = (page_number - 1) * self._state.limit
+        self.load_members(criteria, limit=self._state.limit, offset=offset)
+
+    def next_page(self) -> None:
+        if self._state.loading or not self._state.has_next:
+            return
+        self.load_members(
+            self._state.search,
+            limit=self._state.limit,
+            offset=self._state.offset + self._state.limit,
+        )
+
+    def previous_page(self) -> None:
+        if self._state.loading or not self._state.has_previous:
+            return
+        self.load_members(
+            self._state.search,
+            limit=self._state.limit,
+            offset=max(0, self._state.offset - self._state.limit),
         )
 
     def refresh_members(self) -> None:
         """Reload members using the last known search criteria."""
-        self.load_members(self._state.search)
+        self.load_members(
+            self._state.search,
+            limit=self._state.limit,
+            offset=self._state.offset,
+        )
 
     def get_member_detail(self, member_id: Optional[int]) -> MemberDetailState:
         summary = next((item for item in self._state.members if item.member_id == member_id), None)
@@ -188,8 +243,18 @@ class MembersController(BaseController):
     def _emit_state(self) -> None:
         self.state_changed.emit(self._state)
 
-    @Slot(object)
-    def _on_members_loaded(self, result: Any) -> None:
+    def _on_members_loaded(
+        self,
+        result: Any,
+        request_id: int,
+        limit: int,
+        offset: int,
+        search: Optional[str],
+    ) -> None:
+        if request_id != self._members_request_id:
+            logger.debug("Ignoring stale members response request_id=%s", request_id)
+            return
+
         logger.info("Members controller received result of type %s", type(result))
 
         if isinstance(result, dict):
@@ -199,16 +264,34 @@ class MembersController(BaseController):
             items = result or []
             total = len(items)
 
+        total = max(0, int(total or 0))
+        if not items and total > 0 and offset >= total:
+            last_page_offset = ((total - 1) // limit) * limit
+            logger.info(
+                "Current members page is empty after data change; reloading offset=%s",
+                last_page_offset,
+            )
+            self.load_members(search, limit=limit, offset=last_page_offset)
+            return
+
         summaries = map_members(items)
         logger.debug("Members mapped to %s summaries", len(summaries))
 
-        state = self._state.with_members(summaries, total).with_loading(False)
+        state = (
+            self._state
+            .with_search(search)
+            .with_members(summaries, total, limit=limit, offset=offset)
+            .with_loading(False)
+        )
         self._state = state
         self.loading_changed.emit(False)
         self._emit_state()
 
-    @Slot(str)
-    def _on_members_error(self, error: str) -> None:
+    def _on_members_error(self, error: str, request_id: int) -> None:
+        if request_id != self._members_request_id:
+            logger.debug("Ignoring stale members error request_id=%s", request_id)
+            return
+
         logger.error("Members loading failed: %s", error)
         state = self._state.with_members([], 0).with_loading(False)
         self._state = state
