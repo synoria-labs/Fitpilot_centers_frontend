@@ -42,6 +42,12 @@ class Config:
     THEME: str = 'dark'
     WINDOW_WIDTH: int = 1280
     WINDOW_HEIGHT: int = 800
+
+    # POS / thermal receipt (POS-58). PRINTER_NAME empty -> use the OS default printer.
+    PRINTER_NAME: str = os.getenv('PRINTER_NAME', 'POS-58')
+    RECEIPT_BRAND: str = os.getenv('RECEIPT_BRAND', 'FITPILOT')
+    RECEIPT_FOOTER: str = os.getenv('RECEIPT_FOOTER', '¡Gracias por su preferencia!')
+    RECEIPT_WIDTH: int = int(os.getenv('RECEIPT_WIDTH', '40'))
     
     # Performance Settings
     MAX_THREADS: int = 4

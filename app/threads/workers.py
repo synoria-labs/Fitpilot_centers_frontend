@@ -102,6 +102,9 @@ class TabLoader(BaseWorker):
             "campaigns": ("app.views.tabs.campaigns_tab", "CampaignsTab"),
             "whatsapp_chat": ("app.views.tabs.whatsapp.chat_tab", "ChatTab"),
             "finances": ("app.views.tabs.finances_tab", "FinancesTab"),
+            "pos": ("app.views.tabs.pos_tab", "PosTab"),
+            "cash_register": ("app.views.tabs.cash_register_tab", "CashRegisterTab"),
+            "products": ("app.views.tabs.products_tab", "ProductsTab"),
         }
 
         if self.tab_id in tab_mapping:

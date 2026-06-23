@@ -103,6 +103,10 @@ class FitPilotApp:
             from app.services.standing_bookings_service import StandingBookingsService
             from app.services.sessions_service import SessionsService
             from app.services.finances_service import FinancesService
+            from app.services.pos_service import PosService
+            from app.services.cash_register_service import CashRegisterService
+            from app.services.products_service import ProductsService
+            from app.services.printing_service import PrintingService
             from app.auth.auth_service import AuthService
 
             container.register('auth_service', service=AuthService(graphql_client, session_store))
@@ -125,6 +129,10 @@ class FitPilotApp:
             container.register('cache_service', service=cache_service)
             container.register('finances_service', service=FinancesService(graphql_client, cache_service))
             container.register('dashboard_service', service=DashboardService(graphql_client, cache_service))
+            container.register('pos_service', service=PosService(graphql_client))
+            container.register('cash_register_service', service=CashRegisterService(graphql_client))
+            container.register('products_service', service=ProductsService(graphql_client))
+            container.register('printing_service', service=PrintingService())
             logger.info("Services initialized successfully")
             return True
 

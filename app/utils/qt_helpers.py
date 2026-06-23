@@ -19,6 +19,7 @@ PAYMENT_METHOD_OPTIONS = [
     ("Efectivo", "cash"),
     ("Tarjeta", "card"),
     ("Transferencia", "transfer"),
+    ("MercadoPago", "mercadopago"),
     ("Otro", "other"),
 ]
 
