@@ -23,10 +23,11 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QSizePolicy,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
-from PySide6.QtGui import QPalette 
+from PySide6.QtGui import QPalette
 
 from ...controllers.members_controller import MembersController
 from ...core import container, get_logger
@@ -38,8 +39,7 @@ from ...viewmodels.members_state import (
 )
 from ..dialogs.admin_password_dialog import AdminPasswordDialog
 from ..dialogs.reschedule_standing_booking_dialog import RescheduleStandingBookingDialog
-from ..dialogs.renew_subscription_dialog import RenewSubscriptionDialog
-from ...controllers.renew_subscription_controller import RenewSubscriptionController
+from ..widgets.pos_checkout_panel import PosCheckoutPanel
 from .members.member_detail_card import MemberDetailCard
 from .members.member_table_widget import MemberTableWidget
 from ...utils.dialog_helpers import show_error, show_info, show_warning
@@ -74,10 +74,17 @@ class MembersTab(QWidget):
         self.members_service = members_service
         self.standing_bookings_service = standing_bookings_service
 
+        # Can this user run the POS checkout (Cobrar)? Socios itself is public.
+        try:
+            self._can_pos = bool(container.get("auth_service").has_capability("operate_pos"))
+        except Exception:  # pragma: no cover - defensive
+            self._can_pos = False
+        self.checkout_panel: Optional[PosCheckoutPanel] = None
+
         self._state: MemberListState = self.controller.state()
         self._loading: bool = False
         self._card_visible: bool = False
-        self._card_width: int = 320
+        self._card_width: int = 480
         self._pending_delete_member_id: Optional[int] = None
         self._delete_in_progress: bool = False
         self._basic_update_in_progress: bool = False
@@ -128,6 +135,15 @@ class MembersTab(QWidget):
         self.renew_button.setEnabled(False)
         toolbar_layout.addWidget(self.renew_button)
 
+        self.walkin_button = QPushButton("Venta de mostrador")
+        self.walkin_button.setObjectName("actionButton")
+        toolbar_layout.addWidget(self.walkin_button)
+
+        # POS actions require the operate_pos capability.
+        if not self._can_pos:
+            self.renew_button.setVisible(False)
+            self.walkin_button.setVisible(False)
+
         layout.addLayout(toolbar_layout)
 
         content_layout = QHBoxLayout()
@@ -164,8 +180,14 @@ class MembersTab(QWidget):
         frame_layout.setContentsMargins(0, 0, 0, 0)
         frame_layout.setSpacing(0)
 
-        self.member_card = MemberDetailCard(self.side_card_frame)
-        frame_layout.addWidget(self.member_card)
+        # Right panel = sub-tabs "Perfil" (member card) + "Cobrar" (POS checkout).
+        self.right_tabs = QTabWidget(self.side_card_frame)
+        self.member_card = MemberDetailCard(self.right_tabs)
+        self.right_tabs.addTab(self.member_card, "Perfil")
+        if self._can_pos:
+            self.checkout_panel = PosCheckoutPanel(self.right_tabs)
+            self.right_tabs.addTab(self.checkout_panel, "Cobrar")
+        frame_layout.addWidget(self.right_tabs)
 
         side_card_layout.addWidget(self.side_card_frame)
         content_layout.addWidget(self.side_card_container)
@@ -210,6 +232,9 @@ class MembersTab(QWidget):
         self.new_button.clicked.connect(self.new_member_requested.emit)
         self.new_member_requested.connect(self.controller.handle_new_member_request)
         self.renew_button.clicked.connect(self._on_renew_clicked)
+        self.walkin_button.clicked.connect(self._on_walkin_clicked)
+        if self.checkout_panel is not None:
+            self.checkout_panel.sale_completed.connect(self._on_checkout_sale_completed)
 
         self.member_table.selection_changed.connect(self._on_table_selection_changed)
         self.member_table.activated.connect(self._on_table_activated)
@@ -409,6 +434,8 @@ class MembersTab(QWidget):
             self._current_member_id = None
             self.member_selected.emit(-1)
             self.member_card.reset()
+            if self.checkout_panel is not None:
+                self.checkout_panel.set_member(None)
             self._hide_member_card()
             self._update_action_buttons()
             return
@@ -418,6 +445,16 @@ class MembersTab(QWidget):
         self.member_selected.emit(summary.member_id)
 
         self.member_card.set_state(MemberDetailState.from_summary(summary))
+        if self.checkout_panel is not None:
+            # MemberSummary exposes these as normalized fields; do NOT reach into
+            # summary.source (it's a Member dataclass on the list path, not a dict).
+            self.checkout_panel.set_member({
+                "id": summary.member_id,  # PosMembershipLineDialog/_on_charge use "id"
+                "full_name": summary.full_name,
+                "email": summary.email,
+                "phone_number": summary.phone_number,
+            })
+            self.right_tabs.setCurrentIndex(0)  # default to Perfil on each new selection
         self._show_member_card()
         self._update_action_buttons()
 
@@ -467,36 +504,11 @@ class MembersTab(QWidget):
 
     @Slot()
     def _on_renew_clicked(self) -> None:
-        if self._loading or self._current_member_id is None:
+        """Route renovación through the POS checkout (ticket -> caja + print)."""
+        if self._loading or self._current_member_id is None or self.checkout_panel is None:
             return
-
-        summary = self.member_table.current_summary()
-        if summary is None:
-            return
-
-        self.renew_members_requested.emit(summary.member_id)
-
-        controller = RenewSubscriptionController(
-            members_service=self.members_service,
-            standing_bookings_service=self.standing_bookings_service,
-            parent=self,
-        )
-
-        dialog = RenewSubscriptionDialog(
-            controller=controller,
-            member_id=summary.member_id,
-            member_name=summary.full_name,
-            member_data=summary.source,
-            parent=self,
-        )
-
-        # Connect subscription_renewed signal to refresh UI
-        dialog.subscription_renewed.connect(self._on_subscription_renewed)
-
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            payload = getattr(dialog, "payload", None)
-            if payload is not None:
-                self.renewal_submitted.emit(payload)
+        self.right_tabs.setCurrentWidget(self.checkout_panel)
+        self.checkout_panel.start_renewal()
 
     @Slot(int)
     def _on_reschedule_requested(self, member_id: int) -> None:
@@ -529,22 +541,27 @@ class MembersTab(QWidget):
 
         dialog.exec()
 
-    @Slot(int, dict)
-    def _on_subscription_renewed(self, member_id: int, result: dict) -> None:
-        """Handle subscription renewal completion and refresh UI."""
-        logger.info(f"Subscription renewed for member {member_id}, refreshing UI")
+    @Slot()
+    def _on_walkin_clicked(self) -> None:
+        """Open the checkout for a walk-in sale (no member, person_id=None)."""
+        if self.checkout_panel is None:
+            return
+        self.member_table.clearSelection()  # -> _on_table_selection_changed(None)
+        self.checkout_panel.set_member(None)
+        self.checkout_panel.reset()
+        self._show_member_card()
+        self.right_tabs.setCurrentWidget(self.checkout_panel)
+        self._update_action_buttons()
 
-        # Refresh the member data in the controller
-        # This will update both the table and the detail card
-        self.controller.get_member_detail(member_id)
-
-        # If we have a current search query, re-run the search to update the table
-        # Otherwise, just reload all members
+    @Slot(object)
+    def _on_checkout_sale_completed(self, sale) -> None:
+        """Refresh the member after a POS sale so the renewed plan/end date shows."""
+        member_id = self._current_member_id
+        if member_id:
+            self.controller.get_member_detail(member_id)
         if self._requested_search:
-            logger.info(f"Re-running search with query: {self._requested_search}")
             QTimer.singleShot(100, self._perform_search)
         else:
-            logger.info("Reloading all members")
             QTimer.singleShot(100, self.controller.refresh_members)
 
     def keyPressEvent(self, event) -> None:
@@ -610,8 +627,13 @@ class MembersTab(QWidget):
         self.opacity_animation.setStartValue(self.side_card_opacity.opacity())
         self.opacity_animation.setEndValue(0.0)
         self._card_animation_group.start()
-        QTimer.singleShot(280, lambda: self.side_card_container.setVisible(False))
+        # Guarded finalize: if _show ran again within the animation window, don't hide.
+        QTimer.singleShot(280, self._finalize_hide)
         self._card_visible = False
+
+    def _finalize_hide(self) -> None:
+        if not self._card_visible:
+            self.side_card_container.setVisible(False)
 
     # ------------------------------------------------------------------
     # Click-away global para to close panel
@@ -646,8 +668,14 @@ class MembersTab(QWidget):
                     self.member_card.cancel_edit()
                     return False
 
+                # No cerrar si estamos cobrando: un clic en zona muerta no debe
+                # borrar una venta en curso.
+                on_checkout = (
+                    self.checkout_panel is not None
+                    and self.right_tabs.currentWidget() is self.checkout_panel
+                )
                 # Clic fuera de la tabla y fuera del panel -> cerrar
-                if not in_card and not in_table:
+                if not in_card and not in_table and not on_checkout:
                     self.member_table.clearSelection()
                     self._hide_member_card()
                     return False  # dejamos que otros manejen el evento

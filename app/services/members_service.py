@@ -253,6 +253,7 @@ class MembersService:
                         startTimeLocal
                         venueName
                         instructorName
+                        seatId
                     }
                     totalPayments
                 }
@@ -309,6 +310,7 @@ class MembersService:
                     'start_time_local': active_standing_booking.get('startTimeLocal'),
                     'venue_name': active_standing_booking.get('venueName'),
                     'instructor_name': active_standing_booking.get('instructorName'),
+                    'seat_id': active_standing_booking.get('seatId'),
                 }
 
             logger.info("Member data loaded successfully for ID %s", member_id)

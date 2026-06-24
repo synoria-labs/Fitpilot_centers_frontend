@@ -32,15 +32,14 @@ NAV_ITEMS = [
     SidebarItem("whatsapp", "WhatsApp", "mdi6.whatsapp", is_public=False),
     SidebarItem("chatbot_config", "Chatbot", "mdi6.robot-outline", is_public=False),
     SidebarItem("campaigns", "Campañas", "mdi6.bullhorn", is_public=False),
-    SidebarItem("pos", "Punto de Venta", "mdi6.cash-register", is_public=False),
     SidebarItem("cash_register", "Caja", "mdi6.cash-lock-open", is_public=False),
     SidebarItem("products", "Productos", "mdi6.package-variant-closed", is_public=False),
     SidebarItem("finances", "Finanzas", "mdi6.cash-multiple", is_public=False),
 ]
 
 # Nav items that a non-admin can access when they hold a specific capability.
+# (Punto de Venta is now embedded in the Socios tab as a "Cobrar" sub-tab.)
 NAV_CAPABILITY_GATES = {
-    "pos": "operate_pos",
     "cash_register": "manage_cash_session",
     "products": "manage_products",
 }
