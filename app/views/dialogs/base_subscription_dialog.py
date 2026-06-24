@@ -229,20 +229,24 @@ class BaseSubscriptionDialog(QDialog):
                 if first_available == -1:
                     first_available = idx
 
-        # Handle pending seat selection
+        # Handle pending seat selection (e.g. pre-fill the member's current seat on renewal).
+        # Honor an explicitly-requested seat even if it reads as occupied, so the pre-fill
+        # isn't silently lost; a real conflict is still caught by ensure_seat_available on accept.
+        pending_matched = False
         if self._pending_seat_selection is not None:
             for i in range(self.seat_combo.count()):
                 data = self.seat_combo.itemData(i)
                 if isinstance(data, Seat) and data.id == self._pending_seat_selection:
                     self.seat_combo.setCurrentIndex(i)
+                    pending_matched = True
                     if bool(getattr(data, 'is_available', True)):
                         first_available = i
                     break
             self._pending_seat_selection = None
 
-        if first_available >= 0:
+        if not pending_matched and first_available >= 0:
             self.seat_combo.setCurrentIndex(first_available)
-        self.seat_combo.setEnabled(first_available >= 0)
+        self.seat_combo.setEnabled(pending_matched or first_available >= 0)
         self.seat_combo.blockSignals(False)
 
     def _on_seats_error(self, error: str) -> None:

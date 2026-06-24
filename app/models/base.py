@@ -169,6 +169,7 @@ class ActiveStandingBookingInfo(BaseModel):
     start_time_local: Optional[str] = None
     venue_name: Optional[str] = None
     instructor_name: Optional[str] = None
+    seat_id: Optional[int] = None
 
     def display_label(self) -> str:
         name = self.template_name or self.class_type_name or "Clase"
