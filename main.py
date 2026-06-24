@@ -133,6 +133,8 @@ class FitPilotApp:
             container.register('cash_register_service', service=CashRegisterService(graphql_client))
             container.register('products_service', service=ProductsService(graphql_client))
             container.register('printing_service', service=PrintingService())
+            from app.services.verification_service import VerificationService
+            container.register('verification_service', service=VerificationService(graphql_client))
             logger.info("Services initialized successfully")
             return True
 

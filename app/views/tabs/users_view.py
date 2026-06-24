@@ -13,13 +13,14 @@ from PySide6.QtWidgets import (
     QFormLayout, QLineEdit, QCheckBox, QDialogButtonBox,
     QListWidget, QListWidgetItem, QInputDialog,
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QEventLoop, QTimer
 from PySide6.QtGui import QFont
 
 from ...core import container, get_logger
 from ...models.base import AppUser, AppRole
 from ...utils.dialog_helpers import show_confirmation, show_error, show_info
 from ..table_widget_helpers import configure_table_widget
+from ..dialogs.step_up_code_dialog import StepUpCodeDialog
 
 logger = get_logger(__name__)
 
@@ -34,14 +35,16 @@ class UsersView(QWidget):
 
         try:
             users_service = container.get("users_service")
+            verification_service = container.get("verification_service")
         except Exception as exc:  # pragma: no cover - defensive
-            logger.error("Failed to retrieve users_service: %s", exc)
+            logger.error("Failed to retrieve services: %s", exc)
             raise
 
         self._can_manage = self._resolve_can_manage()
 
         from ...controllers.users_controller import UsersController
         self.controller = UsersController(users_service, self)
+        self._verification_service = verification_service
 
         self._users: List[AppUser] = []
         self._roles: List[AppRole] = []
@@ -223,7 +226,74 @@ class UsersView(QWidget):
         if not (password or "").strip():
             show_error(self, "La contraseña no puede estar vacía.", title="Usuarios")
             return
-        self.controller.reset_password(user.account_id, password)
+
+        # Step-up verification by email (MVP: SMS disabled).
+        # The proof belongs to the authenticated admin, not to the target user.
+        step_up_proof = self._collect_step_up_proof_blocking()
+        if step_up_proof is None:
+            return  # user cancelled or verification unavailable
+
+        self.controller.reset_password(user.account_id, password, step_up_proof)
+
+    def _collect_step_up_proof_blocking(self) -> Optional[str]:
+        """Run the email step-up flow (request -> ask code -> verify).
+
+        Returns the single-use proof on success, or None if the user cancelled
+        or the verification is unavailable. The proof is only kept in memory
+        long enough to submit the sensitive mutation.
+        """
+        if not self._verification_service:
+            show_error(
+                self,
+                "La verificación de 2 pasos no está disponible.",
+                title="Restablecer contraseña",
+            )
+            return None
+
+        async def _flow() -> Optional[str]:
+            request = await self._verification_service.request_email_step_up()
+            if not request.get("success"):
+                message = request.get("message") or "No se pudo enviar el código."
+                show_error(self, message, title="Verificación por correo")
+                return None
+
+            dialog = StepUpCodeDialog(
+                self,
+                masked_destination=request.get("maskedDestination"),
+            )
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                return None
+
+            check = await self._verification_service.verify_step_up_code(
+                str(request.get("verificationId") or ""), dialog.code()
+            )
+            if not check.get("success") or not check.get("proof"):
+                message = check.get("message") or "Código incorrecto o expirado."
+                show_error(self, message, title="Verificación por correo")
+                return None
+            return str(check.get("proof"))
+
+        # The service methods are coroutines; drive them with a nested event loop.
+        return self._run_async(_flow)
+
+    def _run_async(self, coro_factory) -> Optional[str]:
+        """Run an async coroutine to completion on the GUI thread.
+
+        Uses a nested asyncio event loop scoped to the call so we don't
+        interfere with the main Qt loop. Returns the coroutine's result.
+        """
+        import asyncio
+        try:
+            loop = asyncio.new_event_loop()
+        except RuntimeError:
+            loop = asyncio.get_event_loop()
+        try:
+            return loop.run_until_complete(coro_factory())
+        finally:
+            try:
+                loop.close()
+            except Exception:  # noqa: BLE001
+                pass
 
     def on_deactivate_clicked(self):
         if not self._can_manage:

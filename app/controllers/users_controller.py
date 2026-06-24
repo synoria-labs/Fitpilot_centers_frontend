@@ -74,8 +74,18 @@ class UsersController(BaseController):
     def activate_user(self, account_id: int) -> None:
         self._run_mutation("set_user_active", account_id=int(account_id), is_active=True)
 
-    def reset_password(self, account_id: int, password: str) -> None:
-        self._run_mutation("reset_password", account_id=int(account_id), password=password)
+    def reset_password(
+        self,
+        account_id: int,
+        password: str,
+        step_up_proof: Optional[str] = None,
+    ) -> None:
+        self._run_mutation(
+            "reset_password",
+            account_id=int(account_id),
+            password=password,
+            step_up_proof=step_up_proof,
+        )
 
     # ------------------------------------------------------------------
     # Internal helpers

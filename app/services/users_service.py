@@ -1,7 +1,7 @@
 """Service layer for user (login account) management (GraphQL)."""
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from ..core.logging import get_logger
 from ..utils.datetime_helpers import parse_iso_datetime
@@ -158,17 +158,26 @@ class UsersService:
         variables = {"accountId": int(account_id), "isActive": bool(is_active)}
         return await self._run_user_mutation(mutation, variables, "setUserActive")
 
-    async def reset_password(self, account_id: int, password: str) -> Dict[str, Any]:
+    async def reset_password(
+        self,
+        account_id: int,
+        password: str,
+        step_up_proof: Optional[str] = None,
+    ) -> Dict[str, Any]:
         mutation = """
-            mutation ResetUserPassword($accountId: Int!, $password: String!) {
-                resetUserPassword(accountId: $accountId, password: $password) {
+            mutation ResetUserPassword($accountId: Int!, $password: String!, $stepUpProof: String) {
+                resetUserPassword(accountId: $accountId, password: $password, stepUpProof: $stepUpProof) {
                     success
                     message
                 }
             }
         """
 
-        variables = {"accountId": int(account_id), "password": password}
+        variables = {
+            "accountId": int(account_id),
+            "password": password,
+            "stepUpProof": step_up_proof or None,
+        }
         return await self._run_user_mutation(mutation, variables, "resetUserPassword")
 
     async def _run_user_mutation(
