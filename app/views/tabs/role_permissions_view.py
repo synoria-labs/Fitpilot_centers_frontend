@@ -25,6 +25,16 @@ CAPABILITY_LABELS = {
     "manage_membership_plans": "Gestionar planes",
     "manage_owner_agent": "Gestionar agente admin",
     "manage_users": "Gestionar usuarios",
+    "operate_pos": "Operar POS",
+    "manage_cash_session": "Gestionar caja",
+    "view_pos_reports": "Ver reportes POS",
+    "manage_products": "Gestionar productos",
+    "manage_payments": "Gestionar pagos",
+    "manage_subscriptions": "Gestionar suscripciones",
+    "send_campaigns": "Enviar campañas",
+    "view_members": "Ver socios",
+    "view_finances": "Ver finanzas",
+    "view_chats": "Ver chats",
 }
 
 
