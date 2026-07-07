@@ -199,7 +199,14 @@ class GraphQLClient:
         variables: Optional[Dict[str, Any]] = None,
         use_auth: bool = True,
     ) -> Optional[Dict[str, Any]]:
-        """Ejecuta una query/mutation GraphQL y devuelve `data` o None en error."""
+        """Ejecuta una query/mutation GraphQL y devuelve `data` o None en error.
+
+        Mantiene el contrato data-or-None (todos los callers dependen de él) pero
+        además publica ``self.last_error`` en cada fallo (como ``execute_multipart``),
+        para que el caller pueda distinguir "sin datos" de "fallo" leyendo
+        ``getattr(client, "last_error", None)`` inmediatamente despues de un None.
+        """
+        self.last_error = None
         payload: Dict[str, Any] = {"query": query, "variables": variables or {}}
         headers = self._build_headers(use_auth=use_auth)
 
@@ -303,11 +310,13 @@ class GraphQLClient:
                             logger.error("GraphQL errors (after %d retries): %s", attempt, data["errors"])
                         else:
                             logger.error("GraphQL errors: %s", data["errors"])
+                        self.last_error = _format_graphql_errors(data["errors"])
                         return None
-                    
+
                     # Si no hay errores en data pero use_auth es False, también verificar errores
                     if "errors" in data and not use_auth:
                         logger.error("GraphQL errors (no auth): %s", data["errors"])
+                        self.last_error = _format_graphql_errors(data["errors"])
                         return None
 
                     if attempt > 0:
@@ -315,19 +324,23 @@ class GraphQLClient:
                     return data.get("data")
                 except ValueError as e:
                     logger.error("JSON decode error: %s", e)
+                    self.last_error = "Respuesta del servidor no es JSON válido"
                     return None
 
             if attempt > 0:
                 logger.error("HTTP %s (after %d retries): %s", resp.status_code, attempt, resp.text)
             else:
                 logger.error("HTTP %s: %s", resp.status_code, resp.text)
+            self.last_error = f"HTTP {resp.status_code}"
             return None
 
         except httpx.TimeoutException as e:
             logger.error("Timeout en execute: %s", e)
+            self.last_error = "Tiempo de espera agotado"
             return None
         except httpx.RequestError as e:
             logger.error("Request error en execute: %s", e)
+            self.last_error = "Error de conexión con el servidor"
             return None
         except RuntimeError as e:
             # En teoría no volverá a pasar con cliente por loop, pero por si acaso:
@@ -344,8 +357,10 @@ class GraphQLClient:
                 except Exception:
                     pass
                 logger.error("Cannot recover from closed loop.")
+                self.last_error = "Error interno (event loop cerrado)"
                 return None
             logger.error("RuntimeError en execute: %s", e)
+            self.last_error = "Error interno del cliente"
             return None
         except TypeError as e:
             # Específicamente capturar errores de serialización JSON
@@ -354,9 +369,11 @@ class GraphQLClient:
                 logger.error("This usually means a datetime object was passed without .isoformat() conversion")
             else:
                 logger.error("TypeError en execute: %s", e)
+            self.last_error = "Error serializando la solicitud"
             return None
         except Exception as e:
             logger.error("Error en execute: %s", e)
+            self.last_error = "Error inesperado"
             return None
 
     async def execute_multipart(
