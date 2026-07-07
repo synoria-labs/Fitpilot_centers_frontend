@@ -132,7 +132,7 @@ class AuthenticatedOperation(QObject):
 
     def _on_result(self, value: Any) -> None:
         """Slot para resultado exitoso."""
-        logger.info("AuthenticatedOperation result: %s", _summarize_result(value))
+        logger.debug("AuthenticatedOperation result: %s", _summarize_result(value))
         self.success.emit(value)
 
     def _on_error(self, msg: str) -> None:
