@@ -223,6 +223,18 @@ class WhatsAppChatController(BaseController):
         if self._ws_client is not None:
             return
         try:
+            # The access token lives ~5 min; the WS client refreshes it (before
+            # connecting and after auth errors) via the AuthService coroutine.
+            refresh_token = None
+            try:
+                from ..core.di import container
+
+                auth_service = container.get("auth_service")
+                if auth_service is not None:
+                    refresh_token = auth_service.refresh_token
+            except Exception as e:  # noqa: BLE001 - realtime still works, sin refresh
+                logger.warning("Chat realtime: auth_service unavailable for refresh: %s", e)
+
             self._ws_client = ChatSubscriptionClient()
             executor = get_global_executor()
             coro = self._ws_client.run(
@@ -230,6 +242,7 @@ class WhatsAppChatController(BaseController):
                 get_token=GraphQLClient.current_access_token,
                 conversation_id=None,  # all conversations; filter per view
                 on_message_updated=lambda data: self._ws_bridge.message_update_received.emit(data),
+                refresh_token=refresh_token,
             )
             self._ws_signals = executor.submit_coroutine(coro)
             self._ws_signals.error.connect(

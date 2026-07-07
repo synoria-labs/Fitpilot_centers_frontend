@@ -2,11 +2,15 @@
 Sistema de logging unificado para FitPilot.
 """
 import sys
+import time
 import logging
-from datetime import datetime
+from logging.handlers import TimedRotatingFileHandler
 from typing import Optional
 
 from .config import Config
+
+# Días de retención de logs (rotación diaria + purga de restos antiguos).
+LOG_RETENTION_DAYS = 30
 
 
 class Logger:
@@ -31,11 +35,18 @@ class Logger:
         date_format = '%Y-%m-%d %H:%M:%S'
         log_level = getattr(logging, Config.LOG_LEVEL.upper(), logging.INFO)
 
-        # Handlers: consola + archivo diario
-        daily_log_path = Config.LOGS_DIR / f"fitpilot_{datetime.now().strftime('%Y%m%d')}.log"
+        # Handlers: consola + archivo con rotación real a medianoche.
+        # (El FileHandler anterior calculaba la fecha una sola vez al arrancar,
+        # así que solo "rotaba" si se reiniciaba la app y crecía sin límite.)
+        file_handler = TimedRotatingFileHandler(
+            Config.LOGS_DIR / "fitpilot.log",
+            when="midnight",
+            backupCount=LOG_RETENTION_DAYS,
+            encoding="utf-8",
+        )
         handlers = [
             logging.StreamHandler(sys.stdout),
-            logging.FileHandler(daily_log_path, encoding='utf-8'),
+            file_handler,
         ]
 
         logging.basicConfig(
@@ -44,6 +55,27 @@ class Logger:
             datefmt=date_format,
             handlers=handlers,
         )
+
+        self._purge_old_logs()
+
+    @staticmethod
+    def _purge_old_logs() -> None:
+        """Borra logs con más de LOG_RETENTION_DAYS días.
+
+        Cubre los restos del esquema anterior (``fitpilot_YYYYMMDD.log``) y los
+        sufijos rotados de TimedRotatingFileHandler (``fitpilot.log.YYYY-MM-DD``);
+        backupCount solo limpia los suyos y no toca los legacy.
+        """
+        cutoff = time.time() - LOG_RETENTION_DAYS * 86400
+        try:
+            for path in Config.LOGS_DIR.glob("fitpilot*.log*"):
+                try:
+                    if path.is_file() and path.stat().st_mtime < cutoff:
+                        path.unlink()
+                except OSError:
+                    continue  # en uso o sin permisos; se reintenta al próximo arranque
+        except OSError:
+            pass
 
     @classmethod
     def get_logger(cls, name: str) -> logging.Logger:

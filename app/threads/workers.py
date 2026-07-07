@@ -45,27 +45,23 @@ class BaseWorker(QRunnable):
         self._is_cancelled = True
 
     def run(self) -> None:
-        logger.info(f"{self.__class__.__name__}: run() started")
+        # Trazas del ciclo de vida en DEBUG: con INFO eran ~8 líneas por worker.
+        logger.debug(f"{self.__class__.__name__}: run() started")
         self.signals.started.emit()
-        logger.info(f"{self.__class__.__name__}: started signal emitted")
         try:
             if not self._is_cancelled:
-                logger.info(f"{self.__class__.__name__}: calling do_work()")
                 result = self.do_work()
-                logger.info(f"{self.__class__.__name__}: do_work() returned: {type(result)}")
+                logger.debug(f"{self.__class__.__name__}: do_work() returned: {type(result)}")
                 if result is not None:
-                    logger.info(f"{self.__class__.__name__}: Emitting result signal with payload: {type(result)}")
                     self.signals.result.emit(result)
-                    logger.info(f"{self.__class__.__name__}: result signal emitted successfully")
                 else:
                     logger.warning(f"{self.__class__.__name__}: do_work() returned None, not emitting result")
         except Exception as e:
             logger.error(f"Worker error: {e}", exc_info=True)
             self.signals.error.emit(str(e))
         finally:
-            logger.info(f"{self.__class__.__name__}: emitting finished signal")
             self.signals.finished.emit()
-            logger.info(f"{self.__class__.__name__}: run() completed")
+            logger.debug(f"{self.__class__.__name__}: run() completed")
 
     def do_work(self) -> Any:
         raise NotImplementedError
