@@ -156,11 +156,23 @@ class AsyncioExecutor(QThread):
         if self._task_queue is None:
             raise RuntimeError("Task queue not initialized")
 
+        # If shutdown was requested before we got here, the None sentinel may have
+        # been SKIPPED: shutdown() only enqueues it when the loop already exists,
+        # so a shutdown() that ran while this QThread was still starting up would
+        # set the flag but enqueue nothing. Bail out now instead of blocking on a
+        # get() that would never return (which would hang shutdown_global_executor's
+        # wait()).
+        with self._shutdown_lock:
+            if self._shutdown_requested:
+                logger.info("AsyncioExecutor: shutdown requested during startup; not processing")
+                return
+
         while True:
-            # Block until the next task arrives. shutdown() always enqueues a
-            # None sentinel, so there is no need to poll: this replaces the old
-            # 100ms wait_for loop that woke ~10x/second while idle (pure busy-wait,
-            # a measurable battery/CPU drain on an always-open desktop client).
+            # Block until the next task arrives. shutdown() enqueues a None
+            # sentinel (and the startup-race above is handled), so there is no need
+            # to poll: this replaces the old 100ms wait_for loop that woke ~10x/second
+            # while idle (pure busy-wait, a measurable battery/CPU drain on an
+            # always-open desktop client).
             task = await self._task_queue.get()
 
             # None is the shutdown sentinel
@@ -486,6 +498,10 @@ def shutdown_global_executor(wait_for_tasks: bool = True) -> None:
     with _global_executor_lock:
         if _global_executor is not None:
             _global_executor.shutdown(wait_for_tasks)
-            _global_executor.wait()
+            # Bounded wait: never let a stuck executor thread hang app teardown
+            # forever (defensive belt-and-suspenders alongside the startup-race
+            # guard in _process_tasks).
+            if not _global_executor.wait(5000):  # milliseconds
+                logger.warning("AsyncioExecutor did not stop within 5s; abandoning wait")
             _global_executor = None
             logger.info("Global AsyncioExecutor shut down")

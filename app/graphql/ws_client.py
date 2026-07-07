@@ -162,7 +162,10 @@ class ChatSubscriptionClient:
         ``refresh_token`` is an async callable (e.g. ``AuthService.refresh_token``)
         returning True when a new access token landed in the shared cookie jar.
         """
-        self._stop = False
+        # NOTE: do NOT reset self._stop here. __init__ already sets it False and
+        # every start creates a fresh client; resetting on the executor thread
+        # could clobber a stop() that raced in from the GUI thread, orphaning an
+        # unstoppable subscription.
         backoff = 1
         auth_failures = 0
         healthy = False  # set when the current connection proves itself
@@ -232,19 +235,27 @@ class ChatSubscriptionClient:
                                 "Chat subscription: token refresh after auth error failed: %s",
                                 refresh_err,
                             )
-                    if refreshed:
-                        auth_failures = 0
+                    if auth_failures >= _MAX_AUTH_FAILURES:
+                        # Persistent auth failure a refresh cannot resolve. Covers
+                        # BOTH a revoked session (refresh fails) AND a valid token
+                        # that is simply NOT AUTHORIZED for this subscription
+                        # (refresh keeps "succeeding" but the reconnect fails the
+                        # same way). auth_failures is reset ONLY by a HEALTHY
+                        # connection (first event / >=60s uptime), never by a mere
+                        # refresh success — otherwise an authorization error would
+                        # loop forever at ~1/s and never go dormant.
+                        delay = _DORMANT_RETRY_S
+                        logger.error(
+                            "Chat subscription: %d consecutive auth failures a refresh does not "
+                            "resolve (session revoked or subscription not authorized); "
+                            "retrying in %ss",
+                            auth_failures,
+                            delay,
+                        )
+                    elif refreshed:
                         delay = 1
                         logger.info(
                             "Chat subscription auth error: %s; token refreshed, reconnecting", e
-                        )
-                    elif auth_failures >= _MAX_AUTH_FAILURES:
-                        delay = _DORMANT_RETRY_S
-                        logger.error(
-                            "Chat subscription: %d consecutive auth failures and refresh is not "
-                            "working (session revoked or re-login required); retrying in %ss",
-                            auth_failures,
-                            delay,
                         )
                     else:
                         delay = min(backoff, _MAX_BACKOFF_S)
@@ -264,14 +275,33 @@ class ChatSubscriptionClient:
                 if self._stop:
                     break
                 # Jitter avoids synchronized reconnect stampedes across clients.
-                await asyncio.sleep(delay + random.uniform(0, delay * 0.25))
+                await self._sleep_or_stop(delay + random.uniform(0, delay * 0.25))
                 continue
             # Clean exit from the session (e.g. stop() during consume).
             if self._stop:
                 break
-            await asyncio.sleep(backoff + random.uniform(0, backoff * 0.25))
+            await self._sleep_or_stop(backoff + random.uniform(0, backoff * 0.25))
             backoff = min(backoff * 2, _MAX_BACKOFF_S)
         logger.info("Chat subscription stopped")
+
+    async def _sleep_or_stop(self, delay: float) -> None:
+        """Sleep up to ``delay`` seconds, waking within ~1s if stop() is called.
+
+        The reconnect/dormant delay can be up to _DORMANT_RETRY_S (300s); a plain
+        asyncio.sleep would keep the coroutine (and, on the idle path, the backend
+        WS) alive that long after a logout. stop() sets self._stop from the GUI
+        thread (a plain bool write, GIL-atomic), so we poll it in short slices
+        rather than cross-thread signalling an asyncio.Event (which is not
+        thread-safe). This only runs in the exceptional backoff/dormant state, so
+        the ~1s granularity is not a steady-state busy-wait.
+        """
+        loop = asyncio.get_event_loop()
+        deadline = loop.time() + delay
+        while not self._stop:
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                return
+            await asyncio.sleep(min(remaining, 1.0))
 
     async def _consume(
         self,
