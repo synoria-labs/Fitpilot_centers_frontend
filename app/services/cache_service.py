@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import time
+from collections import OrderedDict
 from json import JSONDecodeError
 from pathlib import Path
 from typing import Any, Callable, ClassVar, Dict, Optional, TypedDict
@@ -14,6 +15,11 @@ from ..core.logging import get_logger
 
 logger = get_logger(__name__)
 
+# Tope de entradas en memoria. El caché en memoria era un dict sin límite: crecía
+# indefinidamente (las entradas vencidas nunca se purgaban, solo se sobreescribían
+# por clave). Ahora es un LRU acotado.
+_MAX_MEMORY_ENTRIES = 256
+
 
 class CacheEntry(TypedDict):
     value: Any
@@ -21,18 +27,18 @@ class CacheEntry(TypedDict):
 
 
 class CacheService:
-    """Servicio simple de caché en memoria y disco (singleton)."""
+    """Servicio simple de caché en memoria (LRU acotado) y disco (singleton)."""
 
     # Para Pylance: declarar atributos de instancia y el singleton
     _instance: ClassVar[Optional["CacheService"]] = None
-    memory_cache: Dict[str, CacheEntry]
+    memory_cache: "OrderedDict[str, CacheEntry]"
     cache_dir: Path
 
     def __new__(cls) -> "CacheService":
         if cls._instance is None:
             inst = super().__new__(cls)
             # Inicializamos atributos de instancia tipados
-            inst.memory_cache = {}
+            inst.memory_cache = OrderedDict()
             # Asegura Path: Config.CACHE_DIR puede ser str o Path
             cache_dir = getattr(Config, "CACHE_DIR", ".cache")
             inst.cache_dir = Path(cache_dir)
@@ -41,6 +47,13 @@ class CacheService:
         return cls._instance  # type: ignore[return-value]
 
     # No redefinimos __init__ para no re-ejecutar nada en cada obtención del singleton
+
+    def _remember(self, key: str, entry: CacheEntry) -> None:
+        """Inserta en el LRU en memoria y desaloja las entradas más antiguas."""
+        self.memory_cache[key] = entry
+        self.memory_cache.move_to_end(key)
+        while len(self.memory_cache) > _MAX_MEMORY_ENTRIES:
+            self.memory_cache.popitem(last=False)  # elimina la menos usada
 
     def _key_path(self, key: str) -> Path:
         """Convierte una clave en una ruta de archivo segura."""
@@ -60,9 +73,13 @@ class CacheService:
 
         # 1) Memoria
         entry = self.memory_cache.get(key)
-        if entry and (now - entry["timestamp"] < max_age):
-            logger.debug(f"Cache hit (memory): {key}")
-            return entry["value"]
+        if entry:
+            if now - entry["timestamp"] < max_age:
+                self.memory_cache.move_to_end(key)  # marca como reciente (LRU)
+                logger.debug(f"Cache hit (memory): {key}")
+                return entry["value"]
+            # Vencida: purgar de memoria en vez de retenerla para siempre.
+            self.memory_cache.pop(key, None)
 
         # 2) Disco
         cache_file = self._key_path(key)
@@ -72,7 +89,7 @@ class CacheService:
                     on_disk: CacheEntry = json.load(f)  # type: ignore[assignment]
                 if now - on_disk["timestamp"] < max_age:
                     # Promociona a memoria
-                    self.memory_cache[key] = on_disk
+                    self._remember(key, on_disk)
                     logger.debug(f"Cache hit (disk): {key}")
                     return on_disk["value"]
             except (OSError, JSONDecodeError) as e:
@@ -92,8 +109,8 @@ class CacheService:
         """
         entry: CacheEntry = {"value": value, "timestamp": time.time()}
 
-        # Memoria
-        self.memory_cache[key] = entry
+        # Memoria (LRU acotado)
+        self._remember(key, entry)
 
         # Disco
         if persist:

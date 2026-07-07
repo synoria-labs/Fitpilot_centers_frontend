@@ -58,7 +58,6 @@ class Config:
     GRAPHQL_TIMEOUT: float = 30.0
     GRAPHQL_MAX_RETRIES: int = 3
     GRAPHQL_RETRY_DELAYS: list = [0.1, 0.3, 0.5]  # Exponential backoff in seconds
-    MAX_CONCURRENT_WORKERS: int = 3  # Limit concurrent authenticated workers
 
     @classmethod
     def init_directories(cls):

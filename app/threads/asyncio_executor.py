@@ -20,6 +20,7 @@ References:
 import asyncio
 import inspect
 import logging
+import sys
 import threading
 import weakref
 from typing import Any, Awaitable, Callable, Coroutine, Optional, cast
@@ -99,6 +100,12 @@ class AsyncioExecutor(QThread):
         self._active_tasks: dict[int, asyncio.Task[Any]] = {}
         self._active_tasks_lock = threading.Lock()
 
+        # Strong references to the per-task wrapper coroutines. asyncio only keeps
+        # a WEAK reference to tasks created with create_task, so a fire-and-forget
+        # task can be garbage-collected mid-flight and silently stop running. We
+        # hold it here until it finishes (done-callback discards it).
+        self._background_tasks: set[asyncio.Task[Any]] = set()
+
         logger.info("AsyncioExecutor initialized")
 
     def run(self) -> None:
@@ -108,8 +115,14 @@ class AsyncioExecutor(QThread):
         This runs in the dedicated QThread and should never be called directly.
         """
         try:
-            # Create the persistent event loop (ONCE, at thread startup)
-            self._loop = asyncio.new_event_loop()
+            # Create the persistent event loop (ONCE, at thread startup).
+            # En Windows se usa explícitamente el SelectorEventLoop por compatibilidad
+            # con PySide6/clientes async (en lugar de fijar una event loop policy global,
+            # deprecada desde Python 3.16).
+            if sys.platform.startswith("win"):
+                self._loop = asyncio.SelectorEventLoop()
+            else:
+                self._loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self._loop)
 
             # Create the async queue (must be done after setting event loop)
@@ -144,22 +157,11 @@ class AsyncioExecutor(QThread):
             raise RuntimeError("Task queue not initialized")
 
         while True:
-            # Check for shutdown
-            with self._shutdown_lock:
-                if self._shutdown_requested and self._task_queue.empty():
-                    logger.info("AsyncioExecutor shutdown requested and queue empty, stopping")
-                    break
-
-            # Get next task (with timeout to check shutdown periodically)
-            # CRITICAL FIX: Use asyncio.wait_for instead of run_in_executor to avoid deadlock
-            try:
-                task = await asyncio.wait_for(
-                    self._task_queue.get(),
-                    timeout=0.1
-                )
-            except asyncio.TimeoutError:
-                # No task available, continue checking shutdown
-                continue
+            # Block until the next task arrives. shutdown() always enqueues a
+            # None sentinel, so there is no need to poll: this replaces the old
+            # 100ms wait_for loop that woke ~10x/second while idle (pure busy-wait,
+            # a measurable battery/CPU drain on an always-open desktop client).
+            task = await self._task_queue.get()
 
             # None is the shutdown sentinel
             if task is None:
@@ -168,7 +170,10 @@ class AsyncioExecutor(QThread):
 
             # Schedule the submitted coroutine and keep draining the queue. Some
             # tasks, such as WebSocket subscriptions, are intentionally long-lived.
-            asyncio.create_task(self._execute_task(task))
+            # Hold a strong reference until it completes (see _background_tasks).
+            bg = asyncio.create_task(self._execute_task(task))
+            self._background_tasks.add(bg)
+            bg.add_done_callback(self._background_tasks.discard)
 
     async def _execute_task(self, task: AsyncTask) -> None:
         """

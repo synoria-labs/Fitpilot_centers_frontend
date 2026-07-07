@@ -13,11 +13,9 @@ import inspect
 import itertools
 import logging
 import os
-import threading
-import weakref
 from typing import Any, Awaitable, Callable, Coroutine, Optional, cast
 
-from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal, Qt, QSemaphore
+from PySide6.QtCore import QObject, Signal, Qt
 
 from .asyncio_executor import get_global_executor
 
@@ -30,25 +28,11 @@ if not logger.handlers:
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
-# Semáforo global para limitar workers concurrentes
-try:
-    from ..core.config import Config
-    MAX_CONCURRENT_AUTH_WORKERS = Config.MAX_CONCURRENT_WORKERS
-except Exception:
-    MAX_CONCURRENT_AUTH_WORKERS = 3  # Fallback
-
-_worker_semaphore = None
-_semaphore_lock = threading.Lock()
-
-
-def _get_worker_semaphore():
-    """Obtiene semáforo global de workers (thread-safe singleton)"""
-    global _worker_semaphore
-    with _semaphore_lock:
-        if _worker_semaphore is None:
-            _worker_semaphore = QSemaphore(MAX_CONCURRENT_AUTH_WORKERS)
-            logger.debug("Worker semaphore initialized with %d slots", MAX_CONCURRENT_AUTH_WORKERS)
-    return _worker_semaphore
+# Nota: aquí vivía un QSemaphore "limitador de workers" (MAX_CONCURRENT_WORKERS)
+# que NUNCA se adquiría — no limitaba nada. Se eliminó en lugar de "arreglarlo":
+# el executor corre operaciones long-lived (suscripciones WebSocket) que
+# retendrían un slot indefinidamente y matarían de hambre al resto. La
+# concurrencia real la gobierna el event loop único del AsyncioExecutor.
 
 
 # --------------------------------

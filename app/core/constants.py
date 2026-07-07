@@ -40,7 +40,6 @@ MAX_SEARCH_RESULTS = 100
 DEFAULT_PAGE_SIZE = 20
 
 # Concurrent operations
-MAX_CONCURRENT_WORKERS = 3  # Maximum concurrent authenticated operations
 MAX_THREAD_POOL_SIZE = 5  # Maximum threads in pool
 
 # ==============================================================================
