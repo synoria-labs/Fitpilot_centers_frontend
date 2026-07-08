@@ -94,9 +94,13 @@ class MediaLoader(QObject):
             # for the duration of the download; no extra bookkeeping needed.
             get_global_executor().submit_coroutine(self._download(url, path))
         except Exception as e:  # noqa: BLE001 - executor not ready / shutting down
-            logger.error("No se pudo programar la descarga de %s: %s", url, e)
+            # Capture the message NOW: Python deletes the except var `e` when the
+            # block exits, so the deferred lambda below would raise NameError when
+            # it runs on the event loop if it closed over `e` directly.
+            err = str(e)
+            logger.error("No se pudo programar la descarga de %s: %s", url, err)
             # Defer so callers connecting right after fetch() still get the signal.
-            QTimer.singleShot(0, lambda: self._resolve(url, error=str(e)))
+            QTimer.singleShot(0, lambda: self._resolve(url, error=err))
         return handle
 
     # ------------------------------------------------------------------
