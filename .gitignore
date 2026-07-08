@@ -63,6 +63,13 @@ member_card_*.png
 *.crt
 *.p12
 
+# --- Local session / auth token cache (NEVER commit — contiene JWTs vivos) ---
+data/.session.json
+data/*.session.json
+
+# --- PowerShell redirection junk (p. ej. `pip install x>=1.2.3` crea el archivo `=1.2.3`) ---
+=*
+
 # --- Investigation / debug scripts (one-off tools) ---
 analyze_*.py
 debug_*.py
