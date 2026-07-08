@@ -1,44 +1,47 @@
 # Core
-PySide6>=6.5.0
-python-dotenv>=1.0.0
-QtAwesome>=1.2.3
+# Los upper bounds capean el siguiente MAJOR: un release rompedor no puede
+# instalarse en silencio en una instalacion fresca / CI (la resolucion actual
+# queda holgada dentro del rango; ej. pandas 3.x, PySide6 6.x, gql 4.x ya resuelven).
+PySide6>=6.5.0,<7
+python-dotenv>=1.0.0,<2
+QtAwesome>=1.2.3,<2
 imageio-ffmpeg>=0.5.1
 
 # GraphQL
 httpx>=0.24.0
 # El extra [websockets] es obligatorio: WebsocketsTransport (suscripciones del chat de WhatsApp)
 # lo requiere. gql 4.x resuelve websockets>=14.2,<16.
-gql[websockets]>=3.4.0
+gql[websockets]>=3.4.0,<5
 
 # Async support
 # Nota: NO declarar 'asyncio' como dependencia; es parte de la stdlib (el paquete PyPI es un backport obsoleto).
 aiofiles>=23.1.0
 
 # Data handling
-pandas>=2.0.0
-openpyxl>=3.1.0
+pandas>=2.0.0,<4
+openpyxl>=3.1.0,<4
 
 # Visualization (opcional para gráficas)
-matplotlib>=3.7.0
-plotly>=5.14.0
+matplotlib>=3.7.0,<4
+plotly>=5.14.0,<7
 
 # Utilities
-python-dateutil>=2.8.2
+python-dateutil>=2.8.2,<3
 pytz>=2023.3
-keyring>=24.0.0
+keyring>=24.0.0,<26
 
 # POS thermal-ticket printing (POS-58). Windows-only; on Linux/macOS uses `lp`.
 pywin32>=306; sys_platform == 'win32'
 
 # Development
-pytest>=7.3.0
-pytest-qt>=4.2.0
+pytest>=7.3.0,<10
+pytest-qt>=4.2.0,<5
 pytest-asyncio>=0.21.0
 black>=23.3.0
 flake8>=6.0.0
 
 # JWT handling (si necesitas decodificar tokens localmente)
-PyJWT>=2.6.0
+PyJWT>=2.6.0,<3
 
 # JSON validation
-jsonschema>=4.17.0
+jsonschema>=4.17.0,<5
