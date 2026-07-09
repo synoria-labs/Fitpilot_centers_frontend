@@ -1,7 +1,7 @@
 """Service layer for user (login account) management (GraphQL)."""
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from ..core.logging import get_logger
 from ..utils.datetime_helpers import parse_iso_datetime
@@ -110,10 +110,10 @@ class UsersService:
     # ------------------------------------------------------------------
     # Mutations
     # ------------------------------------------------------------------
-    async def create_user(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    async def create_user(self, data: Dict[str, Any], step_up_proof: Optional[str] = None) -> Dict[str, Any]:
         mutation = """
-            mutation CreateUser($input: CreateUserInput!) {
-                createUser(input: $input) {
+            mutation CreateUser($input: CreateUserInput!, $stepUpProof: String) {
+                createUser(input: $input, stepUpProof: $stepUpProof) {
                     success
                     message
                     user { %s }
@@ -123,13 +123,13 @@ class UsersService:
 
         payload = self._input_from_data(data)
         payload["password"] = data.get("password") or ""
-        variables = {"input": payload}
+        variables = {"input": payload, "stepUpProof": step_up_proof}
         return await self._run_user_mutation(mutation, variables, "createUser")
 
-    async def update_user(self, account_id: int, data: Dict[str, Any]) -> Dict[str, Any]:
+    async def update_user(self, account_id: int, data: Dict[str, Any], step_up_proof: Optional[str] = None) -> Dict[str, Any]:
         mutation = """
-            mutation UpdateUser($input: UpdateUserInput!) {
-                updateUser(input: $input) {
+            mutation UpdateUser($input: UpdateUserInput!, $stepUpProof: String) {
+                updateUser(input: $input, stepUpProof: $stepUpProof) {
                     success
                     message
                     user { %s }
@@ -141,13 +141,13 @@ class UsersService:
         payload["accountId"] = int(account_id)
         if "is_active" in data and data.get("is_active") is not None:
             payload["isActive"] = bool(data.get("is_active"))
-        variables = {"input": payload}
+        variables = {"input": payload, "stepUpProof": step_up_proof}
         return await self._run_user_mutation(mutation, variables, "updateUser")
 
-    async def set_user_active(self, account_id: int, is_active: bool) -> Dict[str, Any]:
+    async def set_user_active(self, account_id: int, is_active: bool, step_up_proof: Optional[str] = None) -> Dict[str, Any]:
         mutation = """
-            mutation SetUserActive($accountId: Int!, $isActive: Boolean!) {
-                setUserActive(accountId: $accountId, isActive: $isActive) {
+            mutation SetUserActive($accountId: Int!, $isActive: Boolean!, $stepUpProof: String) {
+                setUserActive(accountId: $accountId, isActive: $isActive, stepUpProof: $stepUpProof) {
                     success
                     message
                     user { %s }
@@ -155,20 +155,20 @@ class UsersService:
             }
         """ % _USER_FIELDS
 
-        variables = {"accountId": int(account_id), "isActive": bool(is_active)}
+        variables = {"accountId": int(account_id), "isActive": bool(is_active), "stepUpProof": step_up_proof}
         return await self._run_user_mutation(mutation, variables, "setUserActive")
 
-    async def reset_password(self, account_id: int, password: str) -> Dict[str, Any]:
+    async def reset_password(self, account_id: int, password: str, step_up_proof: Optional[str] = None) -> Dict[str, Any]:
         mutation = """
-            mutation ResetUserPassword($accountId: Int!, $password: String!) {
-                resetUserPassword(accountId: $accountId, password: $password) {
+            mutation ResetUserPassword($accountId: Int!, $password: String!, $stepUpProof: String) {
+                resetUserPassword(accountId: $accountId, password: $password, stepUpProof: $stepUpProof) {
                     success
                     message
                 }
             }
         """
 
-        variables = {"accountId": int(account_id), "password": password}
+        variables = {"accountId": int(account_id), "password": password, "stepUpProof": step_up_proof}
         return await self._run_user_mutation(mutation, variables, "resetUserPassword")
 
     async def _run_user_mutation(

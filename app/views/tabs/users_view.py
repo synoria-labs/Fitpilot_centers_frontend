@@ -133,6 +133,7 @@ class UsersView(QWidget):
         self.controller.error_occurred.connect(self._on_error)
         self.controller.mutation_succeeded.connect(self._on_mutation_succeeded)
         self.controller.mutation_failed.connect(self._on_error)
+        self.controller.step_up_prompt.connect(self._on_step_up_prompt)
 
     # ------------------------------------------------------------------
     # Controller callbacks
@@ -163,6 +164,22 @@ class UsersView(QWidget):
 
     def _on_error(self, message: str):
         show_error(self, message or "Ocurrió un error.", title="Usuarios")
+
+    def _on_step_up_prompt(self, masked: str):
+        """Ask the admin for the 2-step verification code sent to their contact."""
+        code, ok = QInputDialog.getText(
+            self,
+            "Verificación de 2 pasos",
+            f"Ingresa el código de 6 dígitos enviado a {masked}:",
+            QLineEdit.EchoMode.Normal,
+        )
+        if not ok:
+            return
+        code = (code or "").strip()
+        if not code:
+            show_error(self, "El código no puede estar vacío.", title="Usuarios")
+            return
+        self.controller.submit_step_up_code(code)
 
     def _set_cell(self, row: int, col: int, text: str):
         item = QTableWidgetItem(text)
