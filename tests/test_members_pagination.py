@@ -3,8 +3,6 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import pytest
-from PySide6.QtCore import QCoreApplication
-
 from app.controllers.members_controller import MembersController
 from app.models.base import Member
 from app.services.members_service import MembersService
@@ -21,8 +19,10 @@ class _FakeGraphQLClient:
 
 
 @pytest.fixture(scope="module")
-def qcore_app():
-    return QCoreApplication.instance() or QCoreApplication([])
+def qcore_app(qapp):
+    # Share the session QApplication with widget tests instead of creating a
+    # short-lived QCoreApplication that Qt cannot safely replace later.
+    return qapp
 
 
 def _member(member_id: int, name: str | None = None) -> Member:

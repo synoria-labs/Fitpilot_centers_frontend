@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import pytest
-from PySide6.QtCore import QCoreApplication
-
 from app.auth.auth_service import AuthService
 from app.controllers import auth_controller
 
@@ -35,8 +33,10 @@ class _FakeSessionStore:
 
 
 @pytest.fixture(scope="module")
-def qcore_app():
-    return QCoreApplication.instance() or QCoreApplication([])
+def qcore_app(qapp):
+    # Reuse pytest-qt's session QApplication. Creating and destroying a
+    # QCoreApplication first prevents later QWidget tests from starting safely.
+    return qapp
 
 
 @pytest.mark.asyncio
