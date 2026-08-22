@@ -68,6 +68,7 @@ _METRICS_FIELDS = """
 _RUN_FIELDS = """
     success
     paused
+    deferred
     dryRun
     targeted
     pending
@@ -150,6 +151,7 @@ def _map_run(payload: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     return {
         "success": bool(payload.get("success")),
         "paused": bool(payload.get("paused")),
+        "deferred": bool(payload.get("deferred")),
         "dry_run": bool(payload.get("dryRun")),
         "targeted": payload.get("targeted", 0),
         "pending": payload.get("pending", 0),
@@ -223,15 +225,103 @@ class CampaignsService:
             and t.get("meta_template_id")
         ]
 
+    async def get_classes(self) -> Dict[str, Any]:
+        """Class types + their scheduled slots, for the audience class picker.
+
+        Reuses the queries the standing-bookings screen already relies on; campaigns need
+        exactly the same catalog, so there is nothing new to add on the backend.
+        """
+        query = """
+            query CampaignClasses {
+                classTypes { classTypes { id code name } }
+                allClassTemplates {
+                    templates {
+                        id classTypeId weekday startTimeLocal name
+                        classTypeName isActive
+                    }
+                }
+            }
+        """
+        result = await self.client.execute(query)
+        result = result or {}
+        types = ((result.get("classTypes") or {}).get("classTypes")) or []
+        templates = ((result.get("allClassTemplates") or {}).get("templates")) or []
+        return {
+            "class_types": [
+                {"id": t.get("id"), "code": t.get("code"), "name": t.get("name")}
+                for t in types
+                if t
+            ],
+            "class_templates": [
+                {
+                    "id": t.get("id"),
+                    "class_type_id": t.get("classTypeId"),
+                    "class_type_name": t.get("classTypeName"),
+                    "weekday": t.get("weekday"),
+                    "start_time_local": t.get("startTimeLocal"),
+                    "name": t.get("name"),
+                    "is_active": bool(t.get("isActive")),
+                }
+                for t in templates
+                if t
+            ],
+        }
+
+    async def get_membership_plans(self) -> List[Dict[str, Any]]:
+        """Plans for the audience picker, so plan IDs never have to be typed by hand."""
+        query = """
+            query CampaignPlans {
+                membershipPlans(includeInactive: false) { id name }
+            }
+        """
+        result = await self.client.execute(query)
+        plans = (result or {}).get("membershipPlans") or []
+        return [{"id": p.get("id"), "name": p.get("name")} for p in plans if p]
+
     async def preview_audience(self, audience_spec: Dict[str, Any]) -> Dict[str, Any]:
         query = """
             query PreviewAudience($spec: JSON) {
-                previewAudience(audienceSpec: $spec) { count sample }
+                previewAudience(audienceSpec: $spec) {
+                    count
+                    reachable
+                    skipped { noPhone noConsent recencyBlock }
+                    sample
+                }
             }
         """
         result = await self.client.execute(query, {"spec": audience_spec})
         node = (result or {}).get("previewAudience") or {}
-        return {"count": node.get("count", 0), "sample": list(node.get("sample") or [])}
+        skipped = node.get("skipped") or {}
+        return {
+            "count": node.get("count", 0),
+            "reachable": node.get("reachable", node.get("count", 0)),
+            "skipped": {
+                "no_phone": skipped.get("noPhone", 0),
+                "no_consent": skipped.get("noConsent", 0),
+                "recency_block": skipped.get("recencyBlock", 0),
+            },
+            "sample": list(node.get("sample") or []),
+        }
+
+    async def get_metrics_batch(self, campaign_ids: List[int]) -> Dict[int, Dict[str, Any]]:
+        """Metrics for the whole campaign list in one round-trip."""
+        if not campaign_ids:
+            return {}
+        query = f"""
+            query CampaignMetricsBatch($ids: [Int!]!) {{
+                campaignMetricsBatch(campaignIds: $ids) {{
+                    campaignId
+                    metrics {{ {_METRICS_FIELDS} }}
+                }}
+            }}
+        """
+        result = await self.client.execute(query, {"ids": list(campaign_ids)})
+        rows = (result or {}).get("campaignMetricsBatch") or []
+        return {
+            row["campaignId"]: _map_metrics(row.get("metrics"))
+            for row in rows
+            if row and row.get("campaignId") is not None
+        }
 
     async def get_metrics(self, campaign_id: int) -> Dict[str, Any]:
         query = f"""

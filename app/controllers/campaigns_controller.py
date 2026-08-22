@@ -22,11 +22,14 @@ class CampaignsController(BaseController):
     campaigns_loaded = Signal(object)     # List[dict]
     catalog_loaded = Signal(object)       # dict {objectives, predicates, variables}
     templates_loaded = Signal(object)     # List[dict]
+    classes_loaded = Signal(object)       # {class_types, class_templates}
+    plans_loaded = Signal(object)         # List[dict]
     campaign_loaded = Signal(object)      # dict | None
     audience_previewed = Signal(object)   # {count, sample}
     campaign_saved = Signal(object)       # {success, error, campaign}
     action_result = Signal(object)        # generic run/status dict
     metrics_loaded = Signal(object)       # dict
+    metrics_batch_loaded = Signal(object) # {campaign_id: metrics}
     recipients_loaded = Signal(object)    # List[dict]
     error_occurred = Signal(str)
     loading_changed = Signal(bool)
@@ -58,6 +61,18 @@ class CampaignsController(BaseController):
             self.templates_loaded.emit, self._on_error,
         )
 
+    def load_classes(self) -> None:
+        self._execute_authenticated_operation(
+            self._service, "get_classes",
+            self.classes_loaded.emit, self._on_error,
+        )
+
+    def load_plans(self) -> None:
+        self._execute_authenticated_operation(
+            self._service, "get_membership_plans",
+            self.plans_loaded.emit, self._on_error,
+        )
+
     def load_campaign(self, campaign_id: int) -> None:
         self._execute_authenticated_operation(
             self._service, "get_campaign",
@@ -74,6 +89,12 @@ class CampaignsController(BaseController):
         self._execute_authenticated_operation(
             self._service, "get_metrics",
             self.metrics_loaded.emit, self._on_error, campaign_id=campaign_id,
+        )
+
+    def load_metrics_batch(self, campaign_ids: List[int]) -> None:
+        self._execute_authenticated_operation(
+            self._service, "get_metrics_batch",
+            self.metrics_batch_loaded.emit, self._on_error, campaign_ids=campaign_ids,
         )
 
     def load_recipients(self, campaign_id: int, status: Optional[str] = None) -> None:
