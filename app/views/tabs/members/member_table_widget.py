@@ -18,48 +18,59 @@ class MemberTableWidget(QTableWidget):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self._rows: list[MemberSummary] = []
+        # QTableWidget owns the visual row order.  That order changes whenever
+        # the user sorts a column, so member identity must not be inferred from
+        # a parallel list index.  Keep summaries keyed by the stable ID stored
+        # on each row instead.
+        self._summaries_by_id: dict[int, MemberSummary] = {}
         self._configure()
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
     def populate(self, members: Sequence[MemberSummary]) -> None:
-        self._rows = list(members)
+        summaries = list(members)
+        self._summaries_by_id = {
+            summary.member_id: summary for summary in summaries
+        }
         self.setSortingEnabled(False)
-        self.setRowCount(len(self._rows))
+        self.setRowCount(len(summaries))
 
-        for row, summary in enumerate(self._rows):
+        for row, summary in enumerate(summaries):
             self._set_row(row, summary)
 
         self.setSortingEnabled(True)
 
     def upsert_member(self, summary: MemberSummary) -> None:
-        for index, existing in enumerate(self._rows):
-            if existing.member_id == summary.member_id:
-                self._rows[index] = summary
-                self._set_row(index, summary)
-                return
+        row = self._row_for_member_id(summary.member_id)
+        self._summaries_by_id[summary.member_id] = summary
 
-        self._rows.insert(0, summary)
-        self.insertRow(0)
-        self._set_row(0, summary)
+        # Updating the text of the active sort column can move a row
+        # immediately.  Disable sorting so both cells are updated atomically,
+        # then let Qt restore the active visual order.
+        sorting_enabled = self.isSortingEnabled()
+        if sorting_enabled:
+            self.setSortingEnabled(False)
+        try:
+            if row is None:
+                row = 0
+                self.insertRow(row)
+            self._set_row(row, summary)
+        finally:
+            if sorting_enabled:
+                self.setSortingEnabled(True)
 
     def remove_member(self, member_id: int) -> None:
-        for index, summary in enumerate(self._rows):
-            if summary.member_id == member_id:
-                self._rows.pop(index)
-                self.removeRow(index)
-                break
+        row = self._row_for_member_id(member_id)
+        self._summaries_by_id.pop(member_id, None)
+        if row is not None:
+            self.removeRow(row)
 
     def current_summary(self) -> Optional[MemberSummary]:
-        row = self.currentRow()
-        if row < 0 or row >= len(self._rows):
-            return None
-        return self._rows[row]
+        return self._summary_for_row(self.currentRow())
 
     def summaries(self) -> Iterable[MemberSummary]:
-        return tuple(self._rows)
+        return tuple(self._summaries_by_id.values())
 
     def select_member(self, member_id: Optional[int]) -> bool:
         if member_id is None:
@@ -68,10 +79,10 @@ class MemberTableWidget(QTableWidget):
             self.setCurrentIndex(QModelIndex())
             return False
 
-        for index, summary in enumerate(self._rows):
-            if summary.member_id == member_id:
-                self.selectRow(index)
-                return True
+        row = self._row_for_member_id(member_id)
+        if row is not None:
+            self.selectRow(row)
+            return True
 
         if self.selectionModel() is not None:
             self.selectionModel().clearSelection()
@@ -105,6 +116,22 @@ class MemberTableWidget(QTableWidget):
     # ------------------------------------------------------------------
     # Rendering
     # ------------------------------------------------------------------
+    def _row_for_member_id(self, member_id: int) -> Optional[int]:
+        for row in range(self.rowCount()):
+            item = self.item(row, 0)
+            if item is not None and item.data(Qt.ItemDataRole.UserRole) == member_id:
+                return row
+        return None
+
+    def _summary_for_row(self, row: int) -> Optional[MemberSummary]:
+        if row < 0 or row >= self.rowCount():
+            return None
+        item = self.item(row, 0)
+        if item is None:
+            return None
+        member_id = item.data(Qt.ItemDataRole.UserRole)
+        return self._summaries_by_id.get(member_id)
+
     def _set_row(self, row: int, summary: MemberSummary) -> None:
         # Backend now calculates the real status based on dates
         values = [
@@ -133,7 +160,7 @@ class MemberTableWidget(QTableWidget):
         self.selection_changed.emit(self.current_summary())
 
     def _on_cell_double_clicked(self, row: int, column: int) -> None:  # noqa: ARG002
-        summary = self.current_summary()
+        summary = self._summary_for_row(row)
         self.activated.emit(summary)
 
     # ------------------------------------------------------------------

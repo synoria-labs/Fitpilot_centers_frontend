@@ -45,4 +45,8 @@ jobs:
       # 58 portable tests. (They also can't share a process with the rest — a Qt
       # teardown segfault — so keeping them out of CI is doubly correct.)
       - name: pytest (portable suite, excl. QtMultimedia audio tests)
+        env:
+          # Widget tests do not need a window manager. The offscreen backend is
+          # more deterministic than loading the xcb platform plugin in CI.
+          QT_QPA_PLATFORM: offscreen
         run: xvfb-run -a python -m pytest tests/ --ignore=tests/test_whatsapp_voice_notes.py -q
