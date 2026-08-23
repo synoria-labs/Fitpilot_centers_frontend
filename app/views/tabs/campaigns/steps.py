@@ -109,12 +109,14 @@ class AudienceStep(QWidget):
         layout.addWidget(self.preview_label)
         layout.addStretch()
 
+        # `toggled` lleva un bool y `valueChanged` un int, pero spec_changed no acepta
+        # argumentos: conectarlos directamente a .emit lanza TypeError en cada cambio.
         for widget in (self.end_range_check, self.inactive_check):
-            widget.toggled.connect(self.spec_changed.emit)
+            widget.toggled.connect(lambda _checked: self.spec_changed.emit())
         for spin in (self.end_min_spin, self.end_max_spin, self.inactive_spin):
-            spin.valueChanged.connect(self.spec_changed.emit)
+            spin.valueChanged.connect(lambda _value: self.spec_changed.emit())
         for check in self.state_checks.values():
-            check.toggled.connect(self.spec_changed.emit)
+            check.toggled.connect(lambda _checked: self.spec_changed.emit())
         self.class_picker.selection_changed.connect(self.spec_changed.emit)
         self.plan_list.itemChanged.connect(lambda _item: self.spec_changed.emit())
 
