@@ -42,6 +42,7 @@ NAV_ITEMS = [
 NAV_CAPABILITY_GATES = {
     "cash_register": "manage_cash_session",
     "products": "manage_products",
+    "campaigns": "send_campaigns",
 }
 
 # Sección alojada en el menú Configuración (fuera de la sidebar).

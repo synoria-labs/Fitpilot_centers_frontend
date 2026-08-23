@@ -90,7 +90,7 @@ class TabLoader(BaseWorker):
             "role_permissions": ("app.views.tabs.role_permissions_view", "RolePermissionsView"),
             "users": ("app.views.tabs.users_view", "UsersView"),
             "chatbot_config": ("app.views.tabs.chatbot_config_tab", "ChatbotConfigTab"),
-            "campaigns": ("app.views.tabs.campaigns_tab", "CampaignsTab"),
+            "campaigns": ("app.views.tabs.campaigns", "CampaignsTab"),
             "whatsapp_chat": ("app.views.tabs.whatsapp.chat_tab", "ChatTab"),
             "finances": ("app.views.tabs.finances_tab", "FinancesTab"),
             "cash_register": ("app.views.tabs.cash_register_tab", "CashRegisterTab"),
