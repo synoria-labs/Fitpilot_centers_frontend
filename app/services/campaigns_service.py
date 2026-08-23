@@ -237,7 +237,7 @@ class CampaignsService:
                 allClassTemplates {
                     templates {
                         id classTypeId weekday startTimeLocal name
-                        classTypeName isActive
+                        classTypeName isActive instructorId instructorName
                     }
                 }
             }
@@ -260,6 +260,8 @@ class CampaignsService:
                     "weekday": t.get("weekday"),
                     "start_time_local": t.get("startTimeLocal"),
                     "name": t.get("name"),
+                    "instructor_id": t.get("instructorId"),
+                    "instructor_name": t.get("instructorName"),
                     "is_active": bool(t.get("isActive")),
                 }
                 for t in templates

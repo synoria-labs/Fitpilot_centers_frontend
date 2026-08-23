@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..whatsapp.template_preview_widget import TemplatePreviewWidget
+from .class_picker import ChipButton, ClassPicker
 
 _PLACEHOLDER_RE = re.compile(r"\{\{\s*(\d+)\s*\}\}")
 
@@ -28,13 +29,11 @@ _MEMBERSHIP_STATES = [
     ("pending", "Pendientes"),
 ]
 
-# weekday is stored 0=Sunday .. 6=Saturday (backend classModel.ClassTemplate).
-_WEEKDAY_SHORT = ("Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb")
-
-# How a member must relate to the selected classes to enter the audience.
+# How a member must relate to the selected classes to enter the audience, in the words a gym
+# owner would use rather than the predicate's.
 _AFFINITY_MODES = [
-    ("favorite", "es la clase que más reservan"),
-    ("attended", "la han reservado alguna vez"),
+    ("favorite", "Es su clase habitual"),
+    ("attended", "Han asistido alguna vez"),
 ]
 
 
@@ -53,34 +52,23 @@ def _component_of(components: Optional[List[Any]], kind: str) -> Optional[dict]:
     return None
 
 
-def class_key(level: str, class_id: Any) -> str:
-    """Payload for a class row.
+def _groups_of(predicate: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Read a class selection out of either spec shape.
 
-    A plain string, not a tuple: Qt compares item data as QVariants and relying on tuple
-    wrapping to round-trip is a subtlety this does not need.
+    Campaigns saved before the grid picker used ``{level, in: [...]}``; reopening one must
+    still light up the right chips instead of silently showing an empty selection.
     """
-    return f"{level}:{class_id}"
-
-
-def parse_class_key(value: Any):
-    """('class_type' | 'class_template', id) from a row payload, or None."""
-    if not value:
-        return None
-    level, _, raw_id = str(value).partition(":")
-    if level not in ("class_type", "class_template") or not raw_id.isdigit():
-        return None
-    return level, int(raw_id)
-
-
-def template_label(template: Dict[str, Any]) -> str:
-    """'Spinning · Lun 07:00' — the class *with its schedule*, as staff think of it."""
-    name = template.get("class_type_name") or template.get("name") or "Clase"
-    weekday = template.get("weekday")
-    day = _WEEKDAY_SHORT[int(weekday) % 7] if weekday is not None else ""
-    raw_time = str(template.get("start_time_local") or "")
-    clock = raw_time[:5] if len(raw_time) >= 5 else raw_time
-    suffix = " ".join(part for part in (day, clock) if part)
-    return f"{name} · {suffix}" if suffix else str(name)
+    groups = predicate.get("groups")
+    if groups is not None:
+        return list(groups)
+    ids = list(predicate.get("in") or [])
+    if not ids:
+        return []
+    if str(predicate.get("level") or "class_type").lower() == "class_type":
+        return [{"class_type_id": i} for i in ids]
+    # A legacy template list carries no activity of its own; the picker resolves the owning
+    # activity from the catalog when it applies them.
+    return [{"class_type_id": None, "template_ids": ids}]
 
 
 class AudienceStep(QWidget):
@@ -121,18 +109,13 @@ class AudienceStep(QWidget):
         layout.addWidget(self.preview_label)
         layout.addStretch()
 
-        for widget in (
-            self.end_range_check,
-            self.inactive_check,
-            self.class_check,
-        ):
+        for widget in (self.end_range_check, self.inactive_check):
             widget.toggled.connect(self.spec_changed.emit)
         for spin in (self.end_min_spin, self.end_max_spin, self.inactive_spin):
             spin.valueChanged.connect(self.spec_changed.emit)
         for check in self.state_checks.values():
             check.toggled.connect(self.spec_changed.emit)
-        self.class_mode_combo.currentIndexChanged.connect(self.spec_changed.emit)
-        self.class_list.itemChanged.connect(lambda _item: self.spec_changed.emit())
+        self.class_picker.selection_changed.connect(self.spec_changed.emit)
         self.plan_list.itemChanged.connect(lambda _item: self.spec_changed.emit())
 
     # ------------------------------------------------------------------ build
@@ -196,30 +179,38 @@ class AudienceStep(QWidget):
         group.setObjectName("campGroup")
         layout = QVBoxLayout(group)
         layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(8)
+        layout.setSpacing(10)
 
         mode_row = QHBoxLayout()
-        self.class_check = QCheckBox("Filtrar por clase, cuando")
-        self.class_mode_combo = QComboBox()
+        mode_row.setContentsMargins(0, 0, 0, 0)
+        mode_row.setSpacing(6)
+        self.mode_chips: Dict[str, ChipButton] = {}
         for key, label in _AFFINITY_MODES:
-            self.class_mode_combo.addItem(label, key)
-        mode_row.addWidget(self.class_check)
-        mode_row.addWidget(self.class_mode_combo)
+            chip = ChipButton(label)
+            chip.setChecked(key == "favorite")
+            chip.clicked.connect(lambda _c=False, k=key: self._set_affinity_mode(k))
+            mode_row.addWidget(chip)
+            self.mode_chips[key] = chip
         mode_row.addStretch()
         layout.addLayout(mode_row)
 
-        self.class_list = QListWidget()
-        self.class_list.setMaximumHeight(150)
-        layout.addWidget(self.class_list)
-
-        hint = QLabel(
-            "Marca una actividad completa (Spinning) o solo algunos horarios "
-            "(Spinning · Lun 07:00)."
-        )
-        hint.setObjectName("campHint")
-        hint.setWordWrap(True)
-        layout.addWidget(hint)
+        self.class_picker = ClassPicker()
+        layout.addWidget(self.class_picker)
         return group
+
+    def _set_affinity_mode(self, mode: str) -> None:
+        """Segmented control: exactly one mode is active at a time."""
+        for key, chip in self.mode_chips.items():
+            chip.blockSignals(True)
+            chip.setChecked(key == mode)
+            chip.blockSignals(False)
+        self.spec_changed.emit()
+
+    def _affinity_mode(self) -> str:
+        for key, chip in self.mode_chips.items():
+            if chip.isChecked():
+                return key
+        return "favorite"
 
     # ------------------------------------------------------------------ data in
     def set_objectives(self, objectives: List[Dict[str, Any]]) -> None:
@@ -241,37 +232,7 @@ class AudienceStep(QWidget):
         self.plan_list.blockSignals(False)
 
     def set_classes(self, class_types, class_templates) -> None:
-        """Activities first, then their scheduled slots grouped underneath."""
-        self._class_types = list(class_types or [])
-        self._class_templates = [t for t in (class_templates or []) if t.get("is_active")]
-        self.class_list.blockSignals(True)
-        self.class_list.clear()
-
-        by_type: Dict[Any, List[Dict[str, Any]]] = {}
-        for template in self._class_templates:
-            by_type.setdefault(template.get("class_type_id"), []).append(template)
-
-        for class_type in self._class_types:
-            self._add_class_item(
-                class_type.get("name") or "?",
-                class_key("class_type", class_type.get("id")),
-            )
-            for template in sorted(
-                by_type.get(class_type.get("id"), []),
-                key=lambda t: (t.get("weekday") or 0, str(t.get("start_time_local") or "")),
-            ):
-                self._add_class_item(
-                    "    " + template_label(template),
-                    class_key("class_template", template.get("id")),
-                )
-        self.class_list.blockSignals(False)
-
-    def _add_class_item(self, label: str, payload: str) -> None:
-        item = QListWidgetItem(label)
-        item.setData(Qt.ItemDataRole.UserRole, payload)
-        item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
-        item.setCheckState(Qt.CheckState.Unchecked)
-        self.class_list.addItem(item)
+        self.class_picker.set_classes(class_types, class_templates)
 
     def set_preview_text(self, text: str) -> None:
         self.preview_label.setText(text)
@@ -313,23 +274,15 @@ class AudienceStep(QWidget):
                 }
             )
 
-        if self.class_check.isChecked():
-            selected = [parse_class_key(v) for v in self._checked_payloads(self.class_list)]
-            selected = [s for s in selected if s]
-            # Templates are the more specific answer, so a mixed selection uses them; the
-            # backend predicate takes one granularity at a time.
-            templates = [cid for level, cid in selected if level == "class_template"]
-            types = [cid for level, cid in selected if level == "class_type"]
-            level, ids = ("class_template", templates) if templates else ("class_type", types)
-            if ids:
-                predicates.append(
-                    {
-                        "type": "class_affinity",
-                        "level": level,
-                        "mode": self.class_mode_combo.currentData() or "favorite",
-                        "in": ids,
-                    }
-                )
+        groups = self.class_picker.groups()
+        if groups:
+            predicates.append(
+                {
+                    "type": "class_affinity",
+                    "mode": self._affinity_mode(),
+                    "groups": groups,
+                }
+            )
         return {"base": "members", "predicates": predicates}
 
     def apply_audience_spec(self, spec: Dict[str, Any]) -> None:
@@ -337,9 +290,8 @@ class AudienceStep(QWidget):
         states: set = set()
         self.end_range_check.setChecked(False)
         self.inactive_check.setChecked(False)
-        self.class_check.setChecked(False)
+        self.class_picker.clear()
         self._uncheck_all(self.plan_list)
-        self._uncheck_all(self.class_list)
 
         for predicate in predicates:
             ptype = predicate.get("type")
@@ -355,16 +307,9 @@ class AudienceStep(QWidget):
             elif ptype == "last_activity" and predicate.get("op") == "older_than_days":
                 self.inactive_check.setChecked(True)
                 self.inactive_spin.setValue(int(predicate.get("value", 30)))
-            elif ptype == "class_affinity" and predicate.get("in"):
-                level = predicate.get("level") or "class_type"
-                self.class_check.setChecked(True)
-                self._check_payloads(
-                    self.class_list,
-                    {class_key(level, cid) for cid in predicate["in"]},
-                )
-                mode_index = self.class_mode_combo.findData(predicate.get("mode") or "favorite")
-                if mode_index >= 0:
-                    self.class_mode_combo.setCurrentIndex(mode_index)
+            elif ptype == "class_affinity":
+                self.class_picker.apply_groups(_groups_of(predicate))
+                self._set_affinity_mode(predicate.get("mode") or "favorite")
 
         for key, check in self.state_checks.items():
             check.setChecked(key in states)
