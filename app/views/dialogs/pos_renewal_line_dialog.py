@@ -287,6 +287,11 @@ class PosRenewalLineDialog(BaseSubscriptionDialog):
             "plan_id": int(plan.id),
             "unit_price": float(self.amount_input.value()),
             "description": f"Renovación: {plan.name}",
+            # Propagate the calendar-selected start date. Without this the line
+            # reaches PosService._line_to_input with no "start_at" key, so the
+            # backend never receives "startAt" and falls back to its own default
+            # (day after the previous membership end), ignoring the chosen date.
+            "start_at": self._build_start_at(start_date),
         }
         # Adds template_id (resolved for the date) + seat_id only when a seat is chosen.
         self._append_template_and_seat(line, start_date)

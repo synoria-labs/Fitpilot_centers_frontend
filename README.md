@@ -15,15 +15,16 @@ Sistema de gestión integral para gimnasios desarrollado con PySide6 (Qt) y arqu
 
 ## 📋 Requisitos Previos
 
-- Python 3.9 o superior
-- PostgreSQL (backend)
-- Backend FastAPI/GraphQL ejecutándose (puerto 8000)
+- Python 3.12 o superior (probado en 3.14)
+- Acceso al backend de FitPilot:
+  - **Producción:** `https://webhook.fitpilot.fit`
+  - **Local (dev):** backend FastAPI/GraphQL en `http://127.0.0.1:8000`
 
 ## 🔧 Instalación
 
-1. **Clonar el repositorio** (o descomprimir el proyecto)
+1. **Ubicarse en la carpeta del frontend**
 ```bash
-cd C:\Users\ale_o\FitPilot\frontend
+cd Fitpilot_centers_frontend
 ```
 
 2. **Crear entorno virtual**
@@ -32,27 +33,51 @@ python -m venv .venv
 ```
 
 3. **Activar entorno virtual**
-```bash
-# Windows
-.venv\Scripts\activate
+```powershell
+# Windows PowerShell
+.venv\Scripts\Activate.ps1
+
+# Windows CMD
+.venv\Scripts\activate.bat
 
 # Linux/Mac
 source .venv/bin/activate
 ```
+
+> **Windows:** si al activar ves *"la ejecución de scripts está deshabilitada en este sistema"*,
+> habilita los scripts solo para tu usuario (no requiere admin) y vuelve a activar:
+> ```powershell
+> Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+> ```
 
 4. **Instalar dependencias**
 ```bash
 pip install -r requirements.txt
 ```
 
-5. **Configurar variables de entorno**
-```bash
-# Copiar archivo de ejemplo
-copy .env.example .env
+> `gql` se instala con el extra **`[websockets]`** (ya declarado en `requirements.txt`). Es **obligatorio**:
+> las suscripciones del chat de WhatsApp usan `WebsocketsTransport`. Sin él, la pestaña *Chats* falla
+> con `No module named 'websockets'`.
 
-# Editar .env con tus configuraciones
-notepad .env
+5. **Configurar variables de entorno**
+```powershell
+# Copiar archivo de ejemplo (ya viene con las URLs de producción)
+Copy-Item .env.example .env
 ```
+
+Ajusta el `.env` según el entorno:
+
+| Variable         | Producción                              | Local (dev)                      |
+| ---------------- | --------------------------------------- | -------------------------------- |
+| `API_BASE_URL`   | `https://webhook.fitpilot.fit`          | `http://127.0.0.1:8000`          |
+| `GRAPHQL_URL`    | `https://webhook.fitpilot.fit/graphql`  | `http://127.0.0.1:8000/graphql`  |
+| `GRAPHQL_WS_URL` | `wss://webhook.fitpilot.fit/graphql`    | `ws://127.0.0.1:8000/graphql`    |
+| `REST_USERS_URL` | `https://webhook.fitpilot.fit/users`    | `http://127.0.0.1:8000/users`    |
+| `ENVIRONMENT`    | `production`                            | `development`                    |
+
+> **Importante:** `ENVIRONMENT` va en **minúscula** (el código compara `== 'production'`). Si dejas
+> `GRAPHQL_URL` apuntando a `localhost` en producción, el login fallará con *"All connection attempts failed"*
+> (que la app muestra como *"Credenciales inválidas"*).
 
 ## 🏃‍♂️ Ejecución
 
@@ -80,8 +105,8 @@ frontend/
 │   ├── views/          # Vistas Qt (UI)
 │   │   └── tabs/       # Pestañas de la aplicación
 │   ├── controllers/    # Controladores MVC
-│   ├── threads/        # Workers y procesamiento paralelo
-│   └── ui/            # Recursos UI (estilos, íconos)
+│   ├── threads/        # Workers, AsyncioExecutor (event loop dedicado)
+│   └── assets/         # Recursos UI (estilos, íconos, logos)
 ├── main.py            # Punto de entrada
 ├── requirements.txt   # Dependencias
 └── .env              # Configuración local
@@ -154,9 +179,16 @@ flake8 app/
 
 ## 🐛 Troubleshooting
 
-### Error de conexión al backend
-- Verificar que el backend esté ejecutándose en http://localhost:8001
-- Revisar configuración en `.env`
+### `activate.ps1 ... la ejecución de scripts está deshabilitada`
+- Política de PowerShell. Ejecuta: `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser`.
+
+### `No module named 'websockets'` (al abrir la pestaña *Chats*)
+- Falta el extra de `gql`. Ejecuta `pip install -r requirements.txt` (declara `gql[websockets]`).
+
+### Login falla con *"Credenciales inválidas"* pese a credenciales correctas
+- El frontend no alcanza el backend (error real: *"All connection attempts failed"*).
+- Revisa `GRAPHQL_URL` en `.env`: en producción debe ser `https://webhook.fitpilot.fit/graphql` (no `localhost`).
+- Verifica que la API responde: `curl https://webhook.fitpilot.fit/health` → `{"status":"ok"}`.
 
 ### Error de autenticación
 - Limpiar sesión: eliminar `data/.session.json`
@@ -185,4 +217,4 @@ Para soporte técnico: soporte@fitpilot.com
 ---
 
 **Versión**: 1.0.0  
-**Última actualización**: Septiembre 2025
+**Última actualización**: Junio 2026

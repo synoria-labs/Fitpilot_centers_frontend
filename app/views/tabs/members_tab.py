@@ -42,7 +42,7 @@ from ..dialogs.reschedule_standing_booking_dialog import RescheduleStandingBooki
 from ..widgets.pos_checkout_panel import PosCheckoutPanel
 from .members.member_detail_card import MemberDetailCard
 from .members.member_table_widget import MemberTableWidget
-from ...utils.dialog_helpers import show_error, show_info, show_warning
+from ...utils.dialog_helpers import show_error, show_info, show_warning, show_yes_no_cancel
 
 
 logger = get_logger(__name__)
@@ -99,6 +99,7 @@ class MembersTab(QWidget):
 
         self._build_ui()
         self._connect_signals()
+        self._update_renew_button_visibility()
 
         # --- NUEVO: click-away global para cerrar panel fuera de tabla/tarjeta
         app = QApplication.instance()
@@ -233,6 +234,9 @@ class MembersTab(QWidget):
         self.new_member_requested.connect(self.controller.handle_new_member_request)
         self.renew_button.clicked.connect(self._on_renew_clicked)
         self.walkin_button.clicked.connect(self._on_walkin_clicked)
+        # The toolbar "Renovar suscripción" is redundant with the in-panel
+        # "Renovar membresía" while on "Cobrar" -> hide it there, show it on "Perfil".
+        self.right_tabs.currentChanged.connect(self._on_right_tab_changed)
         if self.checkout_panel is not None:
             self.checkout_panel.sale_completed.connect(self._on_checkout_sale_completed)
 
@@ -268,20 +272,43 @@ class MembersTab(QWidget):
         previous_id = self._current_member_id if self._current_member_id else None
         self._state = state
 
-        self.member_table.populate(state.members)
+        # Repopulate + re-select with the table's signals blocked. Otherwise
+        # populate()/select_member() emit a transient selection_changed(None)
+        # followed by selection_changed(member); that cascade would wipe the
+        # checkout member and double-reset the cart on *every* list refresh
+        # (search keystroke, pagination, post-sale refresh, etc.). We reconcile
+        # the side card + checkout panel explicitly below instead.
+        self.member_table.blockSignals(True)
+        try:
+            self.member_table.populate(state.members)
+            restored_summary: Optional[MemberSummary] = None
+            if previous_id:
+                if self.member_table.select_member(previous_id):
+                    restored_summary = next(
+                        (item for item in state.members if item.member_id == previous_id),
+                        None,
+                    )
+            else:
+                self.member_table.select_member(None)
+        finally:
+            self.member_table.blockSignals(False)
+
         if previous_id:
-            restored = self.member_table.select_member(previous_id)
-            if not restored:
+            if restored_summary is not None:
+                # Re-sync the active socio. Because the checkout still holds the
+                # same member id, set_member() is a no-op for the cart (no
+                # _reset_sale), so the sale is preserved across the refresh.
+                self._apply_member_selection(restored_summary, reset_tab_on_clear=False)
+            else:
                 logger.info(
                     "selected member not present after state refresh -> clearing selection/card member_id=%s",
                     previous_id,
                 )
-                self._current_member_id = None
-                self.member_selected.emit(-1)
-                self.member_card.reset()
-                self._hide_member_card()
-        else:
-            self.member_table.select_member(None)
+                # Incidental clear (socio filtered out by the search): also clears
+                # the checkout panel (set_member(None)), but reset_tab_on_clear=False
+                # preserves the active "Cobrar" tab so selecting the searched socio
+                # next stays on Cobrar instead of collapsing to Perfil.
+                self._apply_member_selection(None, reset_tab_on_clear=False)
 
         self._update_status_label(state)
         self._update_action_buttons()
@@ -394,6 +421,7 @@ class MembersTab(QWidget):
         if self._current_member_id == member_id:
             self._current_member_id = None
             self.member_card.reset()
+            self.right_tabs.setCurrentIndex(0)  # deliberate removal -> Perfil next
             self._hide_member_card()
         self.member_table.remove_member(member_id)
         self.controller.refresh_members()
@@ -430,12 +458,38 @@ class MembersTab(QWidget):
 
     @Slot(object)
     def _on_table_selection_changed(self, summary: Optional[MemberSummary]) -> None:
+        # Deliberate deselection (click-away / Esc / empty-area click) -> reset to
+        # "Perfil" for the next fresh open. Selecting a socio keeps whatever sub-tab
+        # is active so an open "Cobrar" panel doesn't collapse.
+        self._apply_member_selection(summary, reset_tab_on_clear=True)
+
+    def _apply_member_selection(
+        self, summary: Optional[MemberSummary], *, reset_tab_on_clear: bool
+    ) -> None:
+        """Single entry point for "the active socio changed".
+
+        Keeps the three places that hold member context in sync: the internal
+        ``_current_member_id``, the side card (Perfil), and the checkout panel
+        (Cobrar). Routing every change through here stops the checkout's
+        ``_current_member`` from desyncing whenever the table selection is reset
+        programmatically (list refresh, pagination, post-sale reload, ...).
+
+        Selecting a socio never forces a sub-tab: ``self.right_tabs`` keeps its
+        current index even while the card is hidden, so an open "Cobrar" panel
+        survives socio changes and searches. ``reset_tab_on_clear`` only applies
+        to the cleared (``summary is None``) branch: a *deliberate* close
+        (click-away / Esc / deselect) resets to "Perfil" for the next fresh open,
+        while an *incidental* clear during a list refresh (socio filtered out by
+        the search) passes False so the active tab is preserved.
+        """
         if summary is None:
             self._current_member_id = None
             self.member_selected.emit(-1)
             self.member_card.reset()
             if self.checkout_panel is not None:
                 self.checkout_panel.set_member(None)
+            if reset_tab_on_clear:
+                self.right_tabs.setCurrentIndex(0)  # deliberate close -> Perfil next
             self._hide_member_card()
             self._update_action_buttons()
             return
@@ -454,7 +508,9 @@ class MembersTab(QWidget):
                 "email": summary.email,
                 "phone_number": summary.phone_number,
             })
-            self.right_tabs.setCurrentIndex(0)  # default to Perfil on each new selection
+            # No forced tab switch: keep the active sub-tab so "Cobrar" persists
+            # across socio changes/searches (reset to Perfil happens only on a
+            # deliberate close, in the cleared branch above).
         self._show_member_card()
         self._update_action_buttons()
 
@@ -504,9 +560,15 @@ class MembersTab(QWidget):
 
     @Slot()
     def _on_renew_clicked(self) -> None:
-        """Route renovación through the POS checkout (ticket -> caja + print)."""
+        """Route renovación through the POS checkout (ticket -> caja + print).
+
+        Expands the side card if it is collapsed and jumps straight to "Cobrar"
+        with the member's renewal pre-filled (plan/clase/asiento) by start_renewal.
+        No confirmation modal: this is a direct shortcut into the renewal flow.
+        """
         if self._loading or self._current_member_id is None or self.checkout_panel is None:
             return
+        self._show_member_card()  # expand immediately if the panel was collapsed
         self.right_tabs.setCurrentWidget(self.checkout_panel)
         self.checkout_panel.start_renewal()
 
@@ -543,9 +605,37 @@ class MembersTab(QWidget):
 
     @Slot()
     def _on_walkin_clicked(self) -> None:
-        """Open the checkout for a walk-in sale (no member, person_id=None)."""
+        """Open the checkout for a walk-in sale (no member, person_id=None).
+
+        The button label ("Venta de mostrador") is ambiguous: a user with a
+        socio selected may expect to charge that socio. So when a socio IS
+        selected we ask first instead of silently discarding the selection.
+        """
         if self.checkout_panel is None:
             return
+
+        if self._current_member_id is not None:
+            summary = self.member_table.current_summary()
+            member_name = (summary.full_name if summary else "") or "el socio seleccionado"
+            choice = show_yes_no_cancel(
+                self,
+                (
+                    f"Tienes seleccionado a «{member_name}».\n\n"
+                    "• Sí: iniciar una venta de mostrador SIN socio.\n"
+                    f"• No: cobrar a «{member_name}».\n"
+                    "• Cancelar: no hacer nada."
+                ),
+                title="Venta de mostrador",
+            )
+            if choice == "cancel":
+                return
+            if choice == "no":
+                # Keep the selected socio and route straight to charging them.
+                self._show_member_card()
+                self.right_tabs.setCurrentWidget(self.checkout_panel)
+                return
+            # choice == "yes" -> fall through to the walk-in reset below.
+
         self.member_table.clearSelection()  # -> _on_table_selection_changed(None)
         self.checkout_panel.set_member(None)
         self.checkout_panel.reset()
@@ -591,6 +681,23 @@ class MembersTab(QWidget):
         self.member_card.set_actions_enabled(can_edit, can_edit)
         self.renew_button.setEnabled(has_selection and not controls_locked and not self.member_card.is_editing())
         self._update_pagination_buttons()
+
+    @Slot(int)
+    def _on_right_tab_changed(self, index: int) -> None:  # noqa: ARG002
+        self._update_renew_button_visibility()
+
+    def _update_renew_button_visibility(self) -> None:
+        """Hide the toolbar "Renovar suscripción" while on "Cobrar".
+
+        On the "Cobrar" tab the in-panel "Renovar membresía" already covers the
+        action, so the toolbar shortcut is redundant there. It stays visible on
+        "Perfil" (only when POS is allowed) as the one-click entry into a renewal.
+        """
+        on_cobrar = (
+            self.checkout_panel is not None
+            and self.right_tabs.currentWidget() is self.checkout_panel
+        )
+        self.renew_button.setVisible(self._can_pos and not on_cobrar)
 
     def _update_pagination_buttons(self) -> None:
         controls_locked = (

@@ -3,18 +3,14 @@ FitPilot - Sistema de Gestión para Gimnasios
 Punto de entrada principal de la aplicación.
 """
 import sys
-import asyncio
 import faulthandler
 import ctypes
 from pathlib import Path
 from typing import Optional
 
-# Qt recomienda mantener el event loop principal en el hilo de la GUI; en Windows se usa la policy selector para compatibilidad con PySide6.
-if sys.platform.startswith('win'):
-    try:
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-    except AttributeError:
-        pass
+# Nota: la selección del SelectorEventLoop en Windows se hace explícitamente al crear
+# el loop del AsyncioExecutor (app/threads/asyncio_executor.py), evitando la event loop
+# policy global que quedó deprecada en Python 3.16.
 
 # Agregar el directorio raí­z al path
 sys.path.insert(0, str(Path(__file__).parent))

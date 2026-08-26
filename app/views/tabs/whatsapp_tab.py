@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
     QMenu, QTableWidget, QTableWidgetItem, QHeaderView, QToolButton,
 )
 from PySide6.QtCore import QPoint, QSize, Qt, Signal
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QColor, QFont
 
 from ...core import container, get_logger
 from ...controllers.whatsapp_controller import WhatsAppController
@@ -389,6 +389,190 @@ class CarouselEditor(QGroupBox):
         self.blockSignals(False)
 
 
+_BUTTON_TYPES = [
+    ("QUICK_REPLY", "Respuesta rápida"),
+    ("URL", "URL"),
+    ("PHONE_NUMBER", "Llamada"),
+]
+_BUTTON_VALUE_LABELS = {"URL": "URL:", "PHONE_NUMBER": "Teléfono:"}
+
+
+class TemplateButtonCardWidget(QFrame):
+    """Una tarjeta por botón: tipo a ancho completo (sin combo incrustado en tabla que lo
+    trunque), texto, valor (URL o teléfono según el tipo) y ejemplo {{1}} cuando aplica."""
+
+    changed = Signal()
+    remove_requested = Signal(object)  # self
+
+    def __init__(self, index: int, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("tplCard")
+        self.setFrameShape(QFrame.Shape.NoFrame)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(6)
+
+        title_row = QHBoxLayout()
+        self.title_label = QLabel(f"Botón {index}")
+        self.title_label.setObjectName("tplPanelTitle")
+        title_row.addWidget(self.title_label)
+        title_row.addStretch()
+        self.remove_btn = QToolButton()
+        self.remove_btn.setIcon(qta.icon("fa5s.times", color=theme.palette_hex()))
+        self.remove_btn.setToolTip("Quitar este botón")
+        self.remove_btn.setAutoRaise(True)
+        self.remove_btn.clicked.connect(lambda: self.remove_requested.emit(self))
+        title_row.addWidget(self.remove_btn)
+        layout.addLayout(title_row)
+
+        type_row = QHBoxLayout()
+        type_row.addWidget(QLabel("Tipo:"))
+        self.type_combo = QComboBox()
+        for value, label in _BUTTON_TYPES:
+            self.type_combo.addItem(label, value)
+        self.type_combo.currentIndexChanged.connect(self._on_type_changed)
+        type_row.addWidget(self.type_combo, 1)
+        layout.addLayout(type_row)
+
+        self.text_input = QLineEdit()
+        self.text_input.setPlaceholderText("Texto del botón")
+        self.text_input.textChanged.connect(lambda *_: self.changed.emit())
+        layout.addWidget(self.text_input)
+
+        value_row = QHBoxLayout()
+        self.value_label = QLabel("URL:")
+        value_row.addWidget(self.value_label)
+        self.value_input = QLineEdit()
+        self.value_input.textChanged.connect(self._on_value_changed)
+        value_row.addWidget(self.value_input, 1)
+        layout.addLayout(value_row)
+
+        example_row = QHBoxLayout()
+        self.example_label = QLabel("Ejemplo {{1}}:")
+        example_row.addWidget(self.example_label)
+        self.example_input = QLineEdit()
+        self.example_input.setPlaceholderText("Valor de ejemplo")
+        self.example_input.textChanged.connect(lambda *_: self.changed.emit())
+        example_row.addWidget(self.example_input, 1)
+        self.example_row_widgets = (self.example_label, self.example_input)
+        layout.addLayout(example_row)
+
+        self._on_type_changed()
+
+    def set_index(self, index: int) -> None:
+        self.title_label.setText(f"Botón {index}")
+
+    def _on_type_changed(self, *_args) -> None:
+        btype = self.type_combo.currentData()
+        label = _BUTTON_VALUE_LABELS.get(btype)
+        self.value_label.setVisible(label is not None)
+        self.value_input.setVisible(label is not None)
+        if label:
+            self.value_label.setText(label)
+        self._refresh_example_visibility()
+        self.changed.emit()
+
+    def _on_value_changed(self, *_args) -> None:
+        self._refresh_example_visibility()
+        self.changed.emit()
+
+    def _refresh_example_visibility(self) -> None:
+        is_dynamic_url = (
+            self.type_combo.currentData() == "URL"
+            and self.value_input.text().strip().endswith("{{1}}")
+        )
+        self.example_label.setVisible(is_dynamic_url)
+        self.example_input.setVisible(is_dynamic_url)
+
+    def load_from(self, button: Dict[str, Any]) -> None:
+        index = self.type_combo.findData((button.get("type") or "").upper())
+        self.type_combo.setCurrentIndex(index if index >= 0 else 0)
+        self.text_input.setText(button.get("text") or "")
+        self.value_input.setText(button.get("value") or "")
+        self.example_input.setText(button.get("example") or "")
+
+    def to_button(self) -> Dict[str, Any]:
+        return {
+            "type": self.type_combo.currentData(),
+            "text": self.text_input.text().strip(),
+            "value": self.value_input.text().strip(),
+            "example": self.example_input.text().strip(),
+        }
+
+
+class TemplateButtonsEditor(QWidget):
+    """Lista de tarjetas de botones (máx 10), reemplaza la tabla con combo incrustado."""
+
+    changed = Signal()
+    limit_reached = Signal()
+
+    MAX_BUTTONS = 10
+
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self._cards: List[TemplateButtonCardWidget] = []
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+
+        self.cards_container = QVBoxLayout()
+        self.cards_container.setSpacing(8)
+        layout.addLayout(self.cards_container)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        self.add_btn = QPushButton("Botón")
+        self.add_btn.setObjectName("tplActionButton")
+        self.add_btn.setIcon(qta.icon("fa5s.plus", color=theme.palette_hex()))
+        self.add_btn.setIconSize(QSize(14, 14))
+        self.add_btn.clicked.connect(lambda: self.add_card())
+        btn_row.addWidget(self.add_btn)
+        layout.addLayout(btn_row)
+
+    def add_card(self, button_data: Optional[Dict[str, Any]] = None) -> Optional[TemplateButtonCardWidget]:
+        if len(self._cards) >= self.MAX_BUTTONS:
+            self.limit_reached.emit()
+            return None
+        card = TemplateButtonCardWidget(len(self._cards) + 1, self)
+        card.changed.connect(self.changed)
+        card.remove_requested.connect(self.remove_card)
+        self.cards_container.addWidget(card)
+        self._cards.append(card)
+        if button_data:
+            card.load_from(button_data)
+        self.changed.emit()
+        return card
+
+    def remove_card(self, card: TemplateButtonCardWidget) -> None:
+        if card not in self._cards:
+            return
+        self._cards.remove(card)
+        self.cards_container.removeWidget(card)
+        card.deleteLater()
+        for index, remaining in enumerate(self._cards, start=1):
+            remaining.set_index(index)
+        self.changed.emit()
+
+    def cards(self) -> List[TemplateButtonCardWidget]:
+        return list(self._cards)
+
+    def to_buttons(self) -> List[Dict[str, Any]]:
+        return [card.to_button() for card in self._cards]
+
+    def load_buttons(self, buttons: List[Dict[str, Any]]) -> None:
+        self.clear()
+        for button in buttons or []:
+            self.add_card(button)
+
+    def clear(self) -> None:
+        for card in self._cards:
+            self.cards_container.removeWidget(card)
+            card.deleteLater()
+        self._cards = []
+
+
 class TemplateAiSuggestionDialog(QDialog):
     """Preview dialog for an AI-generated WhatsApp template suggestion."""
 
@@ -587,7 +771,7 @@ class WhatsAppTab(QWidget):
         editor_container = QWidget()
         editor_layout = QVBoxLayout(editor_container)
         editor_layout.setContentsMargins(0, 0, 0, 0)
-        editor_layout.setSpacing(10)
+        editor_layout.setSpacing(14)
 
         # Información de plantilla
         info_group = QGroupBox("Información de Plantilla")
@@ -620,7 +804,8 @@ class WhatsAppTab(QWidget):
         meta_layout.addWidget(self.category_combo)
         meta_layout.addWidget(QLabel("Estado:"))
         self.status_label = QLabel("No guardado")
-        self.status_label.setStyleSheet(f"color: {_STATUS_COLORS['PENDING']};")
+        self.status_label.setObjectName("tplStatusBadge")
+        self._set_status(None)
         meta_layout.addWidget(self.status_label)
         meta_layout.addStretch()
         info_layout.addLayout(meta_layout)
@@ -655,13 +840,17 @@ class WhatsAppTab(QWidget):
         ai_layout.addWidget(self.ai_btn)
         content_layout.addLayout(ai_layout)
 
-        content_layout.addWidget(QLabel("Cuerpo (BODY):"))
+        body_title = QLabel("Cuerpo (BODY):")
+        body_title.setObjectName("tplPanelTitle")
+        content_layout.addWidget(body_title)
         self.body_editor = QTextEdit()
         self.body_editor.setObjectName("tplBodyEditor")
         self.body_editor.setPlaceholderText(
             "Hola {{1}}! 👋\n\nBienvenido a FitPilot. Tu membresía {{2}} está activa.\n\n"
             "¡Nos vemos en el gym! 💪"
         )
+        self.body_editor.setMinimumHeight(110)
+        self.body_editor.setMaximumHeight(220)
         self.body_editor.textChanged.connect(self._on_body_text_changed)
         content_layout.addWidget(self.body_editor)
 
@@ -737,8 +926,18 @@ class WhatsAppTab(QWidget):
         footer_layout.addWidget(self.footer_input)
         content_layout.addLayout(footer_layout)
 
+        header_card = QFrame()
+        header_card.setObjectName("tplCard")
+        header_card.setFrameShape(QFrame.Shape.NoFrame)
+        header_card_layout = QVBoxLayout(header_card)
+        header_card_layout.setContentsMargins(10, 10, 10, 10)
+        header_card_layout.setSpacing(8)
+        header_title = QLabel("Encabezado:")
+        header_title.setObjectName("tplPanelTitle")
+        header_card_layout.addWidget(header_title)
+
         header_format_layout = QHBoxLayout()
-        header_format_layout.addWidget(QLabel("Encabezado:"))
+        header_format_layout.addWidget(QLabel("Formato:"))
         self.header_format_combo = QComboBox()
         self.header_format_combo.addItem("Ninguno", None)
         self.header_format_combo.addItem("Texto", "TEXT")
@@ -759,7 +958,7 @@ class WhatsAppTab(QWidget):
         self.upload_asset_btn.setIconSize(QSize(14, 14))
         self.upload_asset_btn.clicked.connect(self.on_upload_header_asset)
         header_format_layout.addWidget(self.upload_asset_btn)
-        content_layout.addLayout(header_format_layout)
+        header_card_layout.addLayout(header_format_layout)
 
         # Encabezado de TEXTO (hasta 60 chars, una variable {{1}} opcional).
         self.header_text_row = QWidget()
@@ -778,7 +977,7 @@ class WhatsAppTab(QWidget):
         self.header_text_example_input.textChanged.connect(self.update_preview)
         header_text_layout.addWidget(self.header_text_example_input, 1)
         self.header_text_row.setVisible(False)
-        content_layout.addWidget(self.header_text_row)
+        header_card_layout.addWidget(self.header_text_row)
 
         # Encabezado de UBICACIÓN (lat/long requeridos al enviar).
         self.header_location_row = QWidget()
@@ -803,51 +1002,27 @@ class WhatsAppTab(QWidget):
         self.loc_address_input.textChanged.connect(self.update_preview)
         location_layout.addWidget(self.loc_address_input, 1)
         self.header_location_row.setVisible(False)
-        content_layout.addWidget(self.header_location_row)
+        header_card_layout.addWidget(self.header_location_row)
+        content_layout.addWidget(header_card)
 
         # Botones (QUICK_REPLY / URL estática o dinámica / PHONE_NUMBER).
-        buttons_header_layout = QHBoxLayout()
-        buttons_header_layout.addWidget(QLabel("Botones (opcional):"))
-        buttons_header_layout.addStretch()
-        self.add_button_btn = QPushButton("Botón")
-        self.add_button_btn.setObjectName("tplActionButton")
-        self.add_button_btn.setIcon(qta.icon("fa5s.plus", color=theme.palette_hex()))
-        self.add_button_btn.setIconSize(QSize(14, 14))
-        self.add_button_btn.clicked.connect(self.on_add_button)
-        buttons_header_layout.addWidget(self.add_button_btn)
-        self.remove_button_btn = QPushButton("Quitar botón")
-        self.remove_button_btn.setObjectName("tplActionButton")
-        self.remove_button_btn.setIcon(qta.icon("fa5s.minus", color=theme.palette_hex()))
-        self.remove_button_btn.setIconSize(QSize(14, 14))
-        self.remove_button_btn.clicked.connect(self.on_remove_button)
-        buttons_header_layout.addWidget(self.remove_button_btn)
-        content_layout.addLayout(buttons_header_layout)
+        buttons_title = QLabel("Botones (opcional):")
+        buttons_title.setObjectName("tplPanelTitle")
+        content_layout.addWidget(buttons_title)
 
         buttons_hint = QLabel(
-            "Máx 10 botones. URL con {{1}} al final = dinámica (1 por plantilla). "
-            "Valor = URL para URL, número para llamada."
+            "Máx 10 botones. Una URL que termine en {{1}} es dinámica (1 por plantilla)."
         )
         buttons_hint.setObjectName("tplHint")
         buttons_hint.setWordWrap(True)
         content_layout.addWidget(buttons_hint)
 
-        self.buttons_table = QTableWidget(0, 4)
-        self.buttons_table.setObjectName("tplTable")
-        self.buttons_table.setHorizontalHeaderLabels(
-            ["Tipo", "Texto", "URL / Teléfono", "Ejemplo {{1}}"]
+        self.buttons_editor = TemplateButtonsEditor()
+        self.buttons_editor.changed.connect(self._on_buttons_changed)
+        self.buttons_editor.limit_reached.connect(
+            lambda: show_error(self, "Máximo 10 botones por plantilla.")
         )
-        configure_table_widget(self.buttons_table, editable=True)
-        self.buttons_table.verticalHeader().setVisible(False)
-        self.buttons_table.horizontalHeader().setSectionResizeMode(
-            1, QHeaderView.ResizeMode.Stretch
-        )
-        self.buttons_table.horizontalHeader().setSectionResizeMode(
-            2, QHeaderView.ResizeMode.Stretch
-        )
-        self.buttons_table.setMaximumHeight(170)
-        self.buttons_table.setVisible(False)
-        self.buttons_table.itemChanged.connect(self._on_buttons_changed)
-        content_layout.addWidget(self.buttons_table)
+        content_layout.addWidget(self.buttons_editor)
 
         editor_layout.addWidget(content_group)
 
@@ -908,8 +1083,8 @@ class WhatsAppTab(QWidget):
 
         preview_panel = QFrame()
         preview_panel.setObjectName("tplPreviewRail")
-        preview_panel.setMinimumWidth(320)
-        preview_panel.setMaximumWidth(380)
+        preview_panel.setMinimumWidth(360)
+        preview_panel.setMaximumWidth(430)
         preview_layout = QVBoxLayout(preview_panel)
         preview_layout.setContentsMargins(12, 12, 12, 12)
         preview_layout.setSpacing(10)
@@ -1121,7 +1296,11 @@ class WhatsAppTab(QWidget):
         text = status or "No guardado"
         color = _STATUS_COLORS.get((status or "").upper(), "orange")
         self.status_label.setText(text)
-        self.status_label.setStyleSheet(f"color: {color};")
+        qcolor = QColor(color)
+        background = f"rgba({qcolor.red()}, {qcolor.green()}, {qcolor.blue()}, 38)"
+        self.status_label.setStyleSheet(
+            f"color: {color}; background-color: {background}; border: 1px solid {color};"
+        )
 
     def _set_identity_editable(self, editable: bool):
         """Nombre/idioma/categoría son inmutables en Meta tras crear."""
@@ -1283,9 +1462,7 @@ class WhatsAppTab(QWidget):
         self.header_text_example_input.setReadOnly(not editable)
         for widget in (self.loc_lat_input, self.loc_lng_input, self.loc_name_input, self.loc_address_input):
             widget.setReadOnly(not editable)
-        self.buttons_table.setEnabled(editable)
-        self.add_button_btn.setEnabled(editable)
-        self.remove_button_btn.setEnabled(editable)
+        self.buttons_editor.setEnabled(editable)
         self.carousel_group.setEnabled(editable)
         self._update_body_toolbar_cta()
         self._update_ai_cta()
@@ -1375,55 +1552,19 @@ class WhatsAppTab(QWidget):
         return {"latitude": lat, "longitude": lng, "name": name, "address": address}
 
     # --- Buttons editor -----------------------------------------------------------
-    def _make_button_type_combo(self) -> QComboBox:
-        combo = QComboBox()
-        combo.addItem("Respuesta rápida", "QUICK_REPLY")
-        combo.addItem("URL", "URL")
-        combo.addItem("Llamada", "PHONE_NUMBER")
-        combo.currentIndexChanged.connect(self._on_buttons_changed)
-        return combo
-
-    def on_add_button(self) -> None:
-        if self.buttons_table.rowCount() >= 10:
-            show_error(self, "Máximo 10 botones por plantilla.")
-            return
-        self._syncing_buttons_table = True
-        row = self.buttons_table.rowCount()
-        self.buttons_table.insertRow(row)
-        self.buttons_table.setCellWidget(row, 0, self._make_button_type_combo())
-        for col in (1, 2, 3):
-            self.buttons_table.setItem(row, col, QTableWidgetItem(""))
-        self._syncing_buttons_table = False
-        self.buttons_table.setVisible(True)
-        self.update_preview()
-
-    def on_remove_button(self) -> None:
-        row = self.buttons_table.currentRow()
-        if row < 0:
-            row = self.buttons_table.rowCount() - 1
-        if row < 0:
-            return
-        self.buttons_table.removeRow(row)
-        self.buttons_table.setVisible(self.buttons_table.rowCount() > 0)
-        self.update_preview()
-
     def _on_buttons_changed(self, *_args) -> None:
         if self._syncing_buttons_table:
             return
         self.update_preview()
 
-    def _table_text(self, row: int, col: int) -> str:
-        item = self.buttons_table.item(row, col)
-        return item.text() if item is not None else ""
-
     def _collect_buttons(self) -> List[Dict[str, Any]]:
         buttons: List[Dict[str, Any]] = []
-        for row in range(self.buttons_table.rowCount()):
-            combo = self.buttons_table.cellWidget(row, 0)
-            btype = combo.currentData() if combo else None
-            text = (self._table_text(row, 1) or "").strip()
-            value = (self._table_text(row, 2) or "").strip()
-            example = (self._table_text(row, 3) or "").strip()
+        for card in self.buttons_editor.cards():
+            raw = card.to_button()
+            btype = raw.get("type")
+            text = raw.get("text") or ""
+            value = raw.get("value") or ""
+            example = raw.get("example") or ""
             if not btype or not text:
                 continue
             button: Dict[str, Any] = {"type": btype, "text": text}
@@ -1438,19 +1579,8 @@ class WhatsAppTab(QWidget):
 
     def _load_buttons(self, buttons: List[Dict[str, Any]]) -> None:
         self._syncing_buttons_table = True
-        self.buttons_table.setRowCount(0)
-        for button in buttons or []:
-            row = self.buttons_table.rowCount()
-            self.buttons_table.insertRow(row)
-            combo = self._make_button_type_combo()
-            idx = combo.findData((button.get("type") or "").upper())
-            combo.setCurrentIndex(idx if idx >= 0 else 0)
-            self.buttons_table.setCellWidget(row, 0, combo)
-            self.buttons_table.setItem(row, 1, QTableWidgetItem(button.get("text") or ""))
-            self.buttons_table.setItem(row, 2, QTableWidgetItem(button.get("value") or ""))
-            self.buttons_table.setItem(row, 3, QTableWidgetItem(button.get("example") or ""))
+        self.buttons_editor.load_buttons(buttons or [])
         self._syncing_buttons_table = False
-        self.buttons_table.setVisible(self.buttons_table.rowCount() > 0)
 
     # --- Carousel -----------------------------------------------------------------
     def _on_carousel_toggled(self, checked: bool) -> None:

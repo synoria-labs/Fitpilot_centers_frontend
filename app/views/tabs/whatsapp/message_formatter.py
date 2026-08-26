@@ -20,6 +20,10 @@ def display_text_for_message(message: ChatMessage) -> str:
 
     useful = extract_useful_text(message.text_content, message.message_type)
     if useful:
+        # A tap on a template quick-reply button: mark it so staff can tell it apart from
+        # text the customer actually typed (mirrors the "reaction" special-case above).
+        if message.message_type in ("button", "interactive"):
+            return f"🔘 {useful}"
         return useful
 
     if message.message_type == "template":

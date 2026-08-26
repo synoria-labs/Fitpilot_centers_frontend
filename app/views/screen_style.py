@@ -147,6 +147,72 @@ QCheckBox::indicator:checked:disabled {{
 QCheckBox:disabled, QRadioButton:disabled {{
     color: palette(mid);
 }}
+/* Status pill: rounded badge whose color/background come from a per-instance
+   setStyleSheet() (the specific status color isn't known at QSS-build time). This rule only
+   supplies the shape so callers just set color. */
+QLabel#{prefix}StatusBadge {{
+    border-radius: 10px;
+    padding: 2px 10px;
+    font-weight: 700;
+    font-size: 11px;
+}}
+/* Pill chips: activity selection, quick groupings, mode segmented control.
+   The fill uses ACCENT with BRAND_NAVY text on top. ACCENT is deliberately light — the
+   theme module documents that it fails contrast against white — so chips read dark-on-light
+   and ACCENT_STRONG stays reserved for the primary buttons. */
+QPushButton#{prefix}Chip {{
+    background-color: transparent;
+    color: palette(text);
+    border: 1px solid palette(mid);
+    border-radius: 14px;
+    padding: 5px 14px;
+    font-weight: 600;
+}}
+QPushButton#{prefix}Chip:hover {{
+    border-color: {accent};
+}}
+QPushButton#{prefix}Chip:checked {{
+    background-color: {accent};
+    border-color: {accent};
+    color: {theme.BRAND_NAVY};
+}}
+QPushButton#{prefix}Chip:disabled {{
+    color: palette(mid);
+    border-color: palette(mid);
+}}
+
+/* Schedule grid. Row and column headers are buttons because clicking them selects the whole
+   row or column — the gesture that replaces ticking one box per weekday. */
+QPushButton#{prefix}GridHeader {{
+    background-color: transparent;
+    color: {secondary};
+    border: none;
+    padding: 3px 6px;
+    font-weight: 700;
+    font-size: 11px;
+}}
+QPushButton#{prefix}GridHeader:hover {{
+    color: {accent};
+}}
+QPushButton#{prefix}GridCell {{
+    background-color: palette(base);
+    border: 1px solid palette(mid);
+    border-radius: 6px;
+}}
+QPushButton#{prefix}GridCell:hover {{
+    border-color: {accent};
+}}
+QPushButton#{prefix}GridCell:checked {{
+    background-color: {accent};
+    border-color: {accent};
+    image: url({_CHECKMARK_ICON});
+}}
+/* Where the gym runs no class. Kept visible but muted so the grid still communicates the
+   shape of the week at a glance. */
+QLabel#{prefix}GridBlank {{
+    color: palette(mid);
+    background: transparent;
+}}
 QPushButton#{prefix}ActionButton {{
     background-color: transparent;
     color: palette(text);
