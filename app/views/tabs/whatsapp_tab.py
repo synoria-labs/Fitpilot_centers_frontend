@@ -122,12 +122,18 @@ def _parse_buttons(components: Optional[List[Any]]) -> List[Dict[str, Any]]:
                 continue
             btype = str(button.get("type") or "").upper()
             example = button.get("example")
-            example_str = str(example[0]) if isinstance(example, list) and example else ""
+            if btype == "COPY_CODE":
+                # COPY_CODE stores its code as a plain string in "example", not a list.
+                example_str = ""
+                value = str(example or "")
+            else:
+                example_str = str(example[0]) if isinstance(example, list) and example else ""
+                value = str(button.get("url") or button.get("phone_number") or "")
             result.append(
                 {
                     "type": btype,
                     "text": str(button.get("text") or ""),
-                    "value": str(button.get("url") or button.get("phone_number") or ""),
+                    "value": value,
                     "example": example_str,
                 }
             )
@@ -393,8 +399,16 @@ _BUTTON_TYPES = [
     ("QUICK_REPLY", "Respuesta rápida"),
     ("URL", "URL"),
     ("PHONE_NUMBER", "Llamada"),
+    ("COPY_CODE", "Código de oferta"),
+    ("VOICE_CALL", "Llamar en WhatsApp"),
+    ("REQUEST_CONTACT_INFO", "Compartir información de contacto"),
 ]
-_BUTTON_VALUE_LABELS = {"URL": "URL:", "PHONE_NUMBER": "Teléfono:"}
+_BUTTON_VALUE_LABELS = {"URL": "URL:", "PHONE_NUMBER": "Teléfono:", "COPY_CODE": "Código:"}
+# Meta requiere que estos tipos sean el único botón de la plantilla.
+_EXCLUSIVE_BUTTON_TYPES = {"VOICE_CALL", "REQUEST_CONTACT_INFO"}
+# Meta fija esta etiqueta y rechaza cualquier otro texto (verificado contra la API real:
+# error_subcode 2388153, "no se puede modificar y siempre debe ser...").
+_REQUEST_CONTACT_INFO_TEXT = "Compartir información de contacto"
 
 
 class TemplateButtonCardWidget(QFrame):
@@ -470,8 +484,20 @@ class TemplateButtonCardWidget(QFrame):
         self.value_input.setVisible(label is not None)
         if label:
             self.value_label.setText(label)
+        self._refresh_text_lock(btype)
         self._refresh_example_visibility()
         self.changed.emit()
+
+    def _refresh_text_lock(self, btype: str) -> None:
+        """Meta fija la etiqueta de REQUEST_CONTACT_INFO; no tiene sentido pedirle al
+        usuario que la escriba, así que se prellena y se bloquea la edición."""
+        if btype == "REQUEST_CONTACT_INFO":
+            self.text_input.setText(_REQUEST_CONTACT_INFO_TEXT)
+            self.text_input.setReadOnly(True)
+            self.text_input.setToolTip("Meta fija esta etiqueta; no se puede personalizar.")
+        else:
+            self.text_input.setReadOnly(False)
+            self.text_input.setToolTip("")
 
     def _on_value_changed(self, *_args) -> None:
         self._refresh_example_visibility()
@@ -536,12 +562,13 @@ class TemplateButtonsEditor(QWidget):
             self.limit_reached.emit()
             return None
         card = TemplateButtonCardWidget(len(self._cards) + 1, self)
-        card.changed.connect(self.changed)
+        card.changed.connect(self._on_card_changed)
         card.remove_requested.connect(self.remove_card)
         self.cards_container.addWidget(card)
         self._cards.append(card)
         if button_data:
             card.load_from(button_data)
+        self._refresh_lock_state()
         self.changed.emit()
         return card
 
@@ -553,7 +580,27 @@ class TemplateButtonsEditor(QWidget):
         card.deleteLater()
         for index, remaining in enumerate(self._cards, start=1):
             remaining.set_index(index)
+        self._refresh_lock_state()
         self.changed.emit()
+
+    def _on_card_changed(self) -> None:
+        self._refresh_lock_state()
+        self.changed.emit()
+
+    def _refresh_lock_state(self) -> None:
+        """Meta exige que VOICE_CALL/REQUEST_CONTACT_INFO sean el único botón: bloquea
+        "Agregar botón" mientras exista una tarjeta de ese tipo."""
+        exclusive_present = any(
+            card.to_button().get("type") in _EXCLUSIVE_BUTTON_TYPES for card in self._cards
+        )
+        if exclusive_present:
+            self.add_btn.setEnabled(False)
+            self.add_btn.setToolTip(
+                "Este tipo de botón debe ser el único de la plantilla; quítalo para agregar otros."
+            )
+        else:
+            self.add_btn.setEnabled(len(self._cards) < self.MAX_BUTTONS)
+            self.add_btn.setToolTip("")
 
     def cards(self) -> List[TemplateButtonCardWidget]:
         return list(self._cards)
@@ -571,6 +618,7 @@ class TemplateButtonsEditor(QWidget):
             self.cards_container.removeWidget(card)
             card.deleteLater()
         self._cards = []
+        self._refresh_lock_state()
 
 
 class TemplateAiSuggestionDialog(QDialog):
@@ -1574,6 +1622,8 @@ class WhatsAppTab(QWidget):
                     button["example"] = example
             elif btype == "PHONE_NUMBER":
                 button["phone_number"] = value
+            elif btype == "COPY_CODE":
+                button["offer_code"] = value
             buttons.append(button)
         return buttons
 

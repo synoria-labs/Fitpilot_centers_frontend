@@ -237,7 +237,14 @@ class TemplatePreviewWidget(QWidget):
             self._buttons.clear()
             self._buttons.setVisible(False)
             return
-        icons = {"URL": "🔗", "PHONE_NUMBER": "📞", "QUICK_REPLY": "💬"}
+        icons = {
+            "URL": "🔗",
+            "PHONE_NUMBER": "📞",
+            "QUICK_REPLY": "💬",
+            "COPY_CODE": "🏷️",
+            "VOICE_CALL": "📲",
+            "REQUEST_CONTACT_INFO": "👤",
+        }
         self._buttons.setTextFormat(Qt.TextFormat.RichText)
         lines = []
         for button in buttons:
