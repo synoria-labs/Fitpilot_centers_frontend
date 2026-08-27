@@ -31,6 +31,8 @@ class CampaignsController(BaseController):
     metrics_loaded = Signal(object)       # dict
     metrics_batch_loaded = Signal(object) # {campaign_id: metrics}
     recipients_loaded = Signal(object)    # List[dict]
+    media_assets_loaded = Signal(str, object)  # kind, List[dict]
+    media_asset_uploaded = Signal(str, object)  # kind, asset dict
     error_occurred = Signal(str)
     loading_changed = Signal(bool)
 
@@ -104,6 +106,17 @@ class CampaignsController(BaseController):
             campaign_id=campaign_id, status=status,
         )
 
+    def load_media_assets(self, kind: Optional[str]) -> None:
+        if not self._service or not kind:
+            return
+        self._execute_authenticated_operation(
+            self._service,
+            "get_media_assets",
+            lambda result, media_kind=kind: self.media_assets_loaded.emit(media_kind, result or []),
+            self._on_error,
+            kind=kind,
+        )
+
     # -------------------------------------------------------------- mutations
     def create_campaign(self, payload: Dict[str, Any]) -> None:
         self.loading_changed.emit(True)
@@ -170,6 +183,21 @@ class CampaignsController(BaseController):
             self._on_action, self._on_error, campaign_id=campaign_id,
         )
 
+    def upload_media_asset(self, file_path: str, kind: str, display_name: Optional[str] = None) -> None:
+        if not self._service:
+            self.error_occurred.emit("Servicio de campañas no disponible")
+            return
+        self.loading_changed.emit(True)
+        self._execute_authenticated_operation(
+            self._service,
+            "upload_media_asset",
+            lambda result, media_kind=kind: self._on_media_uploaded(media_kind, result),
+            self._on_error,
+            file_path=file_path,
+            kind=kind,
+            display_name=display_name,
+        )
+
     # ------------------------------------------------------------------ slots
     def _on_campaigns(self, result: Optional[List[Dict[str, Any]]]) -> None:
         self.loading_changed.emit(False)
@@ -188,6 +216,15 @@ class CampaignsController(BaseController):
             self.action_result.emit(result)
         else:
             self.error_occurred.emit((result or {}).get("error") or "No se pudo completar la acción")
+
+    def _on_media_uploaded(self, kind: str, result: Optional[Dict[str, Any]]) -> None:
+        self.loading_changed.emit(False)
+        if result and result.get("id"):
+            self.media_asset_uploaded.emit(kind, result)
+        else:
+            self.error_occurred.emit(
+                (result or {}).get("error") or "No se pudo subir el archivo multimedia"
+            )
 
     def _on_error(self, message: str) -> None:
         self.loading_changed.emit(False)

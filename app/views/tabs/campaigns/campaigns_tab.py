@@ -22,7 +22,7 @@ import qtawesome as qta
 from PySide6.QtCore import QSize, Qt, QTimer
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QComboBox, QFrame, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMenu,
+    QComboBox, QFileDialog, QFrame, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMenu,
     QPushButton, QScrollArea, QSplitter, QStackedWidget, QTableWidget,
     QTableWidgetItem, QVBoxLayout, QWidget,
 )
@@ -122,6 +122,9 @@ class CampaignsTab(QWidget):
         self.controller.load_classes()
         self.controller.load_plans()
         self.controller.load_campaigns()
+        self.controller.load_media_assets("image")
+        self.controller.load_media_assets("video")
+        self.controller.load_media_assets("document")
 
     # ================================================================== UI
     def _build_ui(self) -> None:
@@ -321,8 +324,11 @@ class CampaignsTab(QWidget):
         c.metrics_loaded.connect(self._on_metrics)
         c.metrics_batch_loaded.connect(self._on_metrics_batch)
         c.recipients_loaded.connect(self._on_recipients)
+        c.media_assets_loaded.connect(self.message_step.set_media_assets)
+        c.media_asset_uploaded.connect(self._on_media_asset_uploaded)
         c.error_occurred.connect(self._on_error)
         c.loading_changed.connect(self._on_loading)
+        self.message_step.media_upload_requested.connect(self._on_media_upload_requested)
 
     # ============================================================== navigation
     def _go_to_step(self, index: int) -> None:
@@ -555,6 +561,9 @@ class CampaignsTab(QWidget):
         self.message_step.select_template(
             campaign.get("template_id"), campaign.get("param_mapping") or []
         )
+        self.message_step.set_media_override(
+            campaign.get("header_media_asset_id"), campaign.get("header_media_url")
+        )
         # Reset to step 1: without this, selecting a campaign while the wizard was left
         # on another step (or with a torn-down/rebuilt ClassPicker grid) leaves the panel
         # showing a stale QStackedWidget page instead of the campaign just selected.
@@ -619,6 +628,15 @@ class CampaignsTab(QWidget):
     def _on_recipients(self, recipients: List[Dict[str, Any]]) -> None:
         self.recipients_table.set_recipients(recipients or [])
 
+    def _on_media_asset_uploaded(self, kind: str, asset: Dict[str, Any]) -> None:
+        self.message_step.add_uploaded_asset(kind, asset)
+
+    def _on_media_upload_requested(self, kind: str) -> None:
+        path, _ = QFileDialog.getOpenFileName(self, "Seleccionar archivo multimedia")
+        if not path:
+            return
+        self.controller.upload_media_asset(path, kind)
+
     def _on_error(self, message: str) -> None:
         show_error(self, message or "Ocurrió un error.", title="Campañas")
 
@@ -641,6 +659,7 @@ class CampaignsTab(QWidget):
             "audienceSpec": self.audience_step.audience_spec(),
             "templateId": self.message_step.template_id(),
             "paramMapping": self.message_step.param_mapping(),
+            **self.message_step.header_media_override(),
         }
 
     def _on_new_clicked(self) -> None:
@@ -656,6 +675,7 @@ class CampaignsTab(QWidget):
             check.setChecked(key == "expired")
         self.audience_step.end_range_check.setChecked(True)
         self.message_step.select_template(None, [])
+        self.message_step.set_media_override(None, None)
         self.metrics_panel.clear()
         self._go_to_step(0)
 

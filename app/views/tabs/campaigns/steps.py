@@ -14,8 +14,8 @@ from typing import Any, Dict, List, Optional
 from PySide6.QtCore import QDateTime, Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDateTimeEdit, QFormLayout, QGroupBox, QHBoxLayout,
-    QLabel, QLineEdit, QListWidget, QListWidgetItem, QRadioButton, QButtonGroup,
-    QSpinBox, QVBoxLayout, QWidget,
+    QLabel, QLineEdit, QListWidget, QListWidgetItem, QPushButton, QRadioButton,
+    QButtonGroup, QSpinBox, QVBoxLayout, QWidget,
 )
 
 from ..whatsapp import theme
@@ -338,12 +338,19 @@ class MessageStep(QWidget):
     """Paso 2 — qué les decimos: plantilla, variables y la burbuja real."""
 
     test_send_requested = Signal()
+    media_upload_requested = Signal(str)  # kind ("image"/"video"/"document")
+
+    # Header format -> media-asset kind (matches whatsapp_tab.py's _HEADER_FORMATS).
+    _HEADER_MEDIA_KINDS = {"IMAGE": "image", "VIDEO": "video", "DOCUMENT": "document"}
+    _SCHEDULE_VARIABLE_KEYS = ("favorite_class_day", "favorite_class_time", "favorite_class_schedule")
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self._templates: List[Dict[str, Any]] = []
         self._variables: List[Dict[str, Any]] = []
         self._param_combos: List[QComboBox] = []
+        self._media_assets_by_kind: Dict[str, List[Dict[str, Any]]] = {}
+        self._media_assets_by_id: Dict[int, Dict[str, Any]] = {}
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -363,6 +370,40 @@ class MessageStep(QWidget):
         self.template_combo = QComboBox()
         self.template_combo.currentIndexChanged.connect(self._rebuild_mapping)
         form.addRow("Plantilla", self.template_combo)
+
+        # Media de encabezado: visible solo si la plantilla elegida tiene header
+        # IMAGE/VIDEO/DOCUMENT. La plantilla aprobada queda congelada, pero el archivo real
+        # que se manda es independiente — se puede reasignar por campaña (mismo patrón que
+        # "Enviar prueba" en whatsapp_tab.py).
+        self.media_container = QWidget()
+        media_layout = QVBoxLayout(self.media_container)
+        media_layout.setContentsMargins(0, 0, 0, 0)
+        media_layout.setSpacing(4)
+        mode_row = QHBoxLayout()
+        self.media_mode = QComboBox()
+        self.media_mode.addItem("Usar media por defecto", "default")
+        self.media_mode.addItem("Usar otro asset", "asset")
+        self.media_mode.addItem("Usar URL externa HTTPS", "url")
+        self.media_mode.currentIndexChanged.connect(self._refresh_media_controls)
+        mode_row.addWidget(self.media_mode)
+        self.default_media_label = QLabel("")
+        mode_row.addWidget(self.default_media_label, 1)
+        media_layout.addLayout(mode_row)
+        asset_row = QHBoxLayout()
+        self.media_asset_combo = QComboBox()
+        self.media_asset_combo.currentIndexChanged.connect(self.refresh_preview)
+        asset_row.addWidget(self.media_asset_combo, 1)
+        self.upload_media_btn = QPushButton("Subir")
+        self.upload_media_btn.clicked.connect(self._on_upload_clicked)
+        asset_row.addWidget(self.upload_media_btn)
+        media_layout.addLayout(asset_row)
+        self.media_url_input = QLineEdit()
+        self.media_url_input.setPlaceholderText("https://...")
+        self.media_url_input.textChanged.connect(self.refresh_preview)
+        media_layout.addWidget(self.media_url_input)
+        self.media_container.setVisible(False)
+        form.addRow("Media", self.media_container)
+
         self.mapping_container = QWidget()
         self.mapping_layout = QFormLayout(self.mapping_container)
         self.mapping_layout.setContentsMargins(0, 0, 0, 0)
@@ -423,6 +464,151 @@ class MessageStep(QWidget):
     def template_id(self) -> Optional[int]:
         return self.template_combo.currentData()
 
+    # ------------------------------------------------------------------ media override
+    def set_media_assets(self, kind: str, assets: List[Dict[str, Any]]) -> None:
+        self._media_assets_by_kind[kind] = list(assets or [])
+        for asset in assets or []:
+            if asset.get("id") is not None:
+                self._media_assets_by_id[asset["id"]] = asset
+        if kind == self._current_header_kind():
+            self._refresh_media_controls()
+
+    def add_uploaded_asset(self, kind: str, asset: Optional[Dict[str, Any]]) -> None:
+        """Prepend a just-uploaded asset to its kind's list and select it as the override."""
+        if not asset:
+            return
+        assets = [a for a in self._media_assets_by_kind.get(kind, []) if a.get("id") != asset.get("id")]
+        assets.insert(0, asset)
+        self.set_media_assets(kind, assets)
+        if kind == self._current_header_kind():
+            index = self.media_mode.findData("asset")
+            self.media_mode.blockSignals(True)
+            self.media_mode.setCurrentIndex(index if index >= 0 else 0)
+            self.media_mode.blockSignals(False)
+            self._populate_media_asset_combo(selected_id=asset.get("id"))
+            self._refresh_media_controls()
+
+    def header_media_override(self) -> Dict[str, Any]:
+        """``{headerMediaAssetId, headerMediaUrl}`` para el payload de guardado de la campaña."""
+        if not self._current_header_kind():
+            return {"headerMediaAssetId": None, "headerMediaUrl": None}
+        mode = self.media_mode.currentData() or "default"
+        if mode == "asset":
+            return {"headerMediaAssetId": self._selected_media_asset_id(), "headerMediaUrl": None}
+        if mode == "url":
+            url = self.media_url_input.text().strip() or None
+            return {"headerMediaAssetId": None, "headerMediaUrl": url}
+        return {"headerMediaAssetId": None, "headerMediaUrl": None}
+
+    def set_media_override(self, asset_id: Optional[int], url: Optional[str]) -> None:
+        """Restaura la selección de media al abrir una campaña existente para editar."""
+        if asset_id:
+            mode = "asset"
+        elif url:
+            mode = "url"
+        else:
+            mode = "default"
+        index = self.media_mode.findData(mode)
+        self.media_mode.blockSignals(True)
+        self.media_mode.setCurrentIndex(index if index >= 0 else 0)
+        self.media_mode.blockSignals(False)
+        self.media_url_input.setText(url or "")
+        self._populate_media_asset_combo(selected_id=asset_id)
+        self._refresh_media_controls()
+
+    def _current_header_format(self) -> Optional[str]:
+        template = self.current_template()
+        if not template:
+            return None
+        header = _component_of(template.get("components"), "HEADER")
+        return str((header or {}).get("format") or "").upper() or None
+
+    def _current_header_kind(self) -> Optional[str]:
+        return self._HEADER_MEDIA_KINDS.get(self._current_header_format() or "")
+
+    def _default_header_asset_id(self) -> Optional[int]:
+        template = self.current_template()
+        if not template:
+            return None
+        value = template.get("default_header_media_asset_id")
+        return int(value) if value is not None else None
+
+    @staticmethod
+    def _asset_label(asset: Dict[str, Any]) -> str:
+        return asset.get("display_name") or asset.get("original_filename") or f"Asset {asset.get('id')}"
+
+    def _selected_media_asset_id(self) -> Optional[int]:
+        value = self.media_asset_combo.currentData()
+        return int(value) if value is not None else None
+
+    def _selected_media_asset(self) -> Optional[Dict[str, Any]]:
+        asset_id = self._selected_media_asset_id()
+        return self._media_assets_by_id.get(asset_id) if asset_id is not None else None
+
+    def _populate_media_asset_combo(self, selected_id: Optional[int] = None) -> None:
+        kind = self._current_header_kind()
+        self.media_asset_combo.blockSignals(True)
+        self.media_asset_combo.clear()
+        self.media_asset_combo.addItem("(Selecciona un asset)", None)
+        selected_index = 0
+        for i, asset in enumerate(self._media_assets_by_kind.get(kind, []), start=1):
+            self.media_asset_combo.addItem(self._asset_label(asset), asset.get("id"))
+            if selected_id is not None and asset.get("id") == selected_id:
+                selected_index = i
+        self.media_asset_combo.setCurrentIndex(selected_index)
+        self.media_asset_combo.blockSignals(False)
+
+    def _refresh_default_media_label(self) -> None:
+        default_id = self._default_header_asset_id()
+        if default_id is None:
+            self.default_media_label.setText("Sin media por defecto")
+            return
+        asset = self._media_assets_by_id.get(default_id)
+        if asset:
+            self.default_media_label.setText(f"Default: {self._asset_label(asset)}")
+        else:
+            self.default_media_label.setText(f"Default: asset #{default_id}")
+
+    def _refresh_media_controls(self, *_args) -> None:
+        kind = self._current_header_kind()
+        self.media_container.setVisible(bool(kind))
+        if not kind:
+            self.refresh_preview()
+            return
+        self._refresh_default_media_label()
+        self._populate_media_asset_combo(selected_id=self._selected_media_asset_id())
+        mode = self.media_mode.currentData() or "default"
+        self.media_asset_combo.setVisible(mode == "asset")
+        self.media_url_input.setVisible(mode == "url")
+        self.refresh_preview()
+
+    def _resolve_preview_media(self) -> "tuple[Optional[str], Optional[str]]":
+        kind = self._current_header_kind()
+        if not kind:
+            return None, None
+        mode = self.media_mode.currentData() or "default"
+        if mode == "asset":
+            asset = self._selected_media_asset()
+            return (
+                (asset or {}).get("public_url"),
+                (asset or {}).get("display_name") or (asset or {}).get("original_filename"),
+            )
+        if mode == "url":
+            url = self.media_url_input.text().strip()
+            return (url or None), ("URL externa" if url else None)
+        default_id = self._default_header_asset_id()
+        if default_id is None:
+            return None, None
+        asset = self._media_assets_by_id.get(default_id)
+        if asset:
+            return asset.get("public_url"), self._asset_label(asset)
+        return None, f"Asset default #{default_id}"
+
+    def _on_upload_clicked(self) -> None:
+        kind = self._current_header_kind()
+        if kind:
+            self.media_upload_requested.emit(kind)
+
     # ------------------------------------------------------------------ internals
     def _rebuild_mapping(self, *_args, saved_mapping: Optional[List[str]] = None) -> None:
         while self.mapping_layout.rowCount():
@@ -448,7 +634,7 @@ class MessageStep(QWidget):
             combo.currentIndexChanged.connect(self.refresh_preview)
             self._param_combos.append(combo)
             self.mapping_layout.addRow(f"{{{{{index + 1}}}}}", combo)
-        self.refresh_preview()
+        self._refresh_media_controls()
 
     def refresh_preview(self, *_args) -> None:
         """Render the template with sample values, exactly as the dry run would."""
@@ -469,19 +655,25 @@ class MessageStep(QWidget):
         header = _component_of(components, "HEADER")
         buttons = _component_of(components, "BUTTONS")
         header_format = str((header or {}).get("format") or "").upper()
+        media_url, media_name = self._resolve_preview_media()
 
         self.preview.set_preview(
             body=body,
             footer=(footer or {}).get("text"),
             header_text=(header or {}).get("text") if header_format == "TEXT" else None,
             media_format=header_format if header_format in ("IMAGE", "VIDEO", "DOCUMENT") else None,
+            media_url=media_url,
+            media_name=media_name,
             buttons=(buttons or {}).get("buttons"),
         )
-        self._warn_about_class_variables()
+        self._refresh_warnings()
 
-    _SCHEDULE_VARIABLE_KEYS = ("favorite_class_day", "favorite_class_time", "favorite_class_schedule")
+    def _refresh_warnings(self) -> None:
+        lines = self._class_variable_warning_lines() + self._media_warning_lines()
+        self.warning_label.setVisible(bool(lines))
+        self.warning_label.setText("\n".join(lines))
 
-    def _warn_about_class_variables(self) -> None:
+    def _class_variable_warning_lines(self) -> List[str]:
         """A class variable this campaign's audience cannot resolve renders as nothing.
 
         Better to say so here than to let the operator discover blank gaps in the messages
@@ -494,10 +686,6 @@ class MessageStep(QWidget):
         keys = self.param_mapping()
         uses_class_name = "favorite_class_name" in keys
         uses_schedule_var = any(key in self._SCHEDULE_VARIABLE_KEYS for key in keys)
-        self.warning_label.setVisible(uses_class_name or uses_schedule_var)
-        if not (uses_class_name or uses_schedule_var):
-            return
-
         lines = []
         if uses_class_name:
             lines.append(
@@ -511,7 +699,21 @@ class MessageStep(QWidget):
                 "domina claramente su historial — puede quedar en blanco más seguido que el "
                 "nombre de la clase."
             )
-        self.warning_label.setText("\n".join(lines))
+        return lines
+
+    def _media_warning_lines(self) -> List[str]:
+        """The template needs header media, the operator hasn't overridden it, and it has no
+        default either — the send would fail per-recipient (MediaAssetError) with nothing
+        telling the operator why until after the fact."""
+        if not self._current_header_kind():
+            return []
+        mode = self.media_mode.currentData() or "default"
+        if mode != "default" or self._default_header_asset_id() is not None:
+            return []
+        return [
+            "La plantilla requiere una imagen/video/documento de encabezado y no tiene un "
+            "archivo por defecto. Selecciona un asset o sube uno nuevo antes de enviar."
+        ]
 
 
 class ReviewStep(QWidget):
