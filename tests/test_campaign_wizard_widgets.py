@@ -11,6 +11,7 @@ comprobaciones estáticas no pueden ver.
 from __future__ import annotations
 
 import pytest
+from PySide6.QtCore import Qt
 
 from app.views.tabs.campaigns.panels import (
     MetricsPanel,
@@ -130,6 +131,56 @@ def test_message_step_without_a_template_does_not_crash(qtbot):
 
     assert step.template_id() is None
     assert step.param_mapping() == []
+
+
+def test_message_step_shows_the_full_catalog_without_scrolling(qtbot):
+    """Qt's QComboBox defaults to 10 visible rows; the real catalog has 15 variables."""
+    step = MessageStep()
+    qtbot.addWidget(step)
+    step.set_variables(VARIABLES)
+    step.set_templates(TEMPLATES)
+    step.select_template(5, [])
+
+    combo = step._param_combos[0]
+    assert combo.maxVisibleItems() >= len(VARIABLES)
+
+
+def test_message_step_sets_variable_description_as_a_tooltip(qtbot):
+    variables = VARIABLES + [
+        {
+            "key": "kg_fat_equivalent",
+            "label": "Kg de grasa",
+            "sample": "1.1",
+            "description": "Estimación, no el peso real del socio.",
+        }
+    ]
+    step = MessageStep()
+    qtbot.addWidget(step)
+    step.set_variables(variables)
+    step.set_templates(TEMPLATES)
+    step.select_template(5, [])
+
+    combo = step._param_combos[0]
+    index = combo.findData("kg_fat_equivalent")
+    assert index >= 0
+    assert combo.itemData(index, Qt.ItemDataRole.ToolTipRole) == (
+        "Estimación, no el peso real del socio."
+    )
+
+
+def test_message_step_warns_specifically_about_schedule_variables(qtbot):
+    """Day/time/schedule blank out more often than the class name — a distinct caveat."""
+    step = MessageStep()
+    qtbot.addWidget(step)
+    step.set_variables(
+        VARIABLES + [{"key": "favorite_class_day", "label": "Día de esa clase", "sample": "lunes"}]
+    )
+    step.set_templates(TEMPLATES)
+
+    step.select_template(5, ["member_first_name", "favorite_class_day"])
+    assert not step.warning_label.isHidden()
+    assert "reserva fija" in step.warning_label.text()
+    assert "Quien no tenga historial" not in step.warning_label.text()
 
 
 def test_review_step_reports_its_schedule_choice(qtbot):
