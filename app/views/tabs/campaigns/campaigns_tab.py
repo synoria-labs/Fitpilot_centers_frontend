@@ -347,6 +347,25 @@ class CampaignsTab(QWidget):
                 f"Ventana de conversión: {campaign.get('conversion_window_days', 14)} días"
             )
         self.review_step.set_summary(lines)
+        self.review_step.set_readiness_blockers(self._send_blockers())
+
+    def _send_blockers(self) -> List[str]:
+        """Same checks the server enforces before Enviar/Programar (campaigns/mutations.py
+        ``_require_sendable``), computed locally so the reason shows up before the click
+        instead of only after a rejected request."""
+        blockers: List[str] = []
+        template = self.message_step.current_template()
+        if not template:
+            blockers.append("Selecciona una plantilla antes de enviar o programar.")
+        elif not template.get("meta_template_id"):
+            blockers.append(
+                "La plantilla no está sincronizada con Meta. Sincroniza plantillas primero."
+            )
+        elif (template.get("template_status") or "").upper() != "APPROVED":
+            blockers.append("La plantilla seleccionada no está aprobada por Meta.")
+        if not self.audience_step.audience_spec():
+            blockers.append("Define una audiencia antes de enviar.")
+        return blockers
 
     # ============================================================== state
     def _apply_state(self) -> None:
@@ -536,7 +555,10 @@ class CampaignsTab(QWidget):
         self.message_step.select_template(
             campaign.get("template_id"), campaign.get("param_mapping") or []
         )
-        self._apply_state()
+        # Reset to step 1: without this, selecting a campaign while the wizard was left
+        # on another step (or with a torn-down/rebuilt ClassPicker grid) leaves the panel
+        # showing a stale QStackedWidget page instead of the campaign just selected.
+        self._go_to_step(0)
 
     def _on_campaign_saved(self, result: Dict[str, Any]) -> None:
         campaign = result.get("campaign")

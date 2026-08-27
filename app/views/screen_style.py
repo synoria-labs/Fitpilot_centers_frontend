@@ -147,6 +147,15 @@ QCheckBox::indicator:checked:disabled {{
 QCheckBox:disabled, QRadioButton:disabled {{
     color: palette(mid);
 }}
+/* Status pill: rounded badge whose color/background come from a per-instance
+   setStyleSheet() (the specific status color isn't known at QSS-build time). This rule only
+   supplies the shape so callers just set color. */
+QLabel#{prefix}StatusBadge {{
+    border-radius: 10px;
+    padding: 2px 10px;
+    font-weight: 700;
+    font-size: 11px;
+}}
 /* Pill chips: activity selection, quick groupings, mode segmented control.
    The fill uses ACCENT with BRAND_NAVY text on top. ACCENT is deliberately light — the
    theme module documents that it fails contrast against white — so chips read dark-on-light

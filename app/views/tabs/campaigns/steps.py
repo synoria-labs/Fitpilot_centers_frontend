@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QSpinBox, QVBoxLayout, QWidget,
 )
 
+from ..whatsapp import theme
 from ..whatsapp.template_preview_widget import TemplatePreviewWidget
 from .class_picker import ChipButton, ClassPicker
 
@@ -507,6 +508,15 @@ class ReviewStep(QWidget):
         summary_layout.addWidget(self.summary_label)
         layout.addWidget(summary_group)
 
+        # Explica por adelantado por qué Enviar/Programar fallarían, en vez de dejar que el
+        # usuario lo descubra con el diálogo de error del servidor tras hacer clic.
+        self.readiness_label = QLabel("")
+        self.readiness_label.setObjectName("campHint")
+        self.readiness_label.setStyleSheet(f"color: {theme.DANGER}; font-weight: 600;")
+        self.readiness_label.setWordWrap(True)
+        self.readiness_label.setVisible(False)
+        layout.addWidget(self.readiness_label)
+
         schedule_group = QGroupBox("Cuándo enviar")
         schedule_group.setObjectName("campGroup")
         schedule_layout = QVBoxLayout(schedule_group)
@@ -538,6 +548,17 @@ class ReviewStep(QWidget):
 
     def set_summary(self, lines: List[str]) -> None:
         self.summary_label.setText("\n".join(lines))
+
+    def set_readiness_blockers(self, blockers: List[str]) -> None:
+        """Show the reasons Enviar/Programar would be rejected — same checks the server
+        applies (plantilla elegida y aprobada, audiencia definida) — before the user tries."""
+        if not blockers:
+            self.readiness_label.setVisible(False)
+            self.readiness_label.setText("")
+            return
+        lines = "\n".join(f"• {b}" for b in blockers)
+        self.readiness_label.setText(f"Antes de enviar o programar:\n{lines}")
+        self.readiness_label.setVisible(True)
 
     def is_scheduled(self) -> bool:
         return self.schedule_radio.isChecked()
