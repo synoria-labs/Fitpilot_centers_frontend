@@ -47,6 +47,25 @@ _CAMPAIGN_FIELDS = f"""
     template {{ {_TEMPLATE_FIELDS} }}
 """
 
+_MEDIA_ASSET_FIELDS = """
+    id
+    mediaKind
+    displayName
+    originalFilename
+    mimeType
+    fileExt
+    fileSize
+    sha256
+    storageKey
+    publicUrl
+    status
+    sampleHeaderHandle
+    sampleHandleGeneratedAt
+    createdAt
+    updatedAt
+    lastValidatedAt
+"""
+
 _METRICS_FIELDS = """
     targeted
     pending
@@ -78,6 +97,29 @@ _RUN_FIELDS = """
     renderedPreview
     error
 """
+
+
+def _map_asset(node: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not node:
+        return None
+    return {
+        "id": node.get("id"),
+        "media_kind": node.get("mediaKind"),
+        "display_name": node.get("displayName"),
+        "original_filename": node.get("originalFilename"),
+        "mime_type": node.get("mimeType"),
+        "file_ext": node.get("fileExt"),
+        "file_size": node.get("fileSize"),
+        "sha256": node.get("sha256"),
+        "storage_key": node.get("storageKey"),
+        "public_url": node.get("publicUrl"),
+        "status": node.get("status"),
+        "sample_header_handle": node.get("sampleHeaderHandle"),
+        "sample_handle_generated_at": node.get("sampleHandleGeneratedAt"),
+        "created_at": node.get("createdAt"),
+        "updated_at": node.get("updatedAt"),
+        "last_validated_at": node.get("lastValidatedAt"),
+    }
 
 
 def _map_template(node: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -224,6 +266,58 @@ class CampaignsService:
             if (t.get("template_status") or "").upper() == "APPROVED"
             and t.get("meta_template_id")
         ]
+
+    async def get_media_assets(
+        self,
+        kind: Optional[str] = None,
+        search: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Media assets for the header-media override picker (same store WhatsApp uses)."""
+        query = f"""
+            query GetWhatsappMediaAssets($kind: String, $search: String) {{
+                whatsappMediaAssets(kind: $kind, search: $search, status: "active") {{
+                    {_MEDIA_ASSET_FIELDS}
+                }}
+            }}
+        """
+        result = await self.client.execute(query, {"kind": kind, "search": search})
+        nodes = (result or {}).get("whatsappMediaAssets") or []
+        return [_map_asset(n) for n in nodes if n]
+
+    async def upload_media_asset(
+        self,
+        file_path: str,
+        kind: str,
+        display_name: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        mutation = f"""
+            mutation UploadWhatsappMediaAsset(
+                $file: Upload!,
+                $kind: WhatsAppMediaKind!,
+                $displayName: String
+            ) {{
+                uploadWhatsappMediaAsset(file: $file, kind: $kind, displayName: $displayName) {{
+                    {_MEDIA_ASSET_FIELDS}
+                }}
+            }}
+        """
+        variables = {"kind": (kind or "").upper(), "displayName": display_name}
+        result = await self.client.execute_multipart(
+            mutation,
+            variables,
+            file_path=file_path,
+            file_variable="file",
+        )
+        if not result:
+            return {
+                "error": getattr(
+                    self.client,
+                    "last_error",
+                    "No se pudo subir el archivo multimedia",
+                )
+            }
+        asset = _map_asset(result.get("uploadWhatsappMediaAsset"))
+        return asset or {"error": "No se pudo subir el archivo multimedia"}
 
     async def get_classes(self) -> Dict[str, Any]:
         """Class types + their scheduled slots, for the audience class picker.

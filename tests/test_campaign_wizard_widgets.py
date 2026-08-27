@@ -21,6 +21,30 @@ from app.views.tabs.campaigns.panels import (
 )
 from app.views.tabs.campaigns.steps import AudienceStep, MessageStep, ReviewStep
 
+
+@pytest.fixture(autouse=True)
+def _stub_media_loader(monkeypatch):
+    """MessageStep's preview now passes real-looking media_url values through to
+    TemplatePreviewWidget, which schedules an async fetch via the app's AsyncioExecutor — not
+    running in this headless test process. Left unstubbed, the fetch fails after several
+    seconds and its deferred callback can fire once qtbot has already torn the widget down
+    (a QLabel access on a deleted C++ object). None of these are network tests, so stub the
+    loader: a bare MediaFetchHandle whose signals are simply never emitted."""
+    from app.services.media_loader import MediaFetchHandle
+
+    class _StubLoader:
+        def cached_path(self, url):  # noqa: ARG002 - matches MediaLoader's signature
+            return None
+
+        def fetch(self, url, *, force=False):  # noqa: ARG002
+            return MediaFetchHandle()
+
+    monkeypatch.setattr(
+        "app.views.tabs.whatsapp.template_preview_widget.get_media_loader",
+        lambda: _StubLoader(),
+    )
+
+
 OBJECTIVES = [{"key": "win_back", "label": "Reactivación"}]
 VARIABLES = [
     {"key": "member_first_name", "label": "Primer nombre", "sample": "Juan"},
@@ -35,6 +59,28 @@ TEMPLATES = [
             {"type": "FOOTER", "text": "FitPilot"},
         ],
     }
+]
+IMAGE_TEMPLATE_WITH_DEFAULT = {
+    "id": 6,
+    "template_name": "promo_con_default",
+    "default_header_media_asset_id": 101,
+    "components": [
+        {"type": "HEADER", "format": "IMAGE"},
+        {"type": "BODY", "text": "Hola {{1}}."},
+    ],
+}
+IMAGE_TEMPLATE_WITHOUT_DEFAULT = {
+    "id": 7,
+    "template_name": "promo_sin_default",
+    "default_header_media_asset_id": None,
+    "components": [
+        {"type": "HEADER", "format": "IMAGE"},
+        {"type": "BODY", "text": "Hola {{1}}."},
+    ],
+}
+IMAGE_ASSETS = [
+    {"id": 101, "display_name": "Banner promo", "public_url": "https://cdn.example/101.jpg"},
+    {"id": 102, "display_name": "Banner alterno", "public_url": "https://cdn.example/102.jpg"},
 ]
 PLANS = [{"id": 1, "name": "Mensualidad"}]
 CLASS_TYPES = [{"id": 7, "name": "Spinning"}]
@@ -131,6 +177,106 @@ def test_message_step_without_a_template_does_not_crash(qtbot):
 
     assert step.template_id() is None
     assert step.param_mapping() == []
+
+
+def test_media_section_hidden_for_a_text_only_template(qtbot):
+    step = MessageStep()
+    qtbot.addWidget(step)
+    step.set_variables(VARIABLES)
+    step.set_templates(TEMPLATES)
+    step.select_template(5, [])
+
+    assert step.media_container.isHidden()
+
+
+def test_media_section_shown_for_an_image_header_template(qtbot):
+    step = MessageStep()
+    qtbot.addWidget(step)
+    step.set_variables(VARIABLES)
+    step.set_templates([IMAGE_TEMPLATE_WITH_DEFAULT])
+    step.select_template(6, [])
+
+    assert not step.media_container.isHidden()
+
+
+@pytest.mark.parametrize(
+    "mode,setup,expected",
+    [
+        ("default", lambda step: None, {"headerMediaAssetId": None, "headerMediaUrl": None}),
+        (
+            "asset",
+            lambda step: step.media_asset_combo.setCurrentIndex(
+                step.media_asset_combo.findData(102)
+            ),
+            {"headerMediaAssetId": 102, "headerMediaUrl": None},
+        ),
+        (
+            "url",
+            lambda step: step.media_url_input.setText("https://cdn.example/manual.jpg"),
+            {"headerMediaAssetId": None, "headerMediaUrl": "https://cdn.example/manual.jpg"},
+        ),
+    ],
+)
+def test_header_media_override_resolves_per_mode(qtbot, mode, setup, expected):
+    step = MessageStep()
+    qtbot.addWidget(step)
+    step.set_variables(VARIABLES)
+    step.set_templates([IMAGE_TEMPLATE_WITH_DEFAULT])
+    step.select_template(6, [])
+    step.set_media_assets("image", IMAGE_ASSETS)
+
+    step.media_mode.setCurrentIndex(step.media_mode.findData(mode))
+    setup(step)
+
+    assert step.header_media_override() == expected
+
+
+def test_set_media_override_restores_asset_mode(qtbot):
+    step = MessageStep()
+    qtbot.addWidget(step)
+    step.set_variables(VARIABLES)
+    step.set_templates([IMAGE_TEMPLATE_WITH_DEFAULT])
+    step.select_template(6, [])
+    step.set_media_assets("image", IMAGE_ASSETS)
+
+    step.set_media_override(102, None)
+
+    assert step.media_mode.currentData() == "asset"
+    assert step.media_asset_combo.currentData() == 102
+
+
+def test_set_media_override_restores_url_mode(qtbot):
+    step = MessageStep()
+    qtbot.addWidget(step)
+    step.set_variables(VARIABLES)
+    step.set_templates([IMAGE_TEMPLATE_WITH_DEFAULT])
+    step.select_template(6, [])
+
+    step.set_media_override(None, "https://cdn.example/manual.jpg")
+
+    assert step.media_mode.currentData() == "url"
+    assert step.media_url_input.text() == "https://cdn.example/manual.jpg"
+
+
+def test_media_warning_when_template_needs_media_and_has_no_default(qtbot):
+    step = MessageStep()
+    qtbot.addWidget(step)
+    step.set_variables(VARIABLES)
+    step.set_templates([IMAGE_TEMPLATE_WITHOUT_DEFAULT])
+    step.select_template(7, [])
+
+    assert not step.warning_label.isHidden()
+    assert "requiere una imagen" in step.warning_label.text()
+
+
+def test_no_media_warning_when_template_already_has_a_default(qtbot):
+    step = MessageStep()
+    qtbot.addWidget(step)
+    step.set_variables(VARIABLES)
+    step.set_templates([IMAGE_TEMPLATE_WITH_DEFAULT])
+    step.select_template(6, [])
+
+    assert step.warning_label.isHidden()
 
 
 def test_message_step_shows_the_full_catalog_without_scrolling(qtbot):
