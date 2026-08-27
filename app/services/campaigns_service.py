@@ -197,7 +197,7 @@ class CampaignsService:
                 campaignCatalog {
                     objectives { key label variables }
                     predicates { type label kind options hint }
-                    variables { key label sample }
+                    variables { key label sample description }
                 }
             }
         """

@@ -433,8 +433,14 @@ class MessageStep(QWidget):
         count = body_placeholder_count(template.get("components")) if template else 0
         for index in range(count):
             combo = QComboBox()
+            combo.setMaxVisibleItems(20)  # el catálogo completo cabe sin scroll (Qt default: 10)
             for variable in self._variables:
                 combo.addItem(variable.get("label", variable.get("key")), variable.get("key"))
+                description = variable.get("description")
+                if description:
+                    combo.setItemData(
+                        combo.count() - 1, description, Qt.ItemDataRole.ToolTipRole
+                    )
             if saved_mapping and index < len(saved_mapping):
                 found = combo.findData(saved_mapping[index])
                 if found >= 0:
@@ -473,21 +479,39 @@ class MessageStep(QWidget):
         )
         self._warn_about_class_variables()
 
+    _SCHEDULE_VARIABLE_KEYS = ("favorite_class_day", "favorite_class_time", "favorite_class_schedule")
+
     def _warn_about_class_variables(self) -> None:
-        """A class variable on an audience with no class affinity renders as nothing.
+        """A class variable this campaign's audience cannot resolve renders as nothing.
 
         Better to say so here than to let the operator discover blank gaps in the messages
-        their members already received.
+        their members already received. Two distinct caveats, because they blank out under
+        different (and not equally common) conditions:
+        * ``favorite_class_name`` — only when the socio has no booking history at all.
+        * day/time/schedule — that, plus: no standing booking AND no single scheduled slot
+          dominates their history. Blanks more often than the class name alone.
         """
-        uses_class_var = any(
-            (key or "").startswith("favorite_class") for key in self.param_mapping()
-        )
-        self.warning_label.setVisible(uses_class_var)
-        if uses_class_var:
-            self.warning_label.setText(
-                "Esta plantilla usa datos de la clase del socio. Quien no tenga historial de "
+        keys = self.param_mapping()
+        uses_class_name = "favorite_class_name" in keys
+        uses_schedule_var = any(key in self._SCHEDULE_VARIABLE_KEYS for key in keys)
+        self.warning_label.setVisible(uses_class_name or uses_schedule_var)
+        if not (uses_class_name or uses_schedule_var):
+            return
+
+        lines = []
+        if uses_class_name:
+            lines.append(
+                "Esta plantilla usa la clase favorita del socio. Quien no tenga historial de "
                 "reservas recibirá ese espacio en blanco — combínala con un filtro de clase."
             )
+        if uses_schedule_var:
+            lines.append(
+                "Usa el día/hora de la clase favorita. Se llena con la reserva fija (standing "
+                "booking) activa del socio si tiene una; si no, solo cuando un horario puntual "
+                "domina claramente su historial — puede quedar en blanco más seguido que el "
+                "nombre de la clase."
+            )
+        self.warning_label.setText("\n".join(lines))
 
 
 class ReviewStep(QWidget):
