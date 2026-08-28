@@ -49,6 +49,7 @@ NAV_CAPABILITY_GATES = {
 SETTINGS_SECTIONS = [
     ("whatsapp_notifications", "Notificaciones"),
     ("owner_agent_config", "Agente Admin"),
+    ("fitness_estimation", "Estimaciones"),
     ("users", "Usuarios"),
     ("role_permissions", "Permisos"),
 ]
@@ -306,6 +307,9 @@ class MainWindow(QMainWindow):
                 "whatsapp_notifications": is_admin,
                 "role_permissions": is_admin,
                 "owner_agent_config": is_admin or "manage_owner_agent" in capabilities,
+                # Ajusta el número que las campañas mandan al socio, así que se abre con
+                # la misma capacidad que permite enviarlas.
+                "fitness_estimation": is_admin or "send_campaigns" in capabilities,
                 "users": is_admin or "manage_users" in capabilities,
             }
             any_enabled = False
