@@ -615,6 +615,7 @@ class CampaignsTab(QWidget):
         self.controller.load_campaigns()
         if self._editing_id:
             self.controller.load_metrics(self._editing_id)
+            self._reload_recipients()
 
     def _on_audience_previewed(self, result: Dict[str, Any]) -> None:
         count = result.get("count", 0)

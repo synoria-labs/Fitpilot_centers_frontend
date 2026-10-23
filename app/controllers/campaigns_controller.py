@@ -242,6 +242,6 @@ class CampaignsController(BaseController):
 
     def recover_recipients(self, campaign_id: int) -> None:
         self._execute_authenticated_operation(
-            self._service, "recover_recipients", self.action_result.emit, self._on_error,
+            self._service, "recover_recipients", self._on_action, self._on_error,
             campaign_id=campaign_id,
         )

@@ -76,6 +76,20 @@ def test_preview_for_previous_selection_cannot_recover_new_selection(screen, mon
     assert not any(c.method == "recover_recipients" for c in screen.calls)
 
 
+def test_failed_recovery_does_not_report_a_successful_send(screen):
+    results, errors = [], []
+    screen.tab.controller.action_result.connect(results.append)
+    screen.tab.controller.error_occurred.connect(errors.append)
+    screen.tab.controller.recover_recipients(3)
+    screen.calls[-1].success({"success": False, "error": "El evento ya comenzó."})
+    assert not results and errors == ["El evento ya comenzó."]
+
+
+def test_successful_recovery_refreshes_metrics_and_recipient_details(screen):
+    screen.tab._on_action({"success": True, "pending": 3})
+    assert {call.method for call in screen.calls} == {"list_campaigns", "get_metrics", "list_recipients"}
+
+
 @pytest.mark.parametrize("state,enabled", [("sending", False), ("canceled", False),
                                         ("scheduled", True), ("paused", True), ("completed", True)])
 def test_delivery_controls_respect_campaign_state(screen, state, enabled):
