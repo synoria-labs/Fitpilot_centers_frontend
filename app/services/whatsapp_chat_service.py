@@ -371,9 +371,14 @@ class WhatsAppChatService:
                 mutation, {"conversationId": conversation_id, "enabled": enabled}
             )
             payload = (result or {}).get("setConversationBotEnabled") or {}
+            if str(payload.get("id")) != str(conversation_id) or not isinstance(payload.get("botEnabled"), bool):
+                return {
+                    "success": False,
+                    "error": getattr(self.client, "last_error", None) or "No se pudo guardar el estado del bot.",
+                }
             return {
-                "success": bool(payload),
-                "bot_enabled": bool(payload.get("botEnabled", enabled)),
+                "success": True,
+                "bot_enabled": payload["botEnabled"],
             }
         except Exception as exc:  # noqa: BLE001
             logger.error("Error toggling conversation bot: %s", exc)

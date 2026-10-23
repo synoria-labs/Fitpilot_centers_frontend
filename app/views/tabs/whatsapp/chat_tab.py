@@ -88,6 +88,7 @@ class ChatTab(QWidget):
         self.controller = WhatsAppChatController(chat_service, self)
 
         self._current_conversation_id: Optional[int] = None
+        self._pending_bot_updates: dict[int, bool] = {}
         self._pending_voice_note_path: Optional[str] = None
 
         # Pagination state for the infinite-scroll conversation list.
@@ -235,6 +236,8 @@ class ChatTab(QWidget):
         self.controller.send_failed.connect(self._on_send_failed)
         self.controller.new_message.connect(self._on_new_message)
         self.controller.message_updated.connect(self._on_message_updated)
+        self.controller.bot_state_changed.connect(self._on_bot_state_changed)
+        self.controller.bot_state_save_failed.connect(self._on_bot_state_save_failed)
         self.controller.error_occurred.connect(self._on_error)
 
     # ------------------------------------------------------------------
@@ -306,6 +309,7 @@ class ChatTab(QWidget):
         conv = self.conversation_list.get_conversation(self._current_conversation_id)
         if conv:
             self._update_header(conv)
+        self._refresh_bot_state()
 
     def _on_conversation_selected(self, conversation_id: int) -> None:
         self._current_conversation_id = conversation_id
@@ -314,9 +318,10 @@ class ChatTab(QWidget):
         if conv:
             self._update_header(conv)
         self.thread.set_contact_name(conv.display_name if conv else "")
-        self.composer.set_bot_enabled(conv.bot_enabled if conv else True)
+        self._refresh_bot_state()
         self.right_stack.setCurrentIndex(1)
         self.controller.load_messages(conversation_id)
+        self.controller.load_single_conversation(conversation_id)
         # Opening a chat reads it: pin it (so it doesn't vanish from the "No leídos"
         # filter), clear the badge locally, and tell the backend (which sends a receipt).
         self.conversation_list.set_pinned_conversation(conversation_id)
@@ -352,9 +357,33 @@ class ChatTab(QWidget):
         self.controller.send_text(self._current_conversation_id, text)
 
     def _on_bot_toggle(self, enabled: bool) -> None:
-        if self._current_conversation_id is None:
+        cid = self._current_conversation_id
+        if cid is None or cid in self._pending_bot_updates:
             return
-        self.controller.set_conversation_bot_enabled(self._current_conversation_id, enabled)
+        self._pending_bot_updates[cid] = enabled
+        self._refresh_bot_state()
+        self.controller.set_conversation_bot_enabled(cid, enabled)
+
+    def _refresh_bot_state(self) -> None:
+        cid = self._current_conversation_id
+        conv = self.conversation_list.get_conversation(cid) if cid is not None else None
+        enabled = self._pending_bot_updates.get(cid, conv.bot_enabled if conv else True)
+        self.composer.set_bot_enabled(enabled)
+        self.composer.set_bot_pending(cid in self._pending_bot_updates)
+
+    def _on_bot_state_changed(self, conversation_id: int, enabled: bool) -> None:
+        conv = self.conversation_list.get_conversation(conversation_id)
+        if conv is not None:
+            conv.bot_enabled = enabled
+        self._pending_bot_updates.pop(conversation_id, None)
+        self._refresh_bot_state()
+
+    def _on_bot_state_save_failed(self, conversation_id: int, error: str) -> None:
+        self._pending_bot_updates.pop(conversation_id, None)
+        self._refresh_bot_state()
+        conv = self.conversation_list.get_conversation(conversation_id)
+        name = conv.display_name if conv else str(conversation_id)
+        show_error(self, error, title=f"No se pudo cambiar el bot de {name}")
 
     def _on_send_media(self, file_path: str, caption: str) -> None:
         if self._current_conversation_id is None:
