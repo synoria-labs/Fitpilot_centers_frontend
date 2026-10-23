@@ -48,6 +48,8 @@ class ChatbotConfigController(BaseController):
             require_confirmation=bool(data.get("require_confirmation", True)),
             require_mp_payment=bool(data.get("require_mp_payment", False)),
             model=data.get("model"),
+            template_ai_model=data.get("template_ai_model"),
+            prompt_optimizer_model=data.get("prompt_optimizer_model"),
             system_prompt=data.get("system_prompt"),
             business_name=data.get("business_name"),
             address=data.get("address"),
@@ -63,6 +65,7 @@ class ChatbotConfigController(BaseController):
         system_prompt: str,
         tone: Optional[str] = None,
         instruction: Optional[str] = None,
+        model: Optional[str] = None,
     ) -> None:
         if not self._service:
             self.error_occurred.emit("Servicio del chatbot no disponible")
@@ -76,6 +79,7 @@ class ChatbotConfigController(BaseController):
             system_prompt=system_prompt,
             tone=tone,
             instruction=instruction,
+            model=model,
         )
 
     # ------------------------------------------------------------------

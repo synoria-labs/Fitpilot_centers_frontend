@@ -36,7 +36,7 @@ def _map_config(node: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         "id": node.get("id"),
         "enabled": bool(node.get("enabled")),
         "require_confirmation": bool(node.get("requireConfirmation")),
-        "model": node.get("model") or "claude-sonnet-4-6",
+        "model": node.get("model") or "claude-sonnet-5-5",
         "system_prompt": node.get("systemPrompt") or "",
         "history_limit": int(node.get("historyLimit") or 30),
         "max_tokens": int(node.get("maxTokens") or 1024),
@@ -66,13 +66,17 @@ class OwnerAgentConfigService:
     async def get_config_bundle(self) -> Dict[str, Any]:
         query = f"""
             query OwnerAgentConfigBundle {{
+                aiModelOptions {{ id label }}
                 ownerAgentConfig {{ {_CONFIG_FIELDS} }}
                 ownerAgentAuthorizedPhones {{ {_PHONE_FIELDS} }}
             }}
         """
         result = await self.client.execute(query)
+        config = _map_config((result or {}).get("ownerAgentConfig"))
+        if config is not None:
+            config["model_options"] = (result or {}).get("aiModelOptions") or []
         return {
-            "config": _map_config((result or {}).get("ownerAgentConfig")),
+            "config": config,
             "phones": [
                 phone
                 for phone in (

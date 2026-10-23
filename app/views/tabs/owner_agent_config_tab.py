@@ -32,11 +32,11 @@ from ...controllers.owner_agent_config_controller import OwnerAgentConfigControl
 from ...core import container, get_logger
 from ...utils.dialog_helpers import show_error, show_info
 from ..screen_style import screen_qss
+from ..widgets.ai_model_combo import AiModelCombo, DEFAULT_AI_MODEL
 from .whatsapp import theme
 
 logger = get_logger(__name__)
 
-_MODELS = ["claude-sonnet-4-6", "claude-opus-4-8", "claude-haiku-4-5"]
 
 
 def _digits(value: str) -> str:
@@ -161,9 +161,7 @@ class OwnerAgentConfigTab(QWidget):
         self.require_confirmation_check = QCheckBox("Requerir confirmacion para acciones")
         self.require_confirmation_check.setChecked(True)
         form.addRow("Confirmacion", self.require_confirmation_check)
-        self.model_combo = QComboBox()
-        self.model_combo.setEditable(True)
-        self.model_combo.addItems(_MODELS)
+        self.model_combo = AiModelCombo()
         form.addRow("Modelo", self.model_combo)
         self.history_spin = QSpinBox()
         self.history_spin.setRange(1, 100)
@@ -244,12 +242,8 @@ class OwnerAgentConfigTab(QWidget):
         )
         self.enabled_check.setChecked(bool(config.get("enabled", False)))
         self.require_confirmation_check.setChecked(bool(config.get("require_confirmation", True)))
-        model = config.get("model") or "claude-sonnet-4-6"
-        idx = self.model_combo.findText(model)
-        if idx >= 0:
-            self.model_combo.setCurrentIndex(idx)
-        else:
-            self.model_combo.setEditText(model)
+        self.model_combo.set_options(config.get("model_options"))
+        self.model_combo.set_model(config.get("model") or DEFAULT_AI_MODEL)
         self.history_spin.setValue(int(config.get("history_limit") or 30))
         self.max_tokens_spin.setValue(int(config.get("max_tokens") or 1024))
         self.prompt_edit.setPlainText(config.get("system_prompt") or "")
@@ -292,7 +286,7 @@ class OwnerAgentConfigTab(QWidget):
             {
                 "enabled": self.enabled_check.isChecked(),
                 "require_confirmation": self.require_confirmation_check.isChecked(),
-                "model": self.model_combo.currentText().strip() or "claude-sonnet-4-6",
+                "model": self.model_combo.model_id(),
                 "system_prompt": self.prompt_edit.toPlainText().strip(),
                 "history_limit": self.history_spin.value(),
                 "max_tokens": self.max_tokens_spin.value(),
