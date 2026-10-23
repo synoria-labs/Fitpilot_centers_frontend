@@ -1,7 +1,7 @@
 """DTOs for the WhatsApp chat feature."""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Dict, List, Optional
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from ..core.config import Config
@@ -142,6 +142,21 @@ class ChatMedia:
         )
 
 
+def _template_buttons_from(raw) -> List[Dict[str, str]]:
+    """``templateButtons`` in the shape the WhatsApp button helpers (wa_mockup) read."""
+    buttons: List[Dict[str, str]] = []
+    for item in raw or []:
+        if not isinstance(item, dict) or not item.get("type"):
+            continue
+        button = {"type": str(item["type"]), "text": str(item.get("text") or "")}
+        if item.get("url"):
+            button["url"] = str(item["url"])
+        if item.get("phoneNumber"):
+            button["phone_number"] = str(item["phoneNumber"])
+        buttons.append(button)
+    return buttons
+
+
 @dataclass
 class ChatMessage:
     id: int
@@ -155,6 +170,8 @@ class ChatMessage:
     context_message_id: Optional[str] = None
     media_url: Optional[str] = None
     media: Optional[ChatMedia] = None
+    # Buttons of the template the message was sent from, drawn under its bubble.
+    template_buttons: List[Dict[str, str]] = field(default_factory=list)
 
     @property
     def is_inbound(self) -> bool:
@@ -207,6 +224,7 @@ class ChatMessage:
             context_message_id=d.get("contextMessageId"),
             media_url=d.get("mediaUrl"),
             media=ChatMedia.from_dict(raw_media) if raw_media else None,
+            template_buttons=_template_buttons_from(d.get("templateButtons")),
         )
 
 
