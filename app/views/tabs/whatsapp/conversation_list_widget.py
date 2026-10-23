@@ -265,9 +265,9 @@ class ConversationListWidget(QWidget):
     def append_conversations(self, conversations: List[ChatConversation]) -> None:
         self._model.append(conversations)
 
-    def upsert_conversation(self, conversation: ChatConversation) -> None:
+    def upsert_conversation(self, conversation: ChatConversation, *, promote: bool = True) -> None:
         selected_id = self.selected_conversation_id()
-        self._model.upsert(conversation, promote=True)
+        self._model.upsert(conversation, promote=promote)
         if selected_id is not None:
             self._select_conversation(selected_id)
 

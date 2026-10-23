@@ -300,7 +300,7 @@ class ChatTab(QWidget):
         self._on_load_more()
 
     def _on_single_conversation_loaded(self, conversation: ChatConversation) -> None:
-        self.conversation_list.upsert_conversation(conversation)
+        self.conversation_list.upsert_conversation(conversation, promote=False)
         self._refresh_open_header()
 
     def _refresh_open_header(self) -> None:

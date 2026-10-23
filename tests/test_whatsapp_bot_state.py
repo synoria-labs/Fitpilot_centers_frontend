@@ -151,6 +151,14 @@ def test_a_fresh_read_after_saving_can_reflect_another_admins_change(chat):
     assert not tab.composer.bot_button.isChecked()
 
 
+def test_refreshing_the_selected_chat_keeps_the_list_order(chat):
+    tab = chat.tab
+    tab._on_conversation_selected(315)
+    last_call(chat, "get_conversation").success(conversation(315, True))
+    assert tab.conversation_list._model.index_of(193) == 0
+    assert tab.conversation_list._model.index_of(315) == 1
+
+
 @pytest.mark.parametrize("save_succeeds", [False, True])
 def test_pending_bot_save_does_not_unlock_composer_during_an_upload(chat, save_succeeds):
     tab = chat.tab
