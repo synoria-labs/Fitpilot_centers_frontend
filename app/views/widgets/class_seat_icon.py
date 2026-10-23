@@ -30,6 +30,7 @@ class ClassSeatIcon(QWidget):
     COLOR_AVAILABLE = '#4CAF50'  # Green
     COLOR_OCCUPIED = '#F44336'   # Red
     COLOR_EXPIRING = '#FFC107'   # Yellow (membership expiring soon)
+    COLOR_DISPLACED = '#9E9E9E'  # Grey (class taken over by a special event)
 
     def __init__(
         self,
@@ -95,6 +96,8 @@ class ClassSeatIcon(QWidget):
         # Determine color based on status
         if self.status == 'free':
             color = self.COLOR_AVAILABLE
+        elif self.status == 'displaced':
+            color = self.COLOR_DISPLACED
         elif self.will_expire_soon:
             color = self.COLOR_EXPIRING
         else:
@@ -113,6 +116,10 @@ class ClassSeatIcon(QWidget):
         """Update the tooltip based on occupancy status"""
         if self.status == 'free':
             tooltip = "Disponible"
+        elif self.status == 'displaced':
+            tooltip = "Clase reemplazada por un evento especial"
+            if self.occupant_name:
+                tooltip = f"{self.occupant_name}\n(desplazado: {tooltip.lower()})"
         elif self.occupant_name:
             if self.will_expire_soon:
                 tooltip = f"{self.occupant_name}\n(Membresía por vencer)"

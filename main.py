@@ -96,6 +96,7 @@ class FitPilotApp:
             from app.services.fitness_estimation_service import FitnessEstimationService
             from app.services.owner_agent_config_service import OwnerAgentConfigService
             from app.services.campaigns_service import CampaignsService
+            from app.services.special_events_service import SpecialEventsService
             from app.services.dashboard_service import DashboardService
             from app.services.cache_service import CacheService
             from app.services.standing_bookings_service import StandingBookingsService
@@ -123,6 +124,7 @@ class FitPilotApp:
             container.register('fitness_estimation_service', service=FitnessEstimationService(graphql_client))
             container.register('owner_agent_config_service', service=OwnerAgentConfigService(graphql_client))
             container.register('campaigns_service', service=CampaignsService(graphql_client))
+            container.register('special_events_service', service=SpecialEventsService(graphql_client))
             container.register('standing_bookings_service', service=StandingBookingsService(graphql_client))
             container.register('sessions_service', service=SessionsService(graphql_client))
             cache_service = CacheService()

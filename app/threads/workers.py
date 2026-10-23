@@ -92,6 +92,7 @@ class TabLoader(BaseWorker):
             "chatbot_config": ("app.views.tabs.chatbot_config_tab", "ChatbotConfigTab"),
             "fitness_estimation": ("app.views.tabs.fitness_estimation_tab", "FitnessEstimationTab"),
             "campaigns": ("app.views.tabs.campaigns", "CampaignsTab"),
+            "special_events": ("app.views.tabs.special_events_tab", "SpecialEventsTab"),
             "whatsapp_chat": ("app.views.tabs.whatsapp.chat_tab", "ChatTab"),
             "finances": ("app.views.tabs.finances_tab", "FinancesTab"),
             "cash_register": ("app.views.tabs.cash_register_tab", "CashRegisterTab"),

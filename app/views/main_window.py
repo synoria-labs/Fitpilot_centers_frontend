@@ -32,6 +32,7 @@ NAV_ITEMS = [
     SidebarItem("whatsapp", "WhatsApp", "mdi6.whatsapp", is_public=False),
     SidebarItem("chatbot_config", "Chatbot", "mdi6.robot-outline", is_public=False),
     SidebarItem("campaigns", "Campañas", "mdi6.bullhorn", is_public=False),
+    SidebarItem("special_events", "Eventos especiales", "mdi6.calendar-star", is_public=False),
     SidebarItem("cash_register", "Caja", "mdi6.cash-lock-open", is_public=False),
     SidebarItem("products", "Productos", "mdi6.package-variant-closed", is_public=False),
     SidebarItem("finances", "Finanzas", "mdi6.cash-multiple", is_public=False),
@@ -43,6 +44,7 @@ NAV_CAPABILITY_GATES = {
     "cash_register": "manage_cash_session",
     "products": "manage_products",
     "campaigns": "send_campaigns",
+    "special_events": "manage_special_events",
 }
 
 # Sección alojada en el menú Configuración (fuera de la sidebar).

@@ -35,6 +35,7 @@ CAPABILITY_LABELS = {
     "view_members": "Ver socios",
     "view_finances": "Ver finanzas",
     "view_chats": "Ver chats",
+    "manage_special_events": "Gestionar eventos especiales",
 }
 
 
