@@ -239,6 +239,7 @@ class RenewSubscriptionDialog(BaseSubscriptionDialog):
                 self.amount_input.setValue(float(p0.price))
 
         self.plan_combo.blockSignals(False)
+        self._update_daily_picker()
         self._maybe_ready()
 
     def _on_plans_error(self, error: str) -> None:
@@ -347,6 +348,8 @@ class RenewSubscriptionDialog(BaseSubscriptionDialog):
     # Confirm
     # ---------------------------
     def _on_accept(self) -> None:
+        if not self._validate_daily_selection():
+            return
         # Prevent multiple executions
         if self._operation_in_progress:
             logger.warning("Renewal operation already in progress, ignoring duplicate request")

@@ -201,6 +201,7 @@ class MembershipSubscription(BaseModel):
     start_at: datetime
     end_at: datetime
     status: str  # active, expired, canceled, pending
+    session_id: Optional[int] = None
     created_by: Optional[int] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -215,11 +216,11 @@ class MembershipSubscription(BaseModel):
 
     def is_active(self) -> bool:
         """Verifica si la suscripción está activa."""
-        return self.status == 'active'
+        return self.status == 'active' and self.end_at > datetime.now(self.end_at.tzinfo)
 
     def is_expired(self) -> bool:
         """Verifica si la suscripción está vencida."""
-        return self.status == 'expired'
+        return self.status == 'expired' or (self.status == 'active' and not self.is_active())
 
     def days_until_expiry(self) -> Optional[int]:
         """Calcula los días hasta el vencimiento."""
@@ -236,7 +237,8 @@ class MembershipSubscription(BaseModel):
             'canceled': 'Cancelado',
             'pending': 'Pendiente'
         }
-        return status_map.get(self.status, self.status)
+        effective_status = 'expired' if self.is_expired() else self.status
+        return status_map.get(effective_status, effective_status)
 
 @dataclass
 class Asset(BaseModel):

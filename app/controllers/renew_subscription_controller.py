@@ -451,6 +451,8 @@ class RenewSubscriptionController(BaseSubscriptionController):
                 service_params['payment_amount'] = form_data['amount']
                 logger.info(f"Mapped 'amount' ({form_data['amount']}) to 'payment_amount'")
 
+            service_params['session_id'] = form_data.get('session_id')
+
             # Handle template_id: prioritize form_data, fallback to member data
             if 'template_id' in form_data and form_data['template_id']:
                 # User explicitly selected a template in the dialog

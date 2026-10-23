@@ -95,6 +95,7 @@ class NewSubscriptionController(BaseSubscriptionController):
                 "email": form_data.get("email"),
                 "phone_number": form_data.get("phone_number"),
                 "plan_id": form_data.get("plan_id"),
+                "session_id": form_data.get("session_id"),
                 "start_at": form_data.get("start_at"),
                 "payment_method": form_data.get("payment_method"),
                 "payment_amount": form_data.get("payment_amount"),

@@ -159,6 +159,7 @@ class PosRenewalLineDialog(BaseSubscriptionDialog):
         if isinstance(p0, MembershipPlan):
             self.amount_input.setValue(float(p0.price))
         self._preselect_plan()  # override to the current plan if already known
+        self._update_daily_picker()
         self._maybe_ready()
 
     def _on_plans_error(self, error: str) -> None:
@@ -261,6 +262,8 @@ class PosRenewalLineDialog(BaseSubscriptionDialog):
 
     # ------------------------------------------------------------------ accept / line
     def _on_accept_collect(self) -> None:
+        if not self._validate_daily_selection():
+            return
         plan = self.plan_combo.currentData()
         if not isinstance(plan, MembershipPlan):
             show_warning(self, "Selecciona un plan.", title="Renovación")
