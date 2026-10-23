@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 from ...core.logging import get_logger
 from ...models.base import ClassTemplate, MembershipPlan, Seat, TimeslotGroup
 from ...utils.dialog_helpers import show_error, show_warning
+from ..widgets.day_pass_session_picker import DayPassSessionPicker, is_day_pass
 
 logger = get_logger(__name__)
 
@@ -61,6 +62,30 @@ class BaseSubscriptionDialog(QDialog):
         plan = self.plan_combo.itemData(idx)
         if isinstance(plan, MembershipPlan):
             self.amount_input.setValue(float(plan.price))
+        self._update_daily_picker()
+
+    def _update_daily_picker(self):
+        daily = is_day_pass(self.plan_combo.currentData())
+        if daily and not hasattr(self, "_daily_picker"):
+            self._daily_picker = DayPassSessionPicker(self.controller.members_service.client, self.start_date, self)
+            self.layout().insertWidget(1, self._daily_picker)
+        if hasattr(self, "_daily_picker"):
+            self._daily_picker.setEnabled(daily)
+            self._daily_picker.setVisible(daily)
+            if daily:
+                self._daily_picker.reload()
+        self.class_combo.setVisible(not daily)
+        if daily:
+            self._clear_seats()
+        else:
+            self._on_class_changed(self.class_combo.currentIndex())
+
+    def _validate_daily_selection(self):
+        if is_day_pass(self.plan_combo.currentData()):
+            if not hasattr(self, "_daily_picker") or self._daily_picker.session_id() is None:
+                show_warning(self, "Selecciona una clase con fecha y horario para el pase diario.", title="Pase diario")
+                return False
+        return True
 
     def _on_plans_loaded(self, plans: List[MembershipPlan]) -> None:
         """Populate plan combo with loaded plans."""
@@ -160,6 +185,8 @@ class BaseSubscriptionDialog(QDialog):
     def _on_class_changed(self, index: int) -> None:
         """Update seat availability when class changes."""
         self._clear_seats()
+        if is_day_pass(self.plan_combo.currentData()):
+            return
 
         selection = self.class_combo.itemData(index)
         start_date = self._selected_start_date()
@@ -182,6 +209,8 @@ class BaseSubscriptionDialog(QDialog):
 
     def _on_date_changed(self, _qdate: QDate) -> None:
         """Reload seat availability when date changes."""
+        if is_day_pass(self.plan_combo.currentData()):
+            return
         selection = self.class_combo.currentData()
         if selection is None:
             return
@@ -205,6 +234,9 @@ class BaseSubscriptionDialog(QDialog):
     # ---------------------------
     def _on_seats_loaded(self, seats: List[Seat]) -> None:
         """Populate seat combo with available seats."""
+        if is_day_pass(self.plan_combo.currentData()):
+            self._clear_seats()
+            return
         self.seat_combo.blockSignals(True)
         self.seat_combo.clear()
 
@@ -268,6 +300,9 @@ class BaseSubscriptionDialog(QDialog):
 
     def _append_template_and_seat(self, form_data: Dict[str, Any], start_date: date) -> None:
         """Attach template_id and seat_id to form data when available."""
+        if is_day_pass(self.plan_combo.currentData()):
+            form_data["session_id"] = self._daily_picker.session_id() if hasattr(self, "_daily_picker") else None
+            return
         selection = self.class_combo.currentData()
         if hasattr(self, 'controller'):
             resolved_template, _ = self.controller.resolve_template_for_selection(selection, start_date)
@@ -287,6 +322,9 @@ class BaseSubscriptionDialog(QDialog):
 
     def _show_seat_selector(self) -> None:
         """Show seat selector controls."""
+        if is_day_pass(self.plan_combo.currentData()):
+            self._clear_seats()
+            return
         self.seat_label.show()
         self.seat_combo.setVisible(True)
         self.seat_combo.setEnabled(True)
@@ -315,6 +353,10 @@ class BaseSubscriptionDialog(QDialog):
         Fill seat combo with seats. If template is provided, will check if seats are required.
         This is a helper for subclasses that need more control over seat filling.
         """
+        if is_day_pass(self.plan_combo.currentData()):
+            self._clear_seats()
+            return
+
         requires = bool(template and template.requires_seats())
         self.seat_combo.blockSignals(True)
         self.seat_combo.clear()

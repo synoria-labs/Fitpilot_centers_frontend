@@ -563,6 +563,7 @@ class MembersService:
         external_reference: Optional[str] = None,
         template_id: Optional[int] = None,
         seat_id: Optional[int] = None,
+        session_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Create member, subscription, and payment in backend."""
         mutation = """
@@ -589,6 +590,7 @@ class MembersService:
                         id
                         personId
                         planId
+                        sessionId
                         startAt
                         endAt
                         status
@@ -635,6 +637,9 @@ class MembersService:
         if seat_id is not None:
             input_payload["seatId"] = int(seat_id)
 
+        if session_id is not None:
+            input_payload["sessionId"] = int(session_id)
+
         variables = {"input": input_payload}
 
         try:
@@ -673,6 +678,7 @@ class MembersService:
         payment_provider: Optional[str] = None,
         provider_payment_id: Optional[str] = None,
         external_reference: Optional[str] = None,
+        session_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Renew a member's subscription using the new GraphQL mutation."""
         mutation = """
@@ -683,6 +689,7 @@ class MembersService:
                         id
                         personId
                         planId
+                        sessionId
                         startAt
                         endAt
                         status
@@ -725,6 +732,9 @@ class MembersService:
             "providerPaymentId": provider_payment_id,
             "externalReference": external_reference,
         }
+
+        if session_id is not None:
+            input_payload["sessionId"] = int(session_id)
 
         variables = {"input": input_payload}
 
@@ -941,6 +951,7 @@ class MembersService:
             id=int(data.get("id") or 0),
             person_id=int(data.get("personId") or 0),
             plan_id=int(data.get("planId") or 0),
+            session_id=int(data["sessionId"]) if data.get("sessionId") is not None else None,
             start_at=start_at,
             end_at=end_at,
             status=data.get("status", "active"),

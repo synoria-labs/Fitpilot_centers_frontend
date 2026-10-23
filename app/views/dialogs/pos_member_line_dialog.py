@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 )
 
 from ...utils.qt_helpers import configure_amount_input, get_combo_selected_data, populate_combo_safely
+from ..widgets.day_pass_session_picker import DayPassSessionPicker, is_day_pass
 
 
 class PosMembershipLineDialog(QDialog):
@@ -22,6 +23,7 @@ class PosMembershipLineDialog(QDialog):
         plans: List[Any],
         member: Optional[Dict[str, Any]] = None,
         parent=None,
+        graphql_client=None,
     ) -> None:
         super().__init__(parent)
         self.mode = mode
@@ -60,6 +62,11 @@ class PosMembershipLineDialog(QDialog):
         form.addRow("Monto:", self.amount_input)
 
         layout.addLayout(form)
+        if graphql_client is None:
+            from ...core import container
+            graphql_client = container.get("members_service").client
+        self.daily_picker = DayPassSessionPicker(graphql_client, parent=self)
+        layout.addWidget(self.daily_picker)
 
         self.warning_label = QLabel()
         self.warning_label.setStyleSheet("color: #e67e22;")
@@ -85,7 +92,11 @@ class PosMembershipLineDialog(QDialog):
         if plan is not None:
             self.amount_input.setValue(float(plan.price or 0))
         # Alta of a fixed-schedule plan needs a class slot -> guide the user.
-        needs_slot = bool(plan and getattr(plan, "fixed_time_slot", False) and self.mode == "new")
+        daily = is_day_pass(plan)
+        self.daily_picker.setVisible(daily)
+        if daily:
+            self.daily_picker.reload()
+        needs_slot = bool(plan and getattr(plan, "fixed_time_slot", False) and self.mode == "new" and not daily)
         self.warning_label.setVisible(needs_slot)
         if needs_slot:
             self.warning_label.setText(
@@ -95,6 +106,10 @@ class PosMembershipLineDialog(QDialog):
         self.buttons.button(QDialogButtonBox.StandardButton.Ok).setEnabled(not needs_slot)
 
     def _on_accept(self) -> None:
+        if is_day_pass(self._selected_plan()) and self.daily_picker.session_id() is None:
+            self.warning_label.setText("Selecciona una clase para el pase diario.")
+            self.warning_label.setVisible(True)
+            return
         if self._selected_plan() is None:
             self.warning_label.setText("Selecciona un plan.")
             self.warning_label.setVisible(True)
@@ -112,6 +127,8 @@ class PosMembershipLineDialog(QDialog):
             "plan_id": plan.id,
             "unit_price": amount,
         }
+        if is_day_pass(plan):
+            line["session_id"] = self.daily_picker.session_id()
         if self.mode == "new":
             line["line_type"] = "membership_new"
             line["full_name"] = self.name_input.text().strip()

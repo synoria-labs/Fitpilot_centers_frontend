@@ -204,6 +204,8 @@ class NewSubscriptionDialog(BaseSubscriptionDialog):
         """
         Prepara form_data y llama a controller.create_enrollment(form_data).
         """
+        if not self._validate_daily_selection():
+            return
         form_data = self._collect_form()
         if not form_data:
             return

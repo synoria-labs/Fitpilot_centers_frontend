@@ -17,6 +17,8 @@ _CONFIG_FIELDS = """
     requireConfirmation
     requireMpPayment
     model
+    templateAiModel
+    promptOptimizerModel
     systemPrompt
     businessName
     address
@@ -55,7 +57,9 @@ def _map_config(node: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         "enabled": bool(node.get("enabled")),
         "require_confirmation": bool(node.get("requireConfirmation")),
         "require_mp_payment": bool(node.get("requireMpPayment")),
-        "model": node.get("model") or "claude-sonnet-4-6",
+        "model": node.get("model") or "claude-sonnet-5-5",
+        "template_ai_model": node.get("templateAiModel") or "claude-sonnet-5-5",
+        "prompt_optimizer_model": node.get("promptOptimizerModel") or "claude-sonnet-5-5",
         "system_prompt": node.get("systemPrompt") or "",
         "business_name": node.get("businessName") or "",
         "address": node.get("address") or "",
@@ -76,6 +80,7 @@ class ChatbotConfigService:
     async def get_config(self) -> Optional[Dict[str, Any]]:
         query = f"""
             query ChatbotConfig {{
+                aiModelOptions {{ id label }}
                 chatbotConfig {{
                     {_CONFIG_FIELDS}
                 }}
@@ -83,7 +88,9 @@ class ChatbotConfigService:
         """
         result = await self.client.execute(query)
         if result and result.get("chatbotConfig") is not None:
-            return _map_config(result["chatbotConfig"])
+            config = _map_config(result["chatbotConfig"])
+            config["model_options"] = result.get("aiModelOptions") or []
+            return config
         return None
 
     async def save_config(
@@ -100,6 +107,8 @@ class ChatbotConfigService:
         policies: Optional[str] = None,
         tone: Optional[str] = None,
         extra_info: Optional[str] = None,
+        template_ai_model: Optional[str] = None,
+        prompt_optimizer_model: Optional[str] = None,
     ) -> Dict[str, Any]:
         mutation = f"""
             mutation SaveChatbotConfig($input: SaveChatbotConfigInput!) {{
@@ -116,6 +125,8 @@ class ChatbotConfigService:
                 "requireConfirmation": require_confirmation,
                 "requireMpPayment": require_mp_payment,
                 "model": model,
+                "templateAiModel": template_ai_model,
+                "promptOptimizerModel": prompt_optimizer_model,
                 "systemPrompt": system_prompt,
                 "businessName": business_name,
                 "address": address,
@@ -141,6 +152,7 @@ class ChatbotConfigService:
         system_prompt: str,
         tone: Optional[str] = None,
         instruction: Optional[str] = None,
+        model: Optional[str] = None,
     ) -> Dict[str, Any]:
         mutation = f"""
             mutation OptimizeSystemPrompt($input: OptimizeSystemPromptInput!) {{
@@ -156,6 +168,7 @@ class ChatbotConfigService:
                 "systemPrompt": system_prompt or "",
                 "tone": tone,
                 "instruction": instruction,
+                "model": model,
             }
         }
         result = await self.client.execute(mutation, variables)

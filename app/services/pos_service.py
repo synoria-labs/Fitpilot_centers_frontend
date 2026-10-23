@@ -56,6 +56,7 @@ def _line_to_input(line: Dict[str, Any]) -> Dict[str, Any]:
         "phoneNumber": line.get("phone_number"),
         "startAt": format_iso_datetime(start_at) if start_at else None,
         "templateId": line.get("template_id"),
+        "sessionId": line.get("session_id"),
         "seatId": line.get("seat_id"),
         "productId": line.get("product_id"),
     }

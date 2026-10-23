@@ -31,11 +31,11 @@ from ...controllers.chatbot_config_controller import ChatbotConfigController
 from ...core import container, get_logger
 from ...utils.dialog_helpers import show_error, show_info
 from ..screen_style import screen_qss
+from ..widgets.ai_model_combo import AiModelCombo, DEFAULT_AI_MODEL
 from .whatsapp import theme
 
 logger = get_logger(__name__)
 
-_MODELS = ["claude-sonnet-4-6", "claude-opus-4-8", "claude-haiku-4-5"]
 
 
 def _set_button_icon(button: QPushButton, icon_name: str, *, primary: bool = False) -> None:
@@ -217,10 +217,15 @@ class ChatbotConfigTab(QWidget):
         instructions_group = QGroupBox("Modelo e instrucciones")
         instructions_group.setObjectName("botGroup")
         instructions_form = _new_form(instructions_group)
-        self.model_combo = QComboBox()
-        self.model_combo.setEditable(True)
-        self.model_combo.addItems(_MODELS)
-        instructions_form.addRow("Modelo", self.model_combo)
+        self.model_combo = AiModelCombo()
+        instructions_form.addRow("Bot de clientes", self.model_combo)
+        self.template_model_combo = AiModelCombo()
+        instructions_form.addRow("Asistente de plantillas", self.template_model_combo)
+        self.optimizer_model_combo = AiModelCombo()
+        instructions_form.addRow("Optimizador de instrucciones", self.optimizer_model_combo)
+        model_note = QLabel("Cada función usa su propio modelo. Los cambios guardados se aplican en la siguiente solicitud.")
+        model_note.setWordWrap(True)
+        instructions_form.addRow("", model_note)
         self.system_prompt_edit = QTextEdit()
         self.system_prompt_edit.setObjectName("botBodyEditor")
         self.system_prompt_edit.setMinimumHeight(140)
@@ -294,12 +299,10 @@ class ChatbotConfigTab(QWidget):
         self.enabled_check.setChecked(bool(config.get("enabled")))
         self.require_confirmation_check.setChecked(bool(config.get("require_confirmation", True)))
         self.require_mp_payment_check.setChecked(bool(config.get("require_mp_payment", False)))
-        model = config.get("model") or "claude-sonnet-4-6"
-        idx = self.model_combo.findText(model)
-        if idx >= 0:
-            self.model_combo.setCurrentIndex(idx)
-        else:
-            self.model_combo.setEditText(model)
+        for combo, key in ((self.model_combo, "model"), (self.template_model_combo, "template_ai_model"),
+                           (self.optimizer_model_combo, "prompt_optimizer_model")):
+            combo.set_options(config.get("model_options"))
+            combo.set_model(config.get(key) or DEFAULT_AI_MODEL)
         self.system_prompt_edit.setPlainText(config.get("system_prompt") or "")
         self.business_name_edit.setText(config.get("business_name") or "")
         self.address_edit.setText(config.get("address") or "")
@@ -334,6 +337,7 @@ class ChatbotConfigTab(QWidget):
             prompt,
             tone=self.tone_edit.text().strip() or None,
             instruction=(instruction or "").strip() or None,
+            model=self.optimizer_model_combo.model_id(),
         )
 
     def _on_prompt_optimized(self, suggestion: Optional[Dict[str, Any]]) -> None:
@@ -353,7 +357,9 @@ class ChatbotConfigTab(QWidget):
             "enabled": self.enabled_check.isChecked(),
             "require_confirmation": self.require_confirmation_check.isChecked(),
             "require_mp_payment": self.require_mp_payment_check.isChecked(),
-            "model": self.model_combo.currentText().strip() or "claude-sonnet-4-6",
+            "model": self.model_combo.model_id(),
+            "template_ai_model": self.template_model_combo.model_id(),
+            "prompt_optimizer_model": self.optimizer_model_combo.model_id(),
             "system_prompt": self.system_prompt_edit.toPlainText().strip(),
             "business_name": self.business_name_edit.text().strip(),
             "address": self.address_edit.text().strip(),
