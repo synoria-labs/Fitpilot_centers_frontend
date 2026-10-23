@@ -233,15 +233,15 @@ class CampaignsController(BaseController):
         logger.error("CampaignsController error: %s", message)
         self.error_occurred.emit(message)
 
-    def preview_recovery(self, campaign_id: int) -> None:
+    def preview_recovery(self, campaign_id: int, causes: Optional[List[str]] = None) -> None:
         self._execute_authenticated_operation(
             self._service, "preview_recovery",
             lambda result: self.recovery_previewed.emit(campaign_id, result), self._on_error,
-            campaign_id=campaign_id,
+            campaign_id=campaign_id, **({"causes": causes} if causes is not None else {}),
         )
 
-    def recover_recipients(self, campaign_id: int) -> None:
+    def recover_recipients(self, campaign_id: int, causes: Optional[List[str]] = None) -> None:
         self._execute_authenticated_operation(
             self._service, "recover_recipients", self._on_action, self._on_error,
-            campaign_id=campaign_id,
+            campaign_id=campaign_id, **({"causes": causes} if causes is not None else {}),
         )

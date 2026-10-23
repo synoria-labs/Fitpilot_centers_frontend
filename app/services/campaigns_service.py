@@ -608,18 +608,27 @@ class CampaignsService:
         result = await self.client.execute(mutation, {"id": campaign_id})
         return _map_run((result or {}).get("retryCampaignFailures"))
 
-    async def preview_recovery(self, campaign_id: int) -> Dict[str, Any]:
-        query = """query PreviewRecovery($id: Int!) {
-            previewCampaignRecovery(campaignId: $id) {
+    async def preview_recovery(self, campaign_id: int, causes: Optional[List[str]] = None) -> Dict[str, Any]:
+        query = """query PreviewRecovery($id: Int!, $causes: [String!]) {
+            previewCampaignRecovery(campaignId: $id, causes: $causes) {
                 eligible duplicates delivered blocked review scheduled recipients error
+                causes { key label total eligible blocked selectedByDefault note }
             }
         }"""
-        result = await self.client.execute(query, {"id": campaign_id})
-        return (result or {}).get("previewCampaignRecovery") or {"error": "No se pudo obtener la vista previa."}
+        variables = {"id": campaign_id}
+        if causes is not None:
+            variables["causes"] = causes
+        result = await self.client.execute(query, variables)
+        node = (result or {}).get("previewCampaignRecovery") or {"error": "No se pudo obtener la vista previa."}
+        return dict(node, causes=[dict(c, selected_by_default=c.get("selectedByDefault", False))
+                                  for c in node.get("causes") or []])
 
-    async def recover_recipients(self, campaign_id: int) -> Dict[str, Any]:
-        mutation = """mutation RecoverRecipients($id: Int!) {
-            recoverCampaignRecipients(campaignId: $id) { success pending error }
+    async def recover_recipients(self, campaign_id: int, causes: Optional[List[str]] = None) -> Dict[str, Any]:
+        mutation = """mutation RecoverRecipients($id: Int!, $causes: [String!]) {
+            recoverCampaignRecipients(campaignId: $id, causes: $causes) { success pending error }
         }"""
-        result = await self.client.execute(mutation, {"id": campaign_id})
+        variables = {"id": campaign_id}
+        if causes is not None:
+            variables["causes"] = causes
+        result = await self.client.execute(mutation, variables)
         return (result or {}).get("recoverCampaignRecipients") or {"success": False, "error": "Sin respuesta del servidor."}
