@@ -143,6 +143,8 @@ class ComposerWidget(QWidget):
         self._pill_focus = False
         self._recording = False
         self._recording_paused = False
+        self._controls_enabled = True
+        self._bot_pending = False
         self._voice_recorder = voice_recorder or VoiceNoteRecorder(self)
         self._voice_recorder.recording_started.connect(self._on_recording_started)
         self._voice_recorder.recording_paused.connect(self._on_recording_paused)
@@ -271,11 +273,12 @@ class ComposerWidget(QWidget):
         self._update_send_button()
 
     def set_enabled(self, enabled: bool) -> None:
+        self._controls_enabled = enabled
         self.input.setEnabled(enabled)
         self.send_button.setEnabled(enabled)
         self.attach_button.setEnabled(enabled)
         self.emoji_button.setEnabled(enabled)
-        self.bot_button.setEnabled(enabled)
+        self.bot_button.setEnabled(enabled and not self._bot_pending)
         self.pause_recording_button.setEnabled(enabled)
         self.cancel_recording_button.setEnabled(enabled)
         self.send_recording_button.setEnabled(enabled)
@@ -298,15 +301,20 @@ class ComposerWidget(QWidget):
         self._update_bot_button(checked)
         self.bot_toggle_requested.emit(checked)
 
+    def set_bot_pending(self, pending: bool) -> None:
+        self._bot_pending = pending
+        self.bot_button.setEnabled(self._controls_enabled and not pending)
+        self._update_bot_button(self.bot_button.isChecked())
+
     def _update_bot_button(self, enabled: bool) -> None:
         icon = "mdi6.robot" if enabled else "mdi6.robot-off"
         color = theme.ACCENT if enabled else theme.palette_hex(QPalette.ColorRole.Mid)
         self.bot_button.setIcon(qta.icon(icon, color=color))
-        self.bot_button.setToolTip(
-            "Bot activado — clic para desactivar"
-            if enabled
-            else "Bot desactivado — clic para activar"
-        )
+        if self._bot_pending:
+            tooltip = "Guardando estado del bot…"
+        else:
+            tooltip = "Bot activado — clic para desactivar" if enabled else "Bot desactivado — clic para activar"
+        self.bot_button.setToolTip(tooltip)
 
     def _emit(self) -> None:
         text = self.input.text().strip()
