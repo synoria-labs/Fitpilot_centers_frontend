@@ -1,6 +1,5 @@
 """Shared WhatsApp-style palette and small helpers for the chat UI."""
-from dataclasses import dataclass
-
+from dataclasses import dataclass, replace
 from typing import Optional
 
 from PySide6.QtCore import QRectF, Qt
@@ -126,11 +125,22 @@ def palette_for(mode: str) -> WaPalette:
 
 
 def app_palette() -> WaPalette:
-    """The WhatsApp scheme matching the app's own light/dark palette. The chat tab follows
-    the app; the template preview has its own toggle (it shows the member's phone)."""
+    """The chat tab's scheme: WhatsApp's bubbles and text, dark or light like the app, on the
+    app's own neutral chrome — the wallpaper's base (left untinted), the header, the composer
+    and the day chips take the app palette's colors. The template preview keeps WhatsApp's
+    chrome and its own dark/light toggle: it shows the member's phone."""
     app = QApplication.instance()
-    window = (app.palette() if app else QPalette()).color(QPalette.ColorRole.Window)
-    return LIGHT if window.lightnessF() > 0.5 else DARK
+    palette = app.palette() if app else QPalette()
+    window = palette.color(QPalette.ColorRole.Window)
+    surface = palette.color(QPalette.ColorRole.Base).name()
+    return replace(
+        LIGHT if window.lightnessF() > 0.5 else DARK,
+        wallpaper=window.name(),
+        wallpaper_overlay="#00000000",
+        header_bg=window.name(),
+        composer_bg=surface,
+        chip_bg=surface,
+    )
 
 
 # WhatsApp dark palette (flat names kept for the widgets that are always dark)

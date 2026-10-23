@@ -473,16 +473,21 @@ def collapse_buttons(buttons: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
 # ----------------------------------------------------------------------------
 # whatsapp -> tabs -> views -> app ; then /assets/chat-background-3.png (same as the chat tab)
 _WALLPAPER_PATH = Path(__file__).resolve().parents[3] / "assets" / "chat-background-3.png"
-_wallpapers: Dict[str, Optional[QImage]] = {}
+_wallpapers: Dict[Tuple[str, str, str], Optional[QImage]] = {}
+
+
+def _wallpaper_key(pal: WaPalette) -> Tuple[str, str, str]:
+    return (pal.mode, pal.wallpaper, pal.wallpaper_overlay)
 
 
 def wallpaper_image(pal: WaPalette) -> Optional[QImage]:
-    """The chat-tab doodle wallpaper, tinted for the scheme (cached per mode)."""
-    if pal.mode in _wallpapers:
-        return _wallpapers[pal.mode]
+    """The chat-tab doodle wallpaper, tinted for the scheme (cached per scheme colors)."""
+    key = _wallpaper_key(pal)
+    if key in _wallpapers:
+        return _wallpapers[key]
     source = QImage(str(_WALLPAPER_PATH))
     if source.isNull():
-        _wallpapers[pal.mode] = None
+        _wallpapers[key] = None
         return None
     image = QImage(source.size(), QImage.Format.Format_RGB32)
     image.fill(QColor(pal.wallpaper))
@@ -497,7 +502,7 @@ def wallpaper_image(pal: WaPalette) -> Optional[QImage]:
         painter.drawImage(0, 0, source)
         painter.fillRect(image.rect(), QColor(pal.wallpaper_overlay))
     painter.end()
-    _wallpapers[pal.mode] = image
+    _wallpapers[key] = image
     return image
 
 
@@ -521,7 +526,7 @@ class ChatWallpaper:
         if image is None or widget.width() <= 0 or widget.height() <= 0:
             return None
         dpr = widget.devicePixelRatioF()
-        key = (widget.width(), widget.height(), dpr, pal.mode)
+        key = (widget.width(), widget.height(), dpr, _wallpaper_key(pal))
         if self._pixmap is None or self._key != key:
             target = QSize(max(1, round(widget.width() * dpr)), max(1, round(widget.height() * dpr)))
             pixmap = cover_pixmap(QPixmap.fromImage(image), target)

@@ -250,17 +250,27 @@ def test_preview_mic_is_fitpilot_blue_not_whatsapp_green(qtbot, pal):
 
 
 # ----------------------------------------------------------------------------
-# Esquema: el chat sigue al tema claro/oscuro de la app
+# Esquema: burbujas de WhatsApp sobre el fondo y el encabezado de la app
 # ----------------------------------------------------------------------------
 @pytest.mark.parametrize(
-    ("window", "expected"), [("#F3F3F3", theme.LIGHT), ("#202020", theme.DARK)], ids=["claro", "oscuro"]
+    ("window", "base", "whatsapp"),
+    [("#f3f3f3", "#ffffff", theme.LIGHT), ("#1e1e1e", "#2d2d2d", theme.DARK)],
+    ids=["claro", "oscuro"],
 )
-def test_chat_scheme_follows_the_app_palette(qapp, window, expected):
+def test_chat_bubbles_are_whatsapp_on_the_app_own_background(qapp, window, base, whatsapp):
     original = QApplication.palette()
     palette = QPalette(original)
     palette.setColor(QPalette.ColorRole.Window, QColor(window))
+    palette.setColor(QPalette.ColorRole.Base, QColor(base))
     qapp.setPalette(palette)
     try:
-        assert theme.app_palette() is expected
+        pal = theme.app_palette()
     finally:
         qapp.setPalette(original)
+    assert pal.mode == whatsapp.mode
+    assert (pal.bubble_in, pal.bubble_out, pal.text) == (whatsapp.bubble_in, whatsapp.bubble_out, whatsapp.text)
+    # The app's own gray behind the bubbles (wallpaper left untinted) and in the header.
+    assert (pal.wallpaper, pal.wallpaper_overlay, pal.header_bg) == (window, "#00000000", window)
+    assert (pal.composer_bg, pal.chip_bg) == (base, base)
+    # The template preview keeps WhatsApp's own chrome: it shows the member's phone.
+    assert theme.palette_for(whatsapp.mode).header_bg == whatsapp.header_bg

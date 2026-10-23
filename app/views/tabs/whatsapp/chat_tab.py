@@ -37,11 +37,13 @@ _MAX_AUTOFILL_PAGES = 25
 
 
 def _style(pal: WaPalette) -> str:
-    # The conversation header is the template preview's WhatsApp header bar.
     return f"""
 #chatTab {{ background-color: palette(window); }}
 #chatTab QSplitter::handle {{ background-color: palette(mid); width: 1px; }}
-#chatHeader {{ background-color: {pal.header_bg}; }}
+#chatHeader {{
+    background-color: {pal.header_bg};
+    border-bottom: 1px solid palette(mid);
+}}
 QLabel#headerName {{ color: {pal.header_text}; font-weight: 600; font-size: 15px; background: transparent; }}
 QLabel#headerSub {{ color: {pal.text_secondary}; font-size: 12px; background: transparent; }}
 #chatActionButton {{
