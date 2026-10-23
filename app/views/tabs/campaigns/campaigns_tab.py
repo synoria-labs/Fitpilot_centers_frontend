@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
 from ....controllers.campaigns_controller import CampaignsController
 from ....core import container, get_logger
 from ....utils.dialog_helpers import show_confirmation, show_error, show_info
+from .panels import DeliveryPolicyPanel
 from ...screen_style import screen_qss
 from ...table_widget_helpers import configure_table_widget
 from ...widgets.empty_state import EmptyStateWidget
@@ -250,6 +251,12 @@ class CampaignsTab(QWidget):
         self.steps.addWidget(self.message_step)
         self.steps.addWidget(self.review_step)
         layout.addWidget(self.steps)
+        self.delivery_panel = DeliveryPolicyPanel()
+        self.delivery_panel.policy.currentIndexChanged.connect(self._preview_timer.start)
+        self.delivery_panel.recency.valueChanged.connect(self._preview_timer.start)
+        self.delivery_panel.save_button.clicked.connect(self._save_delivery_policy)
+        self.delivery_panel.recover_button.clicked.connect(self._preview_recovery)
+        layout.addWidget(self.delivery_panel)
 
         nav = QHBoxLayout()
         self.back_btn = QPushButton("Atrás")
@@ -285,7 +292,7 @@ class CampaignsTab(QWidget):
         self.cancel_btn.clicked.connect(self._on_cancel_clicked)
         self.retry_btn = QPushButton("Reintentar fallidos")
         _style_action_button(self.retry_btn, "fa5s.redo")
-        self.retry_btn.clicked.connect(lambda: self.controller.retry_failures(self._editing_id))
+        self.retry_btn.clicked.connect(self._preview_recovery)
         self.duplicate_btn = QPushButton("Duplicar")
         _style_action_button(self.duplicate_btn, "fa5s.copy")
         self.duplicate_btn.clicked.connect(self._on_duplicate_clicked)
@@ -322,6 +329,7 @@ class CampaignsTab(QWidget):
         c.action_result.connect(self._on_action)
         c.audience_previewed.connect(self._on_audience_previewed)
         c.metrics_loaded.connect(self._on_metrics)
+        c.recovery_previewed.connect(self._on_recovery_preview)
         c.metrics_batch_loaded.connect(self._on_metrics_batch)
         c.recipients_loaded.connect(self._on_recipients)
         c.media_assets_loaded.connect(self.message_step.set_media_assets)
@@ -415,6 +423,11 @@ class CampaignsTab(QWidget):
             button.setEnabled(self._can_send and (saved or not needs_saved))
 
         self.metrics_panel.setVisible(saved)
+        editable = self._can_send and status not in ("sending", "canceled")
+        self.delivery_panel.setEnabled(editable)
+        self.delivery_panel.recency.setEnabled(editable and status == "draft")
+        self.delivery_panel.save_button.setVisible(saved and status != "draft")
+        self.delivery_panel.recover_button.setEnabled(editable and saved and status != "draft")
         self.recipients_table.setVisible(saved and status != "draft")
 
         if status == "sending":
@@ -552,6 +565,7 @@ class CampaignsTab(QWidget):
     def _populate_editor(self, campaign: Dict[str, Any]) -> None:
         self._editing_id = campaign.get("id")
         self._status = campaign.get("status") or "draft"
+        self.delivery_panel.load(campaign)
         self.audience_step.name_edit.setText(campaign.get("name") or "")
         self.audience_step.description_edit.setText(campaign.get("description") or "")
         index = self.audience_step.objective_combo.findData(campaign.get("objective"))
@@ -606,11 +620,13 @@ class CampaignsTab(QWidget):
         count = result.get("count", 0)
         reachable = result.get("reachable", count)
         skipped = result.get("skipped") or {}
-        parts = [f"{reachable} recibirán"]
+        parts = [f"{reachable} elegibles para envío; la entrega depende de Meta"]
         for key, label in (
             ("no_phone", "sin WhatsApp"),
             ("no_consent", "sin consentimiento"),
             ("recency_block", "contactados hace poco"),
+            ("duplicate_phone", "con número repetido"),
+            ("daily_cap", "bloqueados por límite diario"),
         ):
             if skipped.get(key):
                 parts.append(f"{skipped[key]} {label}")
@@ -643,7 +659,10 @@ class CampaignsTab(QWidget):
     # ============================================================== actions
     def _request_preview(self) -> None:
         self.audience_step.set_preview_text("Calculando…")
-        self.controller.preview_audience(self.audience_step.audience_spec())
+        self.controller.preview_audience(
+            self.audience_step.audience_spec(), campaign_id=self._editing_id,
+            recency_block_days=self.delivery_panel.recency.value(),
+            daily_cap_policy=self.delivery_panel.policy.currentData())
 
     def _reload_recipients(self, *_args) -> None:
         if self._editing_id:
@@ -659,6 +678,8 @@ class CampaignsTab(QWidget):
             "audienceSpec": self.audience_step.audience_spec(),
             "templateId": self.message_step.template_id(),
             "paramMapping": self.message_step.param_mapping(),
+            **self.delivery_panel.values(),
+            "recencyBlockDays": self.delivery_panel.recency.value(),
             **self.message_step.header_media_override(),
         }
 
@@ -666,6 +687,7 @@ class CampaignsTab(QWidget):
         self.table.clearSelection()
         self._editing_id = None
         self._status = "draft"
+        self.delivery_panel.load({"auto_retry_meta_limits": True, "recency_block_days": 30})
         self.audience_step.name_edit.clear()
         self.audience_step.description_edit.clear()
         if self.audience_step.objective_combo.count():
@@ -688,6 +710,42 @@ class CampaignsTab(QWidget):
             self.controller.update_campaign(self._editing_id, payload)
         else:
             self.controller.create_campaign(payload)
+
+    def _save_delivery_policy(self) -> None:
+        if self._editing_id and self._status not in ("sending", "canceled"):
+            self.controller.update_campaign(self._editing_id, self.delivery_panel.values())
+
+    def _preview_recovery(self) -> None:
+        if not self._editing_id:
+            return
+        campaign = self._campaigns_by_id.get(self._editing_id) or {}
+        saved = {"dailyCapPolicy": campaign.get("daily_cap_policy", "respect"),
+                 "autoRetryMetaLimits": campaign.get("auto_retry_meta_limits", False)}
+        if self.delivery_panel.values() != saved:
+            show_error(self, "Guarda la política antes de previsualizar la recuperación.", title="Recuperar campaña")
+            return
+        self.controller.preview_recovery(self._editing_id)
+
+    def _on_recovery_preview(self, campaign_id: int, result: Dict[str, Any]) -> None:
+        if campaign_id != self._editing_id:
+            return
+        if result.get("error"):
+            show_error(self, result["error"], title="Recuperar campaña")
+            return
+        text = (
+            f"Elegibles: {result.get('eligible', 0)} (programados para después: {result.get('scheduled', 0)}).\n"
+            f"Ya entregados: {result.get('delivered', 0)} · Duplicados: {result.get('duplicates', 0)}\n"
+            f"Bloqueados: {result.get('blocked', 0)} · Requieren revisión: {result.get('review', 0)}"
+        )
+        due = [r.get("send_after") for r in result.get("recipients") or [] if r.get("send_after")]
+        if due:
+            from ....utils.datetime_helpers import format_local_datetime
+            text += f"\nPrimer envío permitido: {format_local_datetime(min(due))}"
+        if not result.get("eligible"):
+            show_info(self, text, title="Sin destinatarios elegibles")
+        elif show_confirmation(self, text + "\n¿Programar esta recuperación?", title="Recuperar no entregados",
+                               ok_text="Programar recuperación", cancel_text="Cancelar"):
+            self.controller.recover_recipients(campaign_id)
 
     def _require_saved(self) -> Optional[int]:
         if not self._editing_id:

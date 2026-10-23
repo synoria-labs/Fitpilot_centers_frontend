@@ -39,6 +39,8 @@ _CAMPAIGN_FIELDS = f"""
     conversionWindowDays
     conversionMetric
     recencyBlockDays
+    dailyCapPolicy
+    autoRetryMetaLimits
     throttlePerMinute
     startedAt
     finishedAt
@@ -67,6 +69,8 @@ _MEDIA_ASSET_FIELDS = """
 """
 
 _METRICS_FIELDS = """
+    accepted uniquePhones duplicates rejected needsReview retryPending errorCounts
+    updatedAt periodStart periodEnd templateId
     targeted
     pending
     sent
@@ -156,6 +160,8 @@ def _map_campaign(node: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         "send_local_time": bool(node.get("sendLocalTime")),
         "conversion_window_days": node.get("conversionWindowDays"),
         "conversion_metric": node.get("conversionMetric"),
+        "daily_cap_policy": node.get("dailyCapPolicy") or "respect",
+        "auto_retry_meta_limits": bool(node.get("autoRetryMetaLimits", False)),
         "recency_block_days": node.get("recencyBlockDays"),
         "throttle_per_minute": node.get("throttlePerMinute"),
         "started_at": node.get("startedAt"),
@@ -169,6 +175,17 @@ def _map_campaign(node: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
 def _map_metrics(node: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     node = node or {}
     return {
+        "accepted": node.get("accepted", 0),
+        "unique_phones": node.get("uniquePhones", 0),
+        "duplicates": node.get("duplicates", 0),
+        "rejected": node.get("rejected", 0),
+        "needs_review": node.get("needsReview", 0),
+        "retry_pending": node.get("retryPending", 0),
+        "error_counts": node.get("errorCounts") or {},
+        "updated_at": node.get("updatedAt"),
+        "period_start": node.get("periodStart"),
+        "period_end": node.get("periodEnd"),
+        "template_id": node.get("templateId"),
         "targeted": node.get("targeted", 0),
         "pending": node.get("pending", 0),
         "sent": node.get("sent", 0),
@@ -374,18 +391,18 @@ class CampaignsService:
         plans = (result or {}).get("membershipPlans") or []
         return [{"id": p.get("id"), "name": p.get("name")} for p in plans if p]
 
-    async def preview_audience(self, audience_spec: Dict[str, Any]) -> Dict[str, Any]:
+    async def preview_audience(self, audience_spec: Dict[str, Any], campaign_id=None, recency_block_days=30, daily_cap_policy="respect") -> Dict[str, Any]:
         query = """
-            query PreviewAudience($spec: JSON) {
-                previewAudience(audienceSpec: $spec) {
+            query PreviewAudience($spec: JSON, $campaignId: Int, $recency: Int!, $policy: String!) {
+                previewAudience(audienceSpec: $spec, campaignId: $campaignId, recencyBlockDays: $recency, dailyCapPolicy: $policy) {
                     count
                     reachable
-                    skipped { noPhone noConsent recencyBlock }
+                    skipped { noPhone noConsent recencyBlock duplicatePhone dailyCap }
                     sample
                 }
             }
         """
-        result = await self.client.execute(query, {"spec": audience_spec})
+        result = await self.client.execute(query, {"spec": audience_spec, "campaignId": campaign_id, "recency": recency_block_days, "policy": daily_cap_policy})
         node = (result or {}).get("previewAudience") or {}
         skipped = node.get("skipped") or {}
         return {
@@ -395,6 +412,8 @@ class CampaignsService:
                 "no_phone": skipped.get("noPhone", 0),
                 "no_consent": skipped.get("noConsent", 0),
                 "recency_block": skipped.get("recencyBlock", 0),
+                "duplicate_phone": skipped.get("duplicatePhone", 0),
+                "daily_cap": skipped.get("dailyCap", 0),
             },
             "sample": list(node.get("sample") or []),
         }
@@ -435,7 +454,7 @@ class CampaignsService:
             query CampaignRecipients($id: Int!, $status: String) {
                 campaignRecipients(campaignId: $id, status: $status, limit: 500) {
                     id personId phoneE164 status skipReason waMessageId
-                    sentAt deliveredAt readAt repliedAt converted convertedAt error
+                    sentAt deliveredAt readAt repliedAt converted convertedAt error phoneKey sendAfter attempts
                 }
             }
         """
@@ -449,6 +468,9 @@ class CampaignsService:
                 "status": n.get("status"),
                 "skip_reason": n.get("skipReason"),
                 "wa_message_id": n.get("waMessageId"),
+                "phone_key": n.get("phoneKey"),
+                "send_after": n.get("sendAfter"),
+                "attempts": n.get("attempts") or [],
                 "sent_at": n.get("sentAt"),
                 "delivered_at": n.get("deliveredAt"),
                 "read_at": n.get("readAt"),
@@ -585,3 +607,19 @@ class CampaignsService:
         """
         result = await self.client.execute(mutation, {"id": campaign_id})
         return _map_run((result or {}).get("retryCampaignFailures"))
+
+    async def preview_recovery(self, campaign_id: int) -> Dict[str, Any]:
+        query = """query PreviewRecovery($id: Int!) {
+            previewCampaignRecovery(campaignId: $id) {
+                eligible duplicates delivered blocked review scheduled recipients error
+            }
+        }"""
+        result = await self.client.execute(query, {"id": campaign_id})
+        return (result or {}).get("previewCampaignRecovery") or {"error": "No se pudo obtener la vista previa."}
+
+    async def recover_recipients(self, campaign_id: int) -> Dict[str, Any]:
+        mutation = """mutation RecoverRecipients($id: Int!) {
+            recoverCampaignRecipients(campaignId: $id) { success pending error }
+        }"""
+        result = await self.client.execute(mutation, {"id": campaign_id})
+        return (result or {}).get("recoverCampaignRecipients") or {"success": False, "error": "Sin respuesta del servidor."}

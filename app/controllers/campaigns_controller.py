@@ -28,6 +28,7 @@ class CampaignsController(BaseController):
     audience_previewed = Signal(object)   # {count, sample}
     campaign_saved = Signal(object)       # {success, error, campaign}
     action_result = Signal(object)        # generic run/status dict
+    recovery_previewed = Signal(int, object)
     metrics_loaded = Signal(object)       # dict
     metrics_batch_loaded = Signal(object) # {campaign_id: metrics}
     recipients_loaded = Signal(object)    # List[dict]
@@ -81,10 +82,11 @@ class CampaignsController(BaseController):
             self.campaign_loaded.emit, self._on_error, campaign_id=campaign_id,
         )
 
-    def preview_audience(self, audience_spec: Dict[str, Any]) -> None:
+    def preview_audience(self, audience_spec: Dict[str, Any], campaign_id=None, recency_block_days=30, daily_cap_policy="respect") -> None:
         self._execute_authenticated_operation(
             self._service, "preview_audience",
             self.audience_previewed.emit, self._on_error, audience_spec=audience_spec,
+            campaign_id=campaign_id, recency_block_days=recency_block_days, daily_cap_policy=daily_cap_policy,
         )
 
     def load_metrics(self, campaign_id: int) -> None:
@@ -230,3 +232,16 @@ class CampaignsController(BaseController):
         self.loading_changed.emit(False)
         logger.error("CampaignsController error: %s", message)
         self.error_occurred.emit(message)
+
+    def preview_recovery(self, campaign_id: int) -> None:
+        self._execute_authenticated_operation(
+            self._service, "preview_recovery",
+            lambda result: self.recovery_previewed.emit(campaign_id, result), self._on_error,
+            campaign_id=campaign_id,
+        )
+
+    def recover_recipients(self, campaign_id: int) -> None:
+        self._execute_authenticated_operation(
+            self._service, "recover_recipients", self.action_result.emit, self._on_error,
+            campaign_id=campaign_id,
+        )
