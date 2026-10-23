@@ -36,6 +36,7 @@ from ...table_widget_helpers import configure_table_widget
 from ...widgets.empty_state import EmptyStateWidget
 from ..whatsapp import theme
 from .panels import MetricsPanel, RecipientsTable
+from .recovery_dialog import RecoveryDialog
 from .steps import AudienceStep, MessageStep, ReviewStep
 
 logger = get_logger(__name__)
@@ -732,6 +733,11 @@ class CampaignsTab(QWidget):
             return
         if result.get("error"):
             show_error(self, result["error"], title="Recuperar campaña")
+            return
+        if result.get("causes"):
+            dialog = RecoveryDialog(result, self)
+            if dialog.exec() and campaign_id == self._editing_id:
+                self.controller.recover_recipients(campaign_id, causes=dialog.selected_causes())
             return
         text = (
             f"Elegibles: {result.get('eligible', 0)} (programados para después: {result.get('scheduled', 0)}).\n"

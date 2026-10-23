@@ -144,3 +144,81 @@ async def test_service_maps_policy_false_and_requests_recovery_preview():
     service = CampaignsService(client)
     assert (await service.preview_recovery(3))["eligible"] == 3
     assert client.execute.call_args.args[1] == {"id": 3}
+
+
+def recovery_preview():
+    return dict(causes=[
+        dict(key='daily_cap', label='Ya recibió marketing ese día', total=2, eligible=1, blocked=1,
+             selected_by_default=True, note='Política: reprogramar al próximo día permitido.'),
+        dict(key='unconfirmed', label='Aceptado sin confirmar entrega', total=1, eligible=1, blocked=0,
+             selected_by_default=False, note='Puede duplicar un mensaje; espera mínima de 24 h.'),
+        dict(key='bad_number', label='Número inválido o sin WhatsApp', total=1, eligible=0, blocked=1,
+             selected_by_default=True, note='Corrige su número en Socios.'),
+    ], recipients=[
+        dict(recipient_id=1, person_name='Cliente de ejemplo', phone='+52 871 000 0001', cause='daily_cap',
+             detail='Omitido por límite local.', eligible=True, send_after='2026-10-24T15:00:00+00:00'),
+        dict(recipient_id=2, person_name='Número compartido', phone='+52 871 000 0001', cause='daily_cap',
+             detail='Límite diario.', eligible=False, blocked_reason='Número repetido en esta campaña.'),
+        dict(recipient_id=3, person_name='Entrega incierta', phone='+52 871 000 0003', cause='unconfirmed',
+             detail='Sin confirmación de Meta.', eligible=True, send_after='2026-10-24T15:00:00+00:00'),
+        dict(recipient_id=4, person_name='Número incompleto', phone='1234', cause='bad_number',
+             detail='(#100) Invalid parameter', eligible=False, blocked_reason='Corrige su número en Socios.'),
+    ])
+
+
+def test_recovery_dialog_defaults_filter_locally_and_show_local_dates(qtbot):
+    from app.views.tabs.campaigns.recovery_dialog import RecoveryDialog
+    dialog = RecoveryDialog(recovery_preview())
+    qtbot.addWidget(dialog)
+    assert dialog.selected_causes() == ['daily_cap', 'bad_number']
+    assert dialog.table.rowCount() == 3
+    assert dialog.confirm_button.text() == 'Programar reenvío (1)'
+    assert '24/10/2026 09:00' in [dialog.table.item(row, 4).text() for row in range(dialog.table.rowCount())]
+    dialog.cause_checks['unconfirmed'].setChecked(True)
+    assert dialog.table.rowCount() == 4 and dialog.confirm_button.text() == 'Programar reenvío (2)'
+    dialog.cause_checks['daily_cap'].setChecked(False)
+    assert dialog.table.rowCount() == 2 and dialog.confirm_button.text() == 'Programar reenvío (1)'
+
+
+def test_recovery_dialog_cannot_confirm_without_eligible_recipients(qtbot):
+    from app.views.tabs.campaigns.recovery_dialog import RecoveryDialog
+    preview = recovery_preview()
+    for recipient in preview['recipients']:
+        recipient['eligible'] = False
+    dialog = RecoveryDialog(preview)
+    qtbot.addWidget(dialog)
+    assert not dialog.confirm_button.isEnabled()
+    dialog.accept()
+    assert dialog.result() == 0
+
+
+def test_recovery_dialog_confirmation_passes_only_the_selected_causes(screen, monkeypatch):
+    class Dialog:
+        def __init__(self, result, parent):
+            assert result['causes']
+
+        def exec(self):
+            return 1
+
+        def selected_causes(self):
+            return ['unconfirmed']
+
+    monkeypatch.setattr(campaigns_tab, 'RecoveryDialog', Dialog)
+    screen.tab._on_recovery_preview(3, recovery_preview())
+    assert screen.calls[-1].method == 'recover_recipients'
+    assert screen.calls[-1].kwargs == {'campaign_id': 3, 'causes': ['unconfirmed']}
+
+
+@pytest.mark.asyncio
+async def test_service_passes_empty_and_explicit_causes_and_maps_defaults():
+    node = recovery_preview()
+    node['causes'][0]['selectedByDefault'] = True
+    client = SimpleNamespace(execute=AsyncMock(return_value={'previewCampaignRecovery': node}))
+    service = CampaignsService(client)
+    preview = await service.preview_recovery(3, causes=[])
+    assert preview['causes'][0]['selected_by_default'] is True
+    assert client.execute.call_args.args[1] == {'id': 3, 'causes': []}
+    assert 'selectedByDefault' in client.execute.call_args.args[0]
+    client.execute.return_value = {'recoverCampaignRecipients': {'success': True, 'pending': 1}}
+    assert (await service.recover_recipients(3, causes=['bad_number']))['success']
+    assert client.execute.call_args.args[1] == {'id': 3, 'causes': ['bad_number']}
