@@ -1,7 +1,9 @@
-"""Presentation helpers for WhatsApp chat messages."""
+"""Presentation helpers for WhatsApp chat messages (chat tab and template preview)."""
+import html
 import json
 import re
-from typing import Any, Iterable, List, Optional
+from datetime import date, datetime, time
+from typing import Any, Callable, Iterable, List, Optional, Union
 
 from ....models.chat import ChatMessage
 from . import theme
@@ -10,8 +12,130 @@ from . import theme
 _BLANK_LINES_RE = re.compile(r"\n{3,}")
 _PLACEHOLDER_RE = re.compile(r"\{\{\s*(\d+)\s*\}\}")
 _WHITESPACE_RE = re.compile(r"\s+")
+# A link ends before trailing punctuation and formatting markers (``*https://…*``).
+_URL_RE = re.compile(r"https?://[^\s<]*[^\s<.,;:!?)*_~]")
+_MARKUP_CHARS_RE = re.compile(r"[*_~`]")
+_STASHED_RE = re.compile("\x00(\\d+)\x00")
+
+_WEEKDAYS = ("Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo")
+_QUOTE_PREFIXES = {"image": "📷", "video": "🎥", "document": "📄", "audio": "🎤", "sticker": "🟢"}
 
 
+# ----------------------------------------------------------------------------
+# WhatsApp formatting
+# ----------------------------------------------------------------------------
+def _render_markup(text: str, link_html: Callable[[str], str]) -> str:
+    """Escape ``text`` and apply the safe subset of WhatsApp formatting. Code spans and
+    links are set aside first so ``_`` or ``*`` inside them never turn into formatting."""
+    stash: List[str] = []
+
+    def keep(fragment: str) -> str:
+        stash.append(fragment)
+        return f"\x00{len(stash) - 1}\x00"
+
+    rendered = re.sub(
+        r"```(.+?)```",
+        lambda m: keep(f'<code style="font-family: Consolas, monospace;">{m.group(1)}</code>'),
+        html.escape(text or ""),
+        flags=re.DOTALL,
+    )
+    rendered = _URL_RE.sub(lambda m: keep(link_html(m.group(0))), rendered)
+    rendered = re.sub(r"(?<!\*)\*([^*\n]+?)\*(?!\*)", r"<strong>\1</strong>", rendered)
+    rendered = re.sub(r"(?<!_)_([^_\n]+?)_(?!_)", r"<em>\1</em>", rendered)
+    rendered = re.sub(r"~([^~\n]+?)~", r"<s>\1</s>", rendered)
+    rendered = _STASHED_RE.sub(lambda m: stash[int(m.group(1))], rendered)
+    return rendered.replace("\n", "<br>")
+
+
+def whatsapp_markup_html(text: str) -> str:
+    """WhatsApp formatting (*bold*, _italic_, ~strike~, ```mono```) as safe HTML."""
+    return _render_markup(text, lambda url: url)
+
+
+def message_html(
+    text: str,
+    pal: theme.WaPalette,
+    *,
+    clickable_links: bool = False,
+    highlight_variables: bool = False,
+) -> str:
+    """A message body the way the phone shows it: WhatsApp formatting and tinted links
+    (clickable in the chat). Template drafts can highlight variables still lacking a
+    sample, so they read as "to be filled"."""
+
+    def link(url: str) -> str:
+        if clickable_links:
+            return f'<a href="{url}" style="color:{pal.link}; text-decoration:none;">{url}</a>'
+        return f'<span style="color:{pal.link};">{url}</span>'
+
+    rendered = _render_markup(text, link)
+    if highlight_variables:
+        rendered = _PLACEHOLDER_RE.sub(
+            lambda m: (
+                f'<span style="background-color:{pal.var_bg}; color:{pal.var_text};">'
+                f"&nbsp;{m.group(0)}&nbsp;</span>"
+            ),
+            rendered,
+        )
+    return rendered
+
+
+def quote_snippet(text: str, prefix: str = "", empty: str = "Archivo") -> str:
+    """One-line excerpt of a quoted message: its first line without WhatsApp markers,
+    after the media emoji when the quoted message carries one."""
+    first_line = next((line.strip() for line in (text or "").splitlines() if line.strip()), "")
+    first_line = _MARKUP_CHARS_RE.sub("", first_line)
+    if prefix:
+        return f"{prefix} {first_line}" if first_line else f"{prefix} {empty}"
+    return first_line
+
+
+def quote_text_for_message(message: ChatMessage) -> str:
+    """What a reply shows of the message it quotes (caption or media label for media)."""
+    media_type = message.media.media_type if message.media else message.message_type
+    prefix = _QUOTE_PREFIXES.get(media_type, "") if (message.is_media or message.media) else ""
+    if not prefix:
+        return quote_snippet(display_text_for_message(message))
+    label = theme.MEDIA_LABELS.get(media_type, "Archivo").split(" ", 1)[-1]
+    return quote_snippet(extract_useful_text(message.text_content, message.message_type), prefix, label)
+
+
+# ----------------------------------------------------------------------------
+# Times and days (es-MX, as WhatsApp prints them)
+# ----------------------------------------------------------------------------
+def clock_text(moment: Optional[Union[datetime, time]] = None) -> str:
+    """Time of day, e.g. «6:42 p. m.»; the current time when omitted."""
+    moment = moment or datetime.now()
+    suffix = "a. m." if moment.hour < 12 else "p. m."
+    return f"{moment.hour % 12 or 12}:{moment.minute:02d} {suffix}"
+
+
+def day_label(day: date, today: date) -> str:
+    """Day separator of the chat: «Hoy», «Ayer», the weekday within the last week, else
+    the date."""
+    days_ago = (today - day).days
+    if days_ago == 0:
+        return "Hoy"
+    if days_ago == 1:
+        return "Ayer"
+    if 1 < days_ago < 7:
+        return _WEEKDAYS[day.weekday()]
+    return day.strftime("%d/%m/%Y")
+
+
+def list_time_text(moment: Optional[datetime], now: Optional[datetime] = None) -> str:
+    """Stamp of a conversation row: the time today, otherwise the day as the chat names it."""
+    if moment is None:
+        return ""
+    now = now or datetime.now(moment.tzinfo)
+    if moment.date() == now.date():
+        return clock_text(moment)
+    return day_label(moment.date(), now.date())
+
+
+# ----------------------------------------------------------------------------
+# Message text
+# ----------------------------------------------------------------------------
 def display_text_for_message(message: ChatMessage) -> str:
     """Return user-facing text for a message without storage/API artifacts."""
     # Reactions render as a badge on their target bubble, never as text.

@@ -1,34 +1,54 @@
-"""Scrollable list of message bubbles for a conversation."""
-from typing import Dict, List, Set
+"""Scrollable list of message bubbles for a conversation, laid out like WhatsApp: a day
+chip where the day changes, the tail only on the first bubble of each sender's run and
+replies quoting the message they answer."""
+from datetime import date, datetime
+from typing import Dict, List, Optional, Set
 
-import qtawesome as qta
-from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QTimer, QSize, Signal
-from PySide6.QtWidgets import QScrollArea, QToolButton, QWidget, QVBoxLayout
+from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, QTimer, Signal
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget
 
 from ....models.chat import ChatMessage
-from .message_bubble import MessageBubble
 from . import theme
+from .message_bubble import MessageBubble, QuotedMessage
+from .message_formatter import day_label, quote_text_for_message
+from .theme import WaPalette
+from .wa_mockup import ScrollDownButton, day_chip_qss
 
 
 _BOTTOM_THRESHOLD_PX = 48
 _SCROLL_RETRY_COUNT = 4
 _SCROLL_RETRY_MS = 16
 _SCROLL_ANIMATION_MS = 180
+_OWN_AUTHOR = "Tú"  # how WhatsApp names the business's own messages in a quote
+
+
+class DayChip(QWidget):
+    """Centered day separator («Hoy», «Ayer»…), the same chip as the template preview's."""
+
+    def __init__(self, text: str, pal: WaPalette, parent=None) -> None:
+        super().__init__(parent)
+        self.text = text
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 10, 0, 4)
+        label = QLabel(text)
+        label.setStyleSheet(day_chip_qss(pal))
+        layout.addWidget(label, 0, Qt.AlignmentFlag.AlignHCenter)
 
 
 class MessageThreadWidget(QScrollArea):
     retry_requested = Signal(int)  # message id (re-emitted from bubbles)
     reaction_requested = Signal(str, str)  # target wa_message_id, emoji ("" removes)
 
-    def __init__(self, parent=None) -> None:
+    def __init__(self, parent=None, *, pal: Optional[WaPalette] = None) -> None:
         super().__init__(parent)
+        self._pal = pal or theme.app_palette()
         self.setWidgetResizable(True)
         self.setObjectName("threadScroll")
 
         self._container = QWidget()
         self._container.setObjectName("threadContainer")
         self._layout = QVBoxLayout(self._container)
-        self._layout.setContentsMargins(0, 8, 0, 8)
+        self._layout.setContentsMargins(0, 8, 0, 12)
         self._layout.setSpacing(0)
         self._layout.addStretch()  # index 0: keeps bubbles stacked from the top
 
@@ -41,10 +61,14 @@ class MessageThreadWidget(QScrollArea):
             " #threadContainer { background: transparent; }"
         )
 
+        self._contact_name = ""
         self._seen_ids: Set[int] = set()
         self._bubbles: Dict[int, MessageBubble] = {}
         self._bubbles_by_wa: Dict[str, MessageBubble] = {}  # wa_message_id -> bubble
+        self._messages_by_wa: Dict[str, ChatMessage] = {}  # wa_message_id -> message (quotes)
         self._reactions_by_wa: Dict[str, dict] = {}  # target wa_id -> {"inbound": e, "outbound": e}
+        self._last_day: Optional[date] = None
+        self._last_direction: Optional[str] = None
         self._pending_scroll_mode = ""
         self._pending_scroll_attempts = 0
 
@@ -52,33 +76,17 @@ class MessageThreadWidget(QScrollArea):
         self._scroll_animation.setDuration(_SCROLL_ANIMATION_MS)
         self._scroll_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
 
-        self._jump_button = QToolButton(self.viewport())
-        self._jump_button.setObjectName("jumpToLatestButton")
-        self._jump_button.setIcon(qta.icon("fa5s.chevron-down", color=theme.TEXT_PRIMARY))
-        self._jump_button.setIconSize(QSize(16, 16))
-        self._jump_button.setFixedSize(40, 40)
-        self._jump_button.setToolTip("Ir al mensaje mas reciente")
-        self._jump_button.setAutoRaise(True)
-        self._jump_button.hide()
+        self._jump_button = ScrollDownButton(
+            self._pal, self.viewport(), tooltip="Ir al mensaje más reciente"
+        )
         self._jump_button.clicked.connect(self._on_jump_to_latest_clicked)
 
         self.verticalScrollBar().rangeChanged.connect(self._on_scroll_range_changed)
         self.verticalScrollBar().valueChanged.connect(self._on_scroll_value_changed)
 
-        self.setStyleSheet(
-            self.styleSheet()
-            + f"""
-            QToolButton#jumpToLatestButton {{
-                background-color: {theme.BG_PANEL};
-                border: 1px solid {theme.DIVIDER};
-                border-radius: 20px;
-                padding: 0;
-            }}
-            QToolButton#jumpToLatestButton:hover {{
-                background-color: {theme.ITEM_HOVER};
-            }}
-            """
-        )
+    def set_contact_name(self, name: str) -> None:
+        """Author shown when a reply quotes one of the contact's messages."""
+        self._contact_name = name or ""
 
     def set_messages(self, messages: List[ChatMessage]) -> None:
         self._clear()
@@ -140,15 +148,17 @@ class MessageThreadWidget(QScrollArea):
         self._layout.takeAt(index)
         old_bubble.deleteLater()
 
-        bubble = self._make_bubble(message)
+        if message.wa_message_id:
+            self._messages_by_wa[message.wa_message_id] = message
+        bubble = self._make_bubble(message, tail=old_bubble.has_tail)
         self._layout.insertWidget(index, bubble)
         self._bubbles[message.id] = bubble
 
         if was_near_bottom:
             self.scroll_to_bottom(animated=False)
 
-    def _make_bubble(self, message: ChatMessage) -> MessageBubble:
-        bubble = MessageBubble(message)
+    def _make_bubble(self, message: ChatMessage, *, tail: bool) -> MessageBubble:
+        bubble = MessageBubble(message, pal=self._pal, tail=tail, quote=self._quote_for(message))
         bubble.retry_requested.connect(self.retry_requested.emit)
         bubble.reaction_requested.connect(self._on_reaction_requested)
         if message.wa_message_id:
@@ -157,6 +167,16 @@ class MessageThreadWidget(QScrollArea):
             if known:
                 bubble.set_reactions(known)
         return bubble
+
+    def _quote_for(self, message: ChatMessage) -> Optional[QuotedMessage]:
+        """The quote box of a reply, when the message it answers is in this thread."""
+        quoted = self._messages_by_wa.get(message.context_message_id or "")
+        if quoted is None:
+            return None
+        if quoted.is_inbound:
+            author = self._contact_name or "Contacto"
+            return QuotedMessage(author, quote_text_for_message(quoted), theme.avatar_color(author))
+        return QuotedMessage(_OWN_AUTHOR, quote_text_for_message(quoted), self._pal.quote_name)
 
     def _on_reaction_requested(self, target_wa_id: str, emoji: str) -> None:
         self.reaction_requested.emit(target_wa_id, emoji)
@@ -186,7 +206,17 @@ class MessageThreadWidget(QScrollArea):
             if message.id in self._seen_ids:
                 return
             self._seen_ids.add(message.id)
-        bubble = self._make_bubble(message)
+        if message.timestamp is not None:
+            day = message.timestamp.date()
+            if day != self._last_day:
+                today = datetime.now(message.timestamp.tzinfo).date()
+                self._layout.addWidget(DayChip(day_label(day, today), self._pal))
+                self._last_day = day
+                self._last_direction = None  # a new day starts a new run
+        if message.wa_message_id:
+            self._messages_by_wa[message.wa_message_id] = message
+        bubble = self._make_bubble(message, tail=message.direction != self._last_direction)
+        self._last_direction = message.direction
         self._layout.addWidget(bubble)
         if message.id:
             self._bubbles[message.id] = bubble
@@ -195,8 +225,11 @@ class MessageThreadWidget(QScrollArea):
         self._seen_ids.clear()
         self._bubbles.clear()
         self._bubbles_by_wa.clear()
+        self._messages_by_wa.clear()
         self._reactions_by_wa.clear()
-        while self._layout.count() > 1:  # keep the trailing stretch at index 0
+        self._last_day = None
+        self._last_direction = None
+        while self._layout.count() > 1:  # keep the leading stretch at index 0
             item = self._layout.takeAt(self._layout.count() - 1)
             widget = item.widget()
             if widget is not None:
@@ -256,9 +289,8 @@ class MessageThreadWidget(QScrollArea):
         self._scroll_animation.start()
 
     def _position_jump_button(self) -> None:
-        margin = 18
-        x = self.viewport().width() - self._jump_button.width() - margin
-        y = self.viewport().height() - self._jump_button.height() - margin
+        x = self.viewport().width() - self._jump_button.width() - 14
+        y = self.viewport().height() - self._jump_button.height() - 10
         self._jump_button.move(max(0, x), max(0, y))
 
     def resizeEvent(self, event) -> None:

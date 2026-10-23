@@ -4,10 +4,9 @@ Renders the same WhatsApp-style row as the old ``_ConversationItem`` widget
 (avatar, name, secondary identity, snippet, time, unread badge) but by painting,
 so the list scales to thousands of rows with no per-row widget cost.
 """
-from datetime import datetime
 from typing import Dict, Optional, Tuple
 
-from PySide6.QtCore import QRect, QSize, Qt
+from PySide6.QtCore import QRect, QRectF, QSize, Qt
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPalette, QPen
 from PySide6.QtWidgets import QStyle, QStyledItemDelegate
 
@@ -15,7 +14,7 @@ from ....models.chat import ChatConversation
 from . import theme
 from .conversation_list_model import CONVERSATION_ROLE
 from .membership_chip import membership_chip_size, paint_membership_chip
-from .message_formatter import snippet_for_message
+from .message_formatter import list_time_text, snippet_for_message
 
 _AVATAR_SIZE = 48
 _LEFT_MARGIN = 12
@@ -48,10 +47,6 @@ class ConversationItemDelegate(QStyledItemDelegate):
         self._chip_font = QFont()
         self._chip_font.setPixelSize(10)
         self._chip_font.setBold(True)
-        avatar_px = max(12, _AVATAR_SIZE // 2 - 4)
-        self._avatar_font = QFont()
-        self._avatar_font.setPixelSize(avatar_px)
-        self._avatar_font.setBold(True)
 
     # ------------------------------------------------------------------
     def sizeHint(self, option, index) -> QSize:
@@ -72,25 +67,20 @@ class ConversationItemDelegate(QStyledItemDelegate):
         rect = option.rect
         palette = option.palette
         selected = bool(option.state & QStyle.StateFlag.State_Selected)
-        hover = bool(option.state & QStyle.StateFlag.State_MouseOver)
 
-        # Background.
-        if selected or hover:
-            background_rect = rect.adjusted(6, 4, -6, -4)
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(palette.color(QPalette.ColorRole.AlternateBase))
-            painter.drawRoundedRect(background_rect, 8, 8)
+        # Background (same hover/selection as the templates list).
+        theme.paint_row_highlight(painter, QRectF(rect).adjusted(6, 4, -6, -4), option)
         # Bottom divider.
         painter.setPen(QPen(palette.color(QPalette.ColorRole.Mid), 1))
         painter.drawLine(rect.left(), rect.bottom(), rect.right(), rect.bottom())
 
         primary = palette.text().color()
-        secondary = _secondary_color(palette)
+        secondary = QColor(theme.secondary_text_hex(palette=palette, foreground_weight=0.62))
 
         # Avatar.
         avatar_x = rect.left() + _LEFT_MARGIN
         avatar_y = rect.top() + (rect.height() - _AVATAR_SIZE) // 2
-        self._paint_avatar(painter, avatar_x, avatar_y, conv.display_name)
+        theme.paint_avatar(painter, QRectF(avatar_x, avatar_y, _AVATAR_SIZE, _AVATAR_SIZE), conv.display_name)
 
         # Text block geometry.
         text_left = avatar_x + _AVATAR_SIZE + _GAP
@@ -111,7 +101,7 @@ class ConversationItemDelegate(QStyledItemDelegate):
         start_y = rect.top() + (rect.height() - block_h) // 2
 
         # --- Top line: name + time ---
-        time_text = self._fmt_time(conv.last_activity)
+        time_text = list_time_text(conv.last_activity)
         time_fm = QFontMetrics(self._time_font)
         time_w = time_fm.horizontalAdvance(time_text) if time_text else 0
         top_right = text_right - (time_w + _GAP if time_text else 0)
@@ -182,16 +172,6 @@ class ConversationItemDelegate(QStyledItemDelegate):
         painter.restore()
 
     # ------------------------------------------------------------------
-    def _paint_avatar(self, painter: QPainter, x: int, y: int, name: str) -> None:
-        color = QColor(theme.avatar_color(name))
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(color)
-        painter.drawEllipse(x, y, _AVATAR_SIZE, _AVATAR_SIZE)
-        painter.setFont(self._avatar_font)
-        painter.setPen(QColor("white"))
-        painter.drawText(QRect(x, y, _AVATAR_SIZE, _AVATAR_SIZE),
-                         int(Qt.AlignmentFlag.AlignCenter), theme.avatar_initials(name))
-
     def _paint_unread(self, painter: QPainter, count: int, right: int, y: int,
                       line_h: int, selected: bool, palette) -> int:
         text = str(count)
@@ -222,24 +202,3 @@ class ConversationItemDelegate(QStyledItemDelegate):
                 self._snippet_cache.clear()
             self._snippet_cache[key] = cached
         return cached
-
-    @staticmethod
-    def _fmt_time(ts: Optional[datetime]) -> str:
-        if not ts:
-            return ""
-        try:
-            return ts.strftime("%d/%m %H:%M")
-        except Exception:  # noqa: BLE001
-            return ""
-
-
-def _secondary_color(palette) -> QColor:
-    """Blend text over window (~0.6) to match theme.secondary_text_hex()."""
-    fg = palette.text().color()
-    bg = palette.window().color()
-    w = 0.62
-
-    def ch(a: int, b: int) -> int:
-        return round(b * (1.0 - w) + a * w)
-
-    return QColor(ch(fg.red(), bg.red()), ch(fg.green(), bg.green()), ch(fg.blue(), bg.blue()))

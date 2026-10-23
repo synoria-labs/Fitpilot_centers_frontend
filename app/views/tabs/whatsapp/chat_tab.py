@@ -19,6 +19,7 @@ from ....models.chat import ChatConversation, ChatMessage
 from ....services.whatsapp_chat_service import PAGE_SIZE
 from ....utils.dialog_helpers import show_error
 from . import theme
+from .theme import WaPalette
 from .avatar import Avatar
 from .chat_background_widget import ChatBackgroundWidget
 from .conversation_list_widget import ConversationListWidget
@@ -35,23 +36,23 @@ _MIN_VISIBLE_TARGET = 15
 _MAX_AUTOFILL_PAGES = 25
 
 
-def _style() -> str:
+def _style(pal: WaPalette) -> str:
     return f"""
 #chatTab {{ background-color: palette(window); }}
 #chatTab QSplitter::handle {{ background-color: palette(mid); width: 1px; }}
 #chatHeader {{
-    background-color: palette(window);
-    border-bottom: 1px solid {theme.DIVIDER};
+    background-color: {pal.header_bg};
+    border-bottom: 1px solid palette(mid);
 }}
-QLabel#headerName {{ color: {theme.TEXT_PRIMARY}; font-weight: bold; font-size: 14px; background: transparent; }}
-QLabel#headerSub {{ color: {theme.TEXT_SECONDARY}; font-size: 11px; background: transparent; }}
+QLabel#headerName {{ color: {pal.header_text}; font-weight: 600; font-size: 15px; background: transparent; }}
+QLabel#headerSub {{ color: {pal.text_secondary}; font-size: 12px; background: transparent; }}
 #chatActionButton {{
     background: transparent;
     border: none;
     border-radius: 17px;
     padding: 7px;
 }}
-#chatActionButton:hover {{ background-color: {theme.ITEM_HOVER}; }}
+#chatActionButton:hover {{ background-color: {pal.hover}; }}
 #emptyState {{ background-color: palette(window); }}
 QLabel#emptyIcon {{ font-size: 64px; background: transparent; }}
 QLabel#emptyTitle {{ color: palette(text); font-size: 20px; background: transparent; }}
@@ -59,10 +60,10 @@ QLabel#emptySub {{ color: {theme.secondary_text_hex()}; font-size: 13px; backgro
 """
 
 
-def _make_header_action(icon_name: str, tooltip: str) -> QToolButton:
+def _make_header_action(icon_name: str, tooltip: str, pal: WaPalette) -> QToolButton:
     button = QToolButton()
     button.setObjectName("chatActionButton")
-    button.setIcon(qta.icon(icon_name, color=theme.TEXT_PRIMARY))
+    button.setIcon(qta.icon(icon_name, color=pal.header_icon))
     button.setIconSize(QSize(18, 18))
     button.setFixedSize(36, 36)
     button.setToolTip(tooltip)
@@ -78,7 +79,10 @@ class ChatTab(QWidget):
         super().__init__()
         logger.info("Initializing ChatTab")
         self.setObjectName("chatTab")
-        self.setStyleSheet(_style())
+        # WhatsApp scheme of the conversation pane (bubbles, wallpaper, header, composer),
+        # following the app's light/dark palette.
+        self._pal = theme.app_palette()
+        self.setStyleSheet(_style(self._pal))
 
         chat_service = container.get("whatsapp_chat_service")
         self.controller = WhatsAppChatController(chat_service, self)
@@ -149,7 +153,7 @@ class ChatTab(QWidget):
         return page
 
     def _build_conversation_pane(self) -> QWidget:
-        pane = ChatBackgroundWidget()
+        pane = ChatBackgroundWidget(pal=self._pal)
         layout = QVBoxLayout(pane)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -193,17 +197,17 @@ class ChatTab(QWidget):
         name_box.addWidget(self._header_sub)
         h.addLayout(name_box, 1)
 
-        h.addWidget(_make_header_action("fa5s.search", "Proximamente: buscar en chat"))
-        h.addWidget(_make_header_action("fa5s.video", "Proximamente: videollamada"))
-        h.addWidget(_make_header_action("fa5s.phone-alt", "Proximamente: llamada"))
-        h.addWidget(_make_header_action("fa5s.ellipsis-v", "Proximamente: mas opciones"))
+        h.addWidget(_make_header_action("fa5s.search", "Proximamente: buscar en chat", self._pal))
+        h.addWidget(_make_header_action("fa5s.video", "Proximamente: videollamada", self._pal))
+        h.addWidget(_make_header_action("fa5s.phone-alt", "Proximamente: llamada", self._pal))
+        h.addWidget(_make_header_action("fa5s.ellipsis-v", "Proximamente: mas opciones", self._pal))
 
         layout.addWidget(header)
 
-        self.thread = MessageThreadWidget()
+        self.thread = MessageThreadWidget(pal=self._pal)
         layout.addWidget(self.thread, 1)
 
-        self.composer = ComposerWidget()
+        self.composer = ComposerWidget(pal=self._pal)
         layout.addWidget(self.composer)
         return pane
 
@@ -309,6 +313,7 @@ class ChatTab(QWidget):
         conv = self.conversation_list.get_conversation(conversation_id)
         if conv:
             self._update_header(conv)
+        self.thread.set_contact_name(conv.display_name if conv else "")
         self.composer.set_bot_enabled(conv.bot_enabled if conv else True)
         self.right_stack.setCurrentIndex(1)
         self.controller.load_messages(conversation_id)

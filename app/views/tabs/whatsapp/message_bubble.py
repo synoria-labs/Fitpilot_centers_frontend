@@ -1,53 +1,72 @@
-"""A single chat message bubble (WhatsApp-style)."""
+"""A single chat message bubble, drawn with the same pieces as the template preview."""
+import re
+from dataclasses import dataclass
+from typing import Optional
+
 import qtawesome as qta
-from PySide6.QtCore import Qt, QSize, QPoint, QTimer, Signal
+from PySide6.QtCore import QPoint, QRectF, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QGuiApplication, QKeySequence, QPainter
 from PySide6.QtWidgets import (
-    QWidget, QHBoxLayout, QVBoxLayout, QLabel, QFrame, QSizePolicy, QToolButton,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QMenu,
+    QSizePolicy,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
 )
 
 from ....models.chat import ChatMessage
 from . import theme
 from .media_widgets import MEDIA_BUBBLE_WIDTH, FailedMediaWidget, create_media_widget
-from .message_formatter import display_text_for_message, extract_useful_text
+from .message_formatter import clock_text, display_text_for_message, extract_useful_text, message_html
+from .theme import WaPalette
+from .wa_mockup import BUBBLE_TAIL, BubbleMeta, QuoteBox, ideal_text_width, paint_bubble
 
 # Quick reactions offered by the picker (same default set as official WhatsApp).
 QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"]
 
-_STYLE = f"""
-#bubbleIn {{
-    background-color: {theme.BUBBLE_IN};
-    border-top-left-radius: 2px;
-    border-top-right-radius: 8px;
-    border-bottom-left-radius: 8px;
-    border-bottom-right-radius: 8px;
-}}
-#bubbleOut {{
-    background-color: {theme.BUBBLE_OUT};
-    border-top-left-radius: 8px;
-    border-top-right-radius: 2px;
-    border-bottom-left-radius: 8px;
-    border-bottom-right-radius: 8px;
-}}
-#bubbleIn QLabel, #bubbleOut QLabel {{ color: {theme.TEXT_PRIMARY}; background: transparent; }}
-QLabel#bubbleText {{ font-size: 13px; }}
-QLabel#bubbleTime {{ color: {theme.TEXT_SECONDARY}; font-size: 10px; }}
+_SIDE_MARGIN = 20      # thread edge -> bubble tail
+_RUN_GAP = 1           # above a bubble that continues its sender's run
+_NEW_RUN_GAP = 7       # above the first bubble of a run (the one with the tail)
+_INSET = 3             # quote/media inset from the bubble edge, as in the preview
+_TEXT_INSET = 6        # on top of _INSET: text sits 9px from the edge
+_CONTENT_BOTTOM = 7    # text bottom -> bubble edge (the timestamp sits in it)
+_MAX_TEXT_WIDTH = 560
+
+# The invisible run that reserves the timestamp's room at the end of the text
+# (see wa_mockup.time_spacer_html): left out when the text is copied. ``\s`` also
+# matches the non-breaking spaces it is made of.
+_TIME_SPACER_RE = re.compile(r"\s{2,}\d{1,2}:\d{2}\s[ap]\.\s?m\.\s*$")
+
+
+@dataclass(frozen=True)
+class QuotedMessage:
+    """The message a reply quotes, as its quote box shows it."""
+
+    author: str
+    text: str
+    accent: str
+
+
+def _reaction_qss(pal: WaPalette) -> str:
+    return f"""
 QLabel#reactionPill {{
-    background-color: {theme.BG_PANEL};
-    color: {theme.TEXT_PRIMARY};
-    border: 1px solid {theme.DIVIDER};
-    border-radius: 9px;
-    padding: 1px 5px;
+    background-color: {pal.bubble_in};
+    color: {pal.text};
+    border: 2px solid {pal.wallpaper};
+    border-radius: 11px;
+    padding: 0 5px;
     font-size: 14px;
 }}
 QToolButton#reactButton {{
-    background-color: {theme.BG_PANEL};
-    border: 1px solid {theme.DIVIDER};
+    background-color: {pal.sheet_bg};
+    border: none;
     border-radius: 14px;
 }}
-QToolButton#reactButton:hover {{ background-color: {theme.ITEM_HOVER}; }}
+QToolButton#reactButton:hover {{ background-color: {pal.media_bg}; }}
 """
-
-_OUTER_MARGINS = (16, 4, 16, 4)
 
 
 class ReactionPicker(QFrame):
@@ -55,20 +74,21 @@ class ReactionPicker(QFrame):
 
     selected = Signal(str)  # chosen emoji; "" means remove the current reaction
 
-    def __init__(self, current: str = "", parent=None) -> None:
+    def __init__(self, current: str = "", parent=None, *, pal: Optional[WaPalette] = None) -> None:
         super().__init__(parent, Qt.WindowType.Popup)
+        pal = pal or theme.app_palette()
         self._current = (current or "").strip()
         self.setObjectName("reactionPicker")
         self.setStyleSheet(
             f"""
             #reactionPicker {{
-                background-color: {theme.BG_PANEL};
-                border: 1px solid {theme.DIVIDER};
+                background-color: {pal.sheet_bg};
+                border: 1px solid {pal.divider};
                 border-radius: 18px;
             }}
             QToolButton {{ background: transparent; border: none; border-radius: 14px; font-size: 18px; }}
-            QToolButton:hover {{ background-color: {theme.ITEM_HOVER}; }}
-            QToolButton#active {{ background-color: {theme.ITEM_SELECTED}; }}
+            QToolButton:hover {{ background-color: {pal.hover}; }}
+            QToolButton#active {{ background-color: {pal.media_bg}; }}
             """
         )
 
@@ -91,30 +111,144 @@ class ReactionPicker(QFrame):
         self.close()
 
 
+class _BubbleText(QLabel):
+    """Bubble text: WhatsApp formatting, selectable, links open in the browser. Copying
+    leaves out the invisible run that keeps the timestamp's room.
+
+    It asks for its unwrapped width (up to the bubble's maximum), so short messages hug
+    their text with the timestamp on the same line, as in WhatsApp, and only long ones
+    wrap; a narrow chat still squeezes it (QLabel's own minimum applies)."""
+
+    _MIN_WIDTH = 60
+
+    def __init__(self, html_text: str, pal: WaPalette, max_width: int, parent=None) -> None:
+        super().__init__(parent)
+        self._hovered_link = ""
+        self._max_width = max_width
+        self._ideal_width: Optional[int] = None
+        self.setObjectName("bubbleText")
+        self.setTextFormat(Qt.TextFormat.RichText)
+        self.setWordWrap(True)
+        self.setOpenExternalLinks(True)
+        self.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse | Qt.TextInteractionFlag.LinksAccessibleByMouse
+        )
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+        font = self.font()
+        font.setPixelSize(14)
+        self.setFont(font)
+        self.setStyleSheet(f"color: {pal.text}; background: transparent;")
+        self.setText(html_text)
+        self.linkHovered.connect(self._on_link_hovered)
+
+    def sizeHint(self) -> QSize:  # noqa: N802 (Qt override)
+        if self._ideal_width is None:
+            self._ideal_width = ideal_text_width(self)
+        width = max(self._MIN_WIDTH, min(self._max_width, self._ideal_width))
+        return QSize(width, self.heightForWidth(width))
+
+    def copy_selection(self) -> None:
+        text = self.selectedText().replace(" ", "\n").replace(" ", "\n")
+        QGuiApplication.clipboard().setText(_TIME_SPACER_RE.sub("", text).replace(" ", " "))
+
+    def _on_link_hovered(self, link: str) -> None:
+        self._hovered_link = link
+
+    def keyPressEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        if event.matches(QKeySequence.StandardKey.Copy) and self.hasSelectedText():
+            self.copy_selection()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def contextMenuEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        menu = QMenu(self)
+        copy = menu.addAction("Copiar")
+        copy.setEnabled(self.hasSelectedText())
+        copy.triggered.connect(self.copy_selection)
+        if self._hovered_link:
+            link = self._hovered_link
+            menu.addAction("Copiar enlace").triggered.connect(
+                lambda: QGuiApplication.clipboard().setText(link)
+            )
+        menu.exec(event.globalPos())
+
+
+class _BubbleFrame(QFrame):
+    """The bubble: painted by the preview's painter, with a column for the tail on its side
+    (kept even without the tail, so the bubbles of a run line up) and the timestamp
+    overlaid at the bottom-right."""
+
+    def __init__(self, pal: WaPalette, *, outgoing: bool, tail: bool, parent=None) -> None:
+        super().__init__(parent)
+        self._pal = pal
+        self._outgoing = outgoing
+        self._tail = tail
+        self.meta: Optional[BubbleMeta] = None
+        self.meta_bottom = _CONTENT_BOTTOM
+
+    def body_rect(self) -> QRectF:
+        left = 0 if self._outgoing else BUBBLE_TAIL
+        return QRectF(left, 0, self.width() - BUBBLE_TAIL, self.height() - 1)
+
+    def place_meta(self) -> None:
+        if self.meta is None:
+            return
+        body = self.body_rect()
+        x = body.right() - _INSET - _TEXT_INSET - self.meta.width()
+        y = self.height() - 1 - self.meta_bottom + 1 - self.meta.height()
+        self.meta.move(int(x), int(y))
+        self.meta.raise_()
+
+    def paintEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        color = self._pal.bubble_out if self._outgoing else self._pal.bubble_in
+        side = ("right" if self._outgoing else "left") if self._tail else None
+        paint_bubble(painter, self.body_rect(), color, self._pal.shadow, tail=side)
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        super().resizeEvent(event)
+        self.place_meta()
+
+
 class MessageBubble(QWidget):
     retry_requested = Signal(int)         # message id (failed media download)
     reaction_requested = Signal(str, str)  # target wa_message_id, emoji ("" removes)
 
-    _PILL_OVERHANG = 12  # px the reaction pill hangs below the bubble's bottom edge
+    _PILL_OVERHANG = 14  # px the reaction pill hangs below the bubble's bottom edge
     _PILL_INSET = 8      # px the pill is pulled over the bubble's inner corner
 
-    def __init__(self, message: ChatMessage, parent=None) -> None:
+    def __init__(
+        self,
+        message: ChatMessage,
+        parent=None,
+        *,
+        pal: Optional[WaPalette] = None,
+        tail: bool = True,
+        quote: Optional[QuotedMessage] = None,
+    ) -> None:
         super().__init__(parent)
         self.message_id = message.id
         self.wa_message_id = message.wa_message_id
+        self.has_tail = tail
+        self.quote = quote
+        self._pal = pal or theme.app_palette()
         self._is_inbound = message.is_inbound
+        self._outer_margins = (_SIDE_MARGIN, _NEW_RUN_GAP if tail else _RUN_GAP, _SIDE_MARGIN, 1)
         self._outer = None
         self._bubble_frame = None
         self._reaction_pill = None
         self._react_button = None
         self._reaction_picker = None
         self._own_emoji = ""
-        self.setStyleSheet(_STYLE)
+        self.setStyleSheet(_reaction_qss(self._pal))
         self._build(message)
 
     def _build(self, message: ChatMessage) -> None:
+        pal = self._pal
         outer = QHBoxLayout(self)
-        outer.setContentsMargins(*_OUTER_MARGINS)
+        outer.setContentsMargins(*self._outer_margins)
         outer.setSpacing(0)
         self._outer = outer
 
@@ -123,50 +257,66 @@ class MessageBubble(QWidget):
         # instead of stretching the bubble and leaving air to the image's right.
         has_inline_image = message.media is not None and message.media.media_type == "image"
 
-        bubble = QFrame()
+        bubble = _BubbleFrame(pal, outgoing=not message.is_inbound, tail=self.has_tail)
         bubble.setObjectName("bubbleIn" if message.is_inbound else "bubbleOut")
-        bubble.setMaximumWidth(MEDIA_BUBBLE_WIDTH + 20 if has_inline_image else 560)
+        content_width = MEDIA_BUBBLE_WIDTH if has_inline_image else _MAX_TEXT_WIDTH
+        bubble.setMaximumWidth(content_width + 2 * _INSET + BUBBLE_TAIL)
         bubble.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Preferred)
         self._bubble_frame = bubble
 
+        tail_left = 0 if not message.is_inbound else BUBBLE_TAIL
+        tail_right = BUBBLE_TAIL if not message.is_inbound else 0
         v = QVBoxLayout(bubble)
-        v.setContentsMargins(10, 7, 10, 6)
-        v.setSpacing(3)
+        v.setSpacing(0)
 
-        media_widget = create_media_widget(message, bubble)
+        if self.quote is not None:
+            v.addWidget(
+                QuoteBox(
+                    self.quote.author,
+                    self.quote.text,
+                    None,
+                    pal,
+                    background=pal.quote_in_bg if message.is_inbound else pal.quote_bg,
+                    accent=self.quote.accent,
+                )
+            )
+
+        media_widget = create_media_widget(message, bubble, pal)
         if media_widget is not None:
             if isinstance(media_widget, FailedMediaWidget):
                 media_widget.retry_requested.connect(self.retry_requested.emit)
+            if self.quote is not None:
+                v.addSpacing(_INSET)
             v.addWidget(media_widget)
 
+        meta = BubbleMeta(
+            pal,
+            outgoing=not message.is_inbound,
+            checks_color=pal.meta_out if not message.is_inbound else None,
+            parent=bubble,
+        )
+        meta.set_text(self._fmt_time(message))
+        bubble.meta = meta
+
         text = self._render_text(message, has_media=media_widget is not None)
+        bubble_color = pal.bubble_in if message.is_inbound else pal.bubble_out
         if text:
-            text_label = QLabel(text)
-            text_label.setObjectName("bubbleText")
-            text_label.setTextFormat(Qt.TextFormat.PlainText)
-            text_label.setWordWrap(True)
-            text_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-            text_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
-            text_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-            v.addWidget(text_label)
-
-        meta = QHBoxLayout()
-        meta.setContentsMargins(0, 0, 0, 0)
-        meta.setSpacing(4)
-        meta.addStretch()
-
-        time_label = QLabel(self._fmt_time(message))
-        time_label.setObjectName("bubbleTime")
-        meta.addWidget(time_label)
-
-        if not message.is_inbound:
-            check_label = QLabel()
-            check_label.setPixmap(
-                qta.icon("fa5s.check-double", color="#8bd9d0").pixmap(QSize(14, 10))
+            label = _BubbleText(
+                message_html(text, pal, clickable_links=True) + meta.spacer_html(bubble_color),
+                pal,
+                content_width,
             )
-            meta.addWidget(check_label)
-
-        v.addLayout(meta)
+            label.setContentsMargins(_TEXT_INSET, 4, _TEXT_INSET, 0)
+            v.addWidget(label)
+            bottom = _CONTENT_BOTTOM
+        else:
+            # Media alone: the timestamp gets its own strip under it.
+            strip = QWidget()
+            strip.setFixedHeight(meta.height() + 2)
+            v.addWidget(strip)
+            bottom = 2
+        bubble.meta_bottom = bottom
+        v.setContentsMargins(tail_left + _INSET, _INSET, tail_right + _INSET, bottom + 1)
 
         if message.is_inbound:
             outer.addWidget(bubble, 0, Qt.AlignmentFlag.AlignLeft)
@@ -185,13 +335,7 @@ class MessageBubble(QWidget):
 
     @staticmethod
     def _fmt_time(message: ChatMessage) -> str:
-        ts = message.timestamp
-        if not ts:
-            return ""
-        try:
-            return ts.strftime("%d/%m %H:%M")
-        except Exception:  # noqa: BLE001
-            return ""
+        return clock_text(message.timestamp) if message.timestamp else ""
 
     # ------------------------------------------------------------------
     # Reactions (badge pill + send affordance)
@@ -231,16 +375,23 @@ class MessageBubble(QWidget):
     def _update_reaction_margin(self, *, active: bool) -> None:
         if self._outer is None:
             return
-        left, top, right, bottom = _OUTER_MARGINS
+        left, top, right, bottom = self._outer_margins
         if active:
             bottom += self._PILL_OVERHANG
         self._outer.setContentsMargins(left, top, right, bottom)
+
+    def _body_geometry(self):
+        """The painted bubble (the frame minus its tail column), in this widget's coordinates."""
+        geo = self._bubble_frame.geometry()
+        if self._is_inbound:
+            return geo.adjusted(BUBBLE_TAIL, 0, 0, 0)
+        return geo.adjusted(0, 0, -BUBBLE_TAIL, 0)
 
     def _position_reaction_pill(self) -> None:
         pill = self._reaction_pill
         if pill is None or self._bubble_frame is None:
             return
-        geo = self._bubble_frame.geometry()
+        geo = self._body_geometry()
         if geo.width() <= 0:
             return
         pw, ph = pill.width(), pill.height()
@@ -257,8 +408,8 @@ class MessageBubble(QWidget):
             return
         button = QToolButton(self)
         button.setObjectName("reactButton")
-        button.setIcon(qta.icon("fa5s.smile", color=theme.TEXT_SECONDARY))
-        button.setIconSize(QSize(16, 16))
+        button.setIcon(qta.icon("mdi6.emoticon-happy-outline", color=self._pal.header_icon))
+        button.setIconSize(QSize(18, 18))
         button.setFixedSize(28, 28)
         button.setCursor(Qt.CursorShape.PointingHandCursor)
         button.setToolTip("Reaccionar")
@@ -270,12 +421,12 @@ class MessageBubble(QWidget):
         button = self._react_button
         if button is None or self._bubble_frame is None:
             return
-        geo = self._bubble_frame.geometry()
+        geo = self._body_geometry()
         if geo.width() <= 0:
             return
         bw, bh = button.width(), button.height()
         y = geo.top() + max(0, (geo.height() - bh) // 2)
-        gap = 4
+        gap = 6
         if self._is_inbound:
             x = geo.right() + gap
         else:
@@ -285,7 +436,7 @@ class MessageBubble(QWidget):
     def _open_reaction_picker(self) -> None:
         if not self.wa_message_id:
             return
-        picker = ReactionPicker(current=self._own_emoji, parent=self)
+        picker = ReactionPicker(current=self._own_emoji, parent=self, pal=self._pal)
         self._reaction_picker = picker  # keep a reference so it isn't GC'd while open
         picker.selected.connect(self._on_reaction_chosen)
         picker.adjustSize()
