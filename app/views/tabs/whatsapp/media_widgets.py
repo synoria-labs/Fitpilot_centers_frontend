@@ -14,8 +14,8 @@ import asyncio
 from typing import List, Optional
 
 import qtawesome as qta
-from PySide6.QtCore import QSize, Qt, QUrl, Signal
-from PySide6.QtGui import QDesktopServices, QImageReader, QPixmap
+from PySide6.QtCore import QRectF, QSize, Qt, QUrl, Signal
+from PySide6.QtGui import QDesktopServices, QImageReader, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QDialog,
     QFrame,
@@ -34,7 +34,9 @@ from ....services.media_loader import get_media_loader
 from ....services.voice_note_converter import compute_waveform_bars
 from ....threads.asyncio_executor import get_global_executor
 from . import theme
+from .theme import WaPalette
 from .voice_waveform_widget import PlaybackWaveformWidget
+from .wa_mockup import cover_pixmap, paint_pixmap_rounded
 
 logger = get_logger(__name__)
 
@@ -51,6 +53,7 @@ except ImportError:  # pragma: no cover - environment dependent
 MEDIA_BUBBLE_WIDTH = 320
 _IMAGE_MAX_HEIGHT = 420
 _STICKER_MAX = 160
+_IMAGE_RADIUS = 6.0  # photo corners inside the bubble, as the preview's media
 
 # Number of bars rendered in an audio bubble's waveform.
 _WAVEFORM_BARS = 48
@@ -96,7 +99,9 @@ def _media_type_label(media_type: str) -> str:
     return theme.MEDIA_LABELS.get(media_type, media_type or "archivo")
 
 
-def create_media_widget(message: ChatMessage, parent: Optional[QWidget] = None) -> Optional[QWidget]:
+def create_media_widget(
+    message: ChatMessage, parent: Optional[QWidget] = None, pal: Optional[WaPalette] = None
+) -> Optional[QWidget]:
     """Build the widget for a message attachment, or None for plain text.
 
     Renders for media-typed messages and for any message that carries an
@@ -105,43 +110,47 @@ def create_media_widget(message: ChatMessage, parent: Optional[QWidget] = None) 
     if not message.is_media and not message.media:
         return None
 
+    pal = pal or theme.app_palette()
     media_type = message.media.media_type if message.media else message.message_type
 
     if message.media_failed:
-        return FailedMediaWidget(message.id, media_type, parent)
+        return FailedMediaWidget(message.id, media_type, parent, pal=pal)
     if message.media_pending or not (message.media and message.media.absolute_url):
-        return PendingMediaWidget(media_type, parent)
+        return PendingMediaWidget(media_type, parent, pal=pal)
 
     if media_type in ("image", "sticker"):
         if media_type == "sticker" and not _webp_supported():
             # Frozen builds may miss the qwebp image plugin.
-            return FileCardWidget(message, parent)
-        return ImageMediaWidget(message, parent)
+            return FileCardWidget(message, parent, pal=pal)
+        return ImageMediaWidget(message, parent, pal=pal)
     if media_type == "audio":
         if not _MULTIMEDIA_AVAILABLE:
-            return FileCardWidget(message, parent)
-        return AudioMediaWidget(message, parent)
-    return FileCardWidget(message, parent)
+            return FileCardWidget(message, parent, pal=pal)
+        return AudioMediaWidget(message, parent, pal=pal)
+    return FileCardWidget(message, parent, pal=pal)
 
 
 class PendingMediaWidget(QFrame):
     """Placeholder while the backend is still downloading the attachment."""
 
-    def __init__(self, media_type: str, parent: Optional[QWidget] = None) -> None:
+    def __init__(
+        self, media_type: str, parent: Optional[QWidget] = None, *, pal: Optional[WaPalette] = None
+    ) -> None:
         super().__init__(parent)
+        pal = pal or theme.app_palette()
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(4, 8, 4, 8)
+        layout.setContentsMargins(6, 8, 6, 8)
         layout.setSpacing(8)
 
         icon_label = QLabel()
         icon_label.setPixmap(
-            qta.icon("fa5s.clock", color=theme.TEXT_SECONDARY).pixmap(QSize(18, 18))
+            qta.icon("fa5s.clock", color=pal.text_secondary).pixmap(QSize(18, 18))
         )
         layout.addWidget(icon_label)
 
         label_text = _media_type_label(media_type).split(" ", 1)[-1].lower()
         text = QLabel(f"Recibiendo {label_text}...")
-        text.setStyleSheet(f"color: {theme.TEXT_SECONDARY}; font-size: 12px;")
+        text.setStyleSheet(f"color: {pal.text_secondary}; font-size: 12px; background: transparent;")
         layout.addWidget(text)
         layout.addStretch()
 
@@ -151,10 +160,18 @@ class FailedMediaWidget(QFrame):
 
     retry_requested = Signal(int)  # message id
 
-    def __init__(self, message_id: int, media_type: str, parent: Optional[QWidget] = None) -> None:
+    def __init__(
+        self,
+        message_id: int,
+        media_type: str,
+        parent: Optional[QWidget] = None,
+        *,
+        pal: Optional[WaPalette] = None,
+    ) -> None:
         super().__init__(parent)
+        pal = pal or theme.app_palette()
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(4, 8, 4, 8)
+        layout.setContentsMargins(6, 8, 6, 8)
         layout.setSpacing(8)
 
         icon_label = QLabel()
@@ -165,7 +182,7 @@ class FailedMediaWidget(QFrame):
 
         label_text = _media_type_label(media_type).split(" ", 1)[-1].lower()
         text = QLabel(f"No se pudo descargar el {label_text}.")
-        text.setStyleSheet(f"color: {theme.TEXT_SECONDARY}; font-size: 12px;")
+        text.setStyleSheet(f"color: {pal.text_secondary}; font-size: 12px; background: transparent;")
         layout.addWidget(text)
 
         retry = QPushButton("Reintentar")
@@ -173,7 +190,7 @@ class FailedMediaWidget(QFrame):
         retry.setStyleSheet(
             f"QPushButton {{ color: {theme.ACCENT}; background: transparent;"
             f" border: 1px solid {theme.ACCENT}; border-radius: 4px; padding: 2px 10px; }}"
-            f"QPushButton:hover {{ background-color: {theme.ITEM_SELECTED}; }}"
+            f"QPushButton:hover {{ background-color: {pal.media_bg}; }}"
         )
         retry.clicked.connect(lambda: self.retry_requested.emit(message_id))
         layout.addWidget(retry)
@@ -181,16 +198,22 @@ class FailedMediaWidget(QFrame):
 
 
 class ImageMediaWidget(QLabel):
-    """Inline thumbnail for images/stickers; click opens a full-size viewer."""
+    """Inline photo (rounded like the preview's media) or sticker; click opens a viewer."""
 
-    def __init__(self, message: ChatMessage, parent: Optional[QWidget] = None) -> None:
+    def __init__(
+        self, message: ChatMessage, parent: Optional[QWidget] = None, *, pal: Optional[WaPalette] = None
+    ) -> None:
         super().__init__(parent)
+        pal = pal or theme.app_palette()
         self._media = message.media
         self._pixmap: Optional[QPixmap] = None
+        self._cover: Optional[QPixmap] = None
         self._is_sticker = self._media.media_type == "sticker"
 
         self.setText("Cargando imagen...")
-        self.setStyleSheet(f"color: {theme.TEXT_SECONDARY}; font-size: 12px; padding: 12px;")
+        self.setStyleSheet(
+            f"color: {pal.text_secondary}; font-size: 12px; padding: 12px; background: transparent;"
+        )
         self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
 
         self._handle = get_media_loader().fetch(self._media.absolute_url)
@@ -209,20 +232,34 @@ class ImageMediaWidget(QLabel):
         else:
             # Photos fill the bubble width; only very tall images are capped.
             bound_w, bound_h = MEDIA_BUBBLE_WIDTH, _IMAGE_MAX_HEIGHT
-        scaled = pixmap.scaled(
-            bound_w,
-            bound_h,
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation,
-        )
-        self.setPixmap(scaled)
-        self.setStyleSheet("padding: 0;")
+        self.setText("")
+        self.setStyleSheet("padding: 0; background: transparent;")
+        self.setFixedSize(pixmap.size().scaled(bound_w, bound_h, Qt.AspectRatioMode.KeepAspectRatio))
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setToolTip("Clic para ampliar")
+        self.update()
 
     def _on_failed(self, error: str) -> None:
         logger.warning("No se pudo mostrar la imagen %s: %s", self._media.absolute_url, error)
         self.setText("No se pudo cargar la imagen.")
+
+    def paintEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        if self._pixmap is None:
+            super().paintEvent(event)
+            return
+        # Scaled once per size to device pixels, so photos stay sharp on HiDPI screens.
+        dpr = self.devicePixelRatioF()
+        target = QSize(max(1, round(self.width() * dpr)), max(1, round(self.height() * dpr)))
+        if self._cover is None or self._cover.size() != target:
+            self._cover = cover_pixmap(self._pixmap, target)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        rect = QRectF(self.rect())
+        if self._is_sticker:
+            painter.drawPixmap(rect, self._cover, QRectF(self._cover.rect()))
+        else:
+            paint_pixmap_rounded(painter, self._cover, rect, (_IMAGE_RADIUS,) * 4, dpr)
 
     def mousePressEvent(self, event) -> None:  # noqa: N802 (Qt override)
         if self._pixmap is not None and event.button() == Qt.MouseButton.LeftButton:
@@ -267,8 +304,11 @@ class AudioMediaWidget(QFrame):
     """Inline audio player (voice notes). Falls back to the system player when
     the platform backend cannot decode the codec (e.g. ogg/opus on WMF)."""
 
-    def __init__(self, message: ChatMessage, parent: Optional[QWidget] = None) -> None:
+    def __init__(
+        self, message: ChatMessage, parent: Optional[QWidget] = None, *, pal: Optional[WaPalette] = None
+    ) -> None:
         super().__init__(parent)
+        self._pal = pal or theme.app_palette()
         self._media = message.media
         self._path: Optional[str] = None
         self._player: Optional[QMediaPlayer] = None
@@ -277,17 +317,17 @@ class AudioMediaWidget(QFrame):
         self._waveform_signals = None  # kept alive while the decode runs
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(4, 6, 4, 6)
+        layout.setContentsMargins(4, 6, 6, 6)
         layout.setSpacing(8)
 
         self._play_button = QToolButton()
-        self._play_button.setIcon(qta.icon("fa5s.play", color=theme.TEXT_PRIMARY))
+        self._play_button.setIcon(qta.icon("fa5s.play", color=self._pal.text))
         self._play_button.setIconSize(QSize(16, 16))
         self._play_button.setFixedSize(32, 32)
         self._play_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self._play_button.setEnabled(False)
         self._play_button.setStyleSheet(
-            f"QToolButton {{ background-color: {theme.ITEM_SELECTED}; border-radius: 16px; }}"
+            f"QToolButton {{ background-color: {self._pal.media_bg}; border-radius: 16px; }}"
         )
         self._play_button.clicked.connect(self._toggle_playback)
         layout.addWidget(self._play_button)
@@ -298,7 +338,9 @@ class AudioMediaWidget(QFrame):
         layout.addWidget(self._waveform, 1)
 
         self._time_label = QLabel("--:--")
-        self._time_label.setStyleSheet(f"color: {theme.TEXT_SECONDARY}; font-size: 11px;")
+        self._time_label.setStyleSheet(
+            f"color: {self._pal.text_secondary}; font-size: 11px; background: transparent;"
+        )
         layout.addWidget(self._time_label)
 
         self._fallback_button = QPushButton("Abrir con el reproductor del sistema")
@@ -363,7 +405,7 @@ class AudioMediaWidget(QFrame):
     def _on_state_changed(self, state) -> None:
         playing = state == QMediaPlayer.PlaybackState.PlayingState
         icon = "fa5s.pause" if playing else "fa5s.play"
-        self._play_button.setIcon(qta.icon(icon, color=theme.TEXT_PRIMARY))
+        self._play_button.setIcon(qta.icon(icon, color=self._pal.text))
 
     def _on_duration_changed(self, duration: int) -> None:
         self._duration_ms = max(0, duration)
@@ -408,14 +450,17 @@ class FileCardWidget(QFrame):
     large), with the card itself reflecting the download state.
     """
 
-    def __init__(self, message: ChatMessage, parent: Optional[QWidget] = None) -> None:
+    def __init__(
+        self, message: ChatMessage, parent: Optional[QWidget] = None, *, pal: Optional[WaPalette] = None
+    ) -> None:
         super().__init__(parent)
+        pal = pal or theme.app_palette()
         self._media = message.media
         self._downloading = False
 
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setStyleSheet(
-            f"FileCardWidget {{ background-color: {theme.ITEM_SELECTED}; border-radius: 6px; }}"
+            f"FileCardWidget {{ background-color: {pal.doc_bg}; border-radius: 6px; }}"
         )
 
         layout = QHBoxLayout(self)
@@ -427,7 +472,7 @@ class FileCardWidget(QFrame):
             _FILE_ICONS.get(self._media.media_type, "fa5s.file"),
         )
         icon_label = QLabel()
-        icon_label.setPixmap(qta.icon(icon_name, color=theme.TEXT_PRIMARY).pixmap(QSize(26, 26)))
+        icon_label.setPixmap(qta.icon(icon_name, color=pal.text).pixmap(QSize(26, 26)))
         layout.addWidget(icon_label)
 
         text_column = QVBoxLayout()
@@ -435,12 +480,14 @@ class FileCardWidget(QFrame):
 
         name = self._media.filename or _media_type_label(self._media.media_type)
         name_label = QLabel(name)
-        name_label.setStyleSheet(f"color: {theme.TEXT_PRIMARY}; font-size: 12px;")
+        name_label.setStyleSheet(f"color: {pal.text}; font-size: 12px; background: transparent;")
         name_label.setWordWrap(True)
         text_column.addWidget(name_label)
 
         self._status_label = QLabel(_human_size(self._media.file_size) or "Clic para abrir")
-        self._status_label.setStyleSheet(f"color: {theme.TEXT_SECONDARY}; font-size: 11px;")
+        self._status_label.setStyleSheet(
+            f"color: {pal.text_secondary}; font-size: 11px; background: transparent;"
+        )
         text_column.addWidget(self._status_label)
         layout.addLayout(text_column, 1)
 

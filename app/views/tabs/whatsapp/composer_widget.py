@@ -1,4 +1,9 @@
-"""Message composer (text input + attach button + voice recorder + send button)."""
+"""Message composer (text input + attach button + voice recorder + send button).
+
+Drawn like the template preview's WhatsApp composer — a floating pill in the scheme's
+colors and one round button that records while the field is empty and sends once there
+is text — with that round button in FitPilot blue.
+"""
 import qtawesome as qta
 from PySide6.QtCore import Signal, QSize, QPoint, Qt, QEvent
 from PySide6.QtGui import QPalette
@@ -17,13 +22,16 @@ from . import theme
 from ...input_glow import set_neon_glow
 from .attachment_preview_dialog import AttachmentPreviewDialog, FILE_DIALOG_FILTER
 from .emoji_picker import EmojiPicker
+from .theme import WaPalette
 from .voice_note_recorder import VoiceNoteRecorder
 from .voice_waveform_widget import VoiceWaveformWidget
 
-_STYLE = f"""
+
+def _style(pal: WaPalette) -> str:
+    return f"""
 #composer {{ background: transparent; }}
 #composerPill {{
-    background-color: palette(base);
+    background-color: {pal.composer_bg};
     border: 1px solid transparent;
     border-radius: 22px;
 }}
@@ -31,28 +39,28 @@ _STYLE = f"""
 #composerPill[focused="true"] {{ border: 1px solid {theme.ACCENT}; }}
 #composerInput {{
     background: transparent;
-    color: palette(text);
+    color: {pal.text};
     border: none;
     padding: 0 4px;
     min-height: 38px;
     max-height: 38px;
-    font-size: 13px;
+    font-size: 14px;
     selection-background-color: {theme.ACCENT};
     selection-color: #0b141a;
-    placeholder-text-color: palette(placeholder-text);
+    placeholder-text-color: {pal.text_secondary};
 }}
-#composerInput::placeholder {{ color: palette(placeholder-text); }}
+#composerInput::placeholder {{ color: {pal.text_secondary}; }}
 #composerIconButton {{
     background: transparent;
-    color: {theme.TEXT_PRIMARY};
+    color: {pal.composer_icon};
     border: none;
     border-radius: 18px;
     padding: 7px;
 }}
-#composerIconButton:hover {{ background-color: palette(alternate-base); }}
+#composerIconButton:hover {{ background-color: {pal.hover}; }}
 #composerIconButton:disabled {{ background: transparent; color: palette(mid); }}
 #recordingBar {{
-    background-color: palette(base);
+    background-color: {pal.composer_bg};
     border: 1px solid {theme.ACCENT};
     border-radius: 22px;
     min-height: 44px;
@@ -67,7 +75,7 @@ QLabel#recordingDot {{
     max-height: 8px;
 }}
 QLabel#recordingTime {{
-    color: {theme.TEXT_PRIMARY};
+    color: {pal.text};
     background: transparent;
     font-size: 13px;
     min-width: 38px;
@@ -78,7 +86,7 @@ QLabel#recordingTime {{
     border-radius: 18px;
     padding: 7px;
 }}
-#composerPauseButton:hover {{ background-color: palette(alternate-base); }}
+#composerPauseButton:hover {{ background-color: {pal.hover}; }}
 #composerPauseButton:disabled {{
     background: transparent;
     color: palette(mid);
@@ -98,6 +106,7 @@ QLabel#recordingTime {{
     padding: 8px;
 }}
 #composerSend:hover {{ background-color: {theme.ACCENT_STRONG_HOVER}; }}
+#composerSend:pressed {{ background-color: {theme.ACCENT_STRONG_PRESSED}; }}
 #composerSend:disabled {{
     background-color: palette(mid);
     color: palette(window);
@@ -118,14 +127,16 @@ class ComposerWidget(QWidget):
         parent=None,
         *,
         voice_recorder: VoiceNoteRecorder | None = None,
+        pal: WaPalette | None = None,
     ) -> None:
         super().__init__(parent)
+        self._pal = pal or theme.app_palette()
         self.setObjectName("composer")
         # A plain QWidget only paints its stylesheet background-color when
         # WA_StyledBackground is set; without this the bar wouldn't take the
         # palette(window) color (same as the chat area).
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setStyleSheet(_STYLE)
+        self.setStyleSheet(_style(self._pal))
         self._emoji_picker = None  # lazily created, reused across openings
         # Estado del halo neon de la pill (se activa en hover o focus del input).
         self._pill_hover = False
@@ -158,7 +169,7 @@ class ComposerWidget(QWidget):
 
         self.attach_button = QToolButton()
         self.attach_button.setObjectName("composerIconButton")
-        self.attach_button.setIcon(qta.icon("fa5s.plus", color=theme.TEXT_PRIMARY))
+        self.attach_button.setIcon(qta.icon("fa5s.plus", color=self._pal.composer_icon))
         self.attach_button.setIconSize(QSize(18, 18))
         self.attach_button.setFixedSize(36, 36)
         self.attach_button.setToolTip("Adjuntar archivo")
@@ -168,7 +179,7 @@ class ComposerWidget(QWidget):
 
         self.emoji_button = QToolButton()
         self.emoji_button.setObjectName("composerIconButton")
-        self.emoji_button.setIcon(qta.icon("fa5s.smile", color=theme.TEXT_PRIMARY))
+        self.emoji_button.setIcon(qta.icon("fa5s.smile", color=self._pal.composer_icon))
         self.emoji_button.setIconSize(QSize(18, 18))
         self.emoji_button.setFixedSize(36, 36)
         self.emoji_button.setToolTip("Emojis")
@@ -246,25 +257,18 @@ class ComposerWidget(QWidget):
         self.pill.installEventFilter(self)  # hover de la pill -> halo neon
         pill_layout.addWidget(self.input, 1)
 
-        self.mic_button = QToolButton()
-        self.mic_button.setObjectName("composerIconButton")
-        self.mic_button.setIcon(qta.icon("fa5s.microphone", color=theme.TEXT_PRIMARY))
-        self.mic_button.setIconSize(QSize(18, 18))
-        self.mic_button.setFixedSize(36, 36)
-        self.mic_button.setToolTip("Grabar nota de voz")
-        self.mic_button.setAutoRaise(True)
-        self.mic_button.clicked.connect(self._start_voice_recording)
-        pill_layout.addWidget(self.mic_button)
-
+        # One round button, as in WhatsApp: records a voice note while the field is
+        # empty and sends once there is text.
         self.send_button = QToolButton()
         self.send_button.setObjectName("composerSend")
-        self.send_button.setIcon(qta.icon("fa5s.paper-plane", color="#ffffff"))
         self.send_button.setIconSize(QSize(17, 17))
         self.send_button.setFixedSize(40, 40)
-        self.send_button.setToolTip("Enviar")
-        self.send_button.setCursor(self.send_button.cursor())
-        self.send_button.clicked.connect(self._emit)
+        self.send_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.send_button.clicked.connect(self._on_send_button_clicked)
         layout.addWidget(self.send_button)
+        self._send_mode = None
+        self.input.textChanged.connect(self._update_send_button)
+        self._update_send_button()
 
     def set_enabled(self, enabled: bool) -> None:
         self.input.setEnabled(enabled)
@@ -272,7 +276,6 @@ class ComposerWidget(QWidget):
         self.attach_button.setEnabled(enabled)
         self.emoji_button.setEnabled(enabled)
         self.bot_button.setEnabled(enabled)
-        self.mic_button.setEnabled(enabled)
         self.pause_recording_button.setEnabled(enabled)
         self.cancel_recording_button.setEnabled(enabled)
         self.send_recording_button.setEnabled(enabled)
@@ -310,6 +313,22 @@ class ComposerWidget(QWidget):
         if text:
             self.send_requested.emit(text)
             self.input.clear()
+
+    def _on_send_button_clicked(self) -> None:
+        if self.input.text().strip():
+            self._emit()
+        else:
+            self._start_voice_recording()
+
+    def _update_send_button(self, *_args) -> None:
+        sends = bool(self.input.text().strip())
+        if sends == self._send_mode:
+            return
+        self._send_mode = sends
+        self.send_button.setIcon(
+            qta.icon("fa5s.paper-plane" if sends else "fa5s.microphone", color="#ffffff")
+        )
+        self.send_button.setToolTip("Enviar" if sends else "Grabar nota de voz")
 
     def _on_attach_clicked(self) -> None:
         file_path, _ = QFileDialog.getOpenFileName(
@@ -448,14 +467,14 @@ class ComposerWidget(QWidget):
 
     def _update_pause_button(self) -> None:
         icon_name = "fa5s.play" if self._recording_paused else "fa5s.pause"
-        color = theme.ACCENT if self._recording_paused else theme.TEXT_PRIMARY
+        color = theme.ACCENT if self._recording_paused else self._pal.composer_icon
         self.pause_recording_button.setIcon(qta.icon(icon_name, color=color))
         self.pause_recording_button.setToolTip(
             "Reanudar nota de voz" if self._recording_paused else "Pausar nota de voz"
         )
 
     def _set_recording_dot_paused(self, paused: bool) -> None:
-        color = theme.TEXT_SECONDARY if paused else "#ff5c5c"
+        color = self._pal.text_secondary if paused else "#ff5c5c"
         self.recording_dot.setStyleSheet(f"background-color: {color};")
 
     def _set_recording_mode(self, recording: bool) -> None:
