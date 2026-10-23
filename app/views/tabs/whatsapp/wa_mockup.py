@@ -1045,6 +1045,10 @@ class ButtonRow(QWidget):
 
     activated = Signal(object)  # the button dict
 
+    _ICON = 18
+    _GAP = 8
+    _PAD = 16
+
     def __init__(
         self,
         button: Dict[str, Any],
@@ -1054,6 +1058,7 @@ class ButtonRow(QWidget):
         corner: float = 0.0,
         centered: bool = True,
         text_color: Optional[str] = None,
+        divider: Optional[str] = None,
         height: int = 42,
         parent: Optional[QWidget] = None,
     ) -> None:
@@ -1064,6 +1069,7 @@ class ButtonRow(QWidget):
         self._corner = corner
         self._centered = centered
         self._text_color = text_color
+        self._divider = divider
         self._hover = False
         self._pressed = False
         self.setFixedHeight(height)
@@ -1072,6 +1078,16 @@ class ButtonRow(QWidget):
 
     def button(self) -> Dict[str, Any]:
         return dict(self._button)
+
+    def _label_font(self) -> QFont:
+        if self._centered:
+            return _font(self.font(), 14, QFont.Weight.DemiBold)
+        return _font(self.font(), 15)
+
+    def sizeHint(self) -> QSize:  # noqa: N802 (Qt override)
+        """Room for the whole label, so a short bubble widens instead of eliding it."""
+        label_width = QFontMetricsF(self._label_font()).horizontalAdvance(button_label(self._button))
+        return QSize(math.ceil(2 * self._PAD + self._ICON + self._GAP + label_width), self.minimumHeight())
 
     def paintEvent(self, event) -> None:  # noqa: N802 (Qt override)
         pal = self._pal
@@ -1084,12 +1100,12 @@ class ButtonRow(QWidget):
             if self._pressed:
                 tint.setAlpha(min(255, tint.alpha() * 2))
             painter.fillPath(rounded_path(rect, 0, 0, corner, corner), tint)
-        painter.setPen(QPen(QColor(pal.divider), 1.0))
+        painter.setPen(QPen(QColor(self._divider or pal.divider), 1.0))
         painter.drawLine(QPointF(0, 0.5), QPointF(rect.width(), 0.5))
 
-        font = _font(self.font(), 14 if self._centered else 15, QFont.Weight.DemiBold if self._centered else QFont.Weight.Normal)
+        font = self._label_font()
         metrics = QFontMetricsF(font)
-        icon_size, gap, pad = 18, 8, 16
+        icon_size, gap, pad = self._ICON, self._GAP, self._PAD
         available = max(10.0, rect.width() - 2 * pad - icon_size - gap)
         text = metrics.elidedText(button_label(self._button), Qt.TextElideMode.ElideRight, available)
         text_width = metrics.horizontalAdvance(text)

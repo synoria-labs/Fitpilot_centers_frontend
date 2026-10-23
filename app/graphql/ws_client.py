@@ -68,23 +68,32 @@ _MESSAGE_FIELDS = """
     }
 """
 
-MESSAGE_ADDED_SUBSCRIPTION = gql(
-    """
+_TEMPLATE_BUTTON_FIELDS = """
+    templateButtons {
+        type
+        text
+        url
+        phoneNumber
+    }
+"""
+
+_MESSAGE_ADDED = """
     subscription MessageAdded($conversationId: Int) {
         messageAdded(conversationId: $conversationId) { %s }
     }
-    """
-    % _MESSAGE_FIELDS
-)
-
-MESSAGE_UPDATED_SUBSCRIPTION = gql(
-    """
+"""
+_MESSAGE_UPDATED = """
     subscription MessageUpdated($conversationId: Int) {
         messageUpdated(conversationId: $conversationId) { %s }
     }
-    """
-    % _MESSAGE_FIELDS
-)
+"""
+
+MESSAGE_ADDED_SUBSCRIPTION = gql(_MESSAGE_ADDED % (_MESSAGE_FIELDS + _TEMPLATE_BUTTON_FIELDS))
+MESSAGE_UPDATED_SUBSCRIPTION = gql(_MESSAGE_UPDATED % (_MESSAGE_FIELDS + _TEMPLATE_BUTTON_FIELDS))
+# A backend that predates ``templateButtons`` rejects the documents above; these keep
+# realtime alive against it (template messages just arrive without their buttons).
+MESSAGE_ADDED_COMPAT_SUBSCRIPTION = gql(_MESSAGE_ADDED % _MESSAGE_FIELDS)
+MESSAGE_UPDATED_COMPAT_SUBSCRIPTION = gql(_MESSAGE_UPDATED % _MESSAGE_FIELDS)
 
 
 def _token_seconds_left(token: str) -> Optional[float]:
@@ -117,12 +126,18 @@ def _is_auth_error(exc: BaseException) -> bool:
     )
 
 
+def _is_unknown_template_buttons_error(exc: BaseException) -> bool:
+    """The server rejected the subscription because it does not know ``templateButtons``."""
+    return "templateButtons" in str(exc)
+
+
 class ChatSubscriptionClient:
     """Maintains WebSocket subscriptions to ``messageAdded``/``messageUpdated``
     with auto-reconnect and access-token refresh."""
 
     def __init__(self) -> None:
         self._stop = False
+        self._without_template_buttons = False
 
     def stop(self) -> None:
         self._stop = True
@@ -187,6 +202,12 @@ class ChatSubscriptionClient:
             )
             healthy = False
             connected_at = time.monotonic()
+            if self._without_template_buttons:
+                added_document = MESSAGE_ADDED_COMPAT_SUBSCRIPTION
+                updated_document = MESSAGE_UPDATED_COMPAT_SUBSCRIPTION
+            else:
+                added_document = MESSAGE_ADDED_SUBSCRIPTION
+                updated_document = MESSAGE_UPDATED_SUBSCRIPTION
             try:
                 client = Client(transport=transport)
                 async with client as session:
@@ -195,7 +216,7 @@ class ChatSubscriptionClient:
                     consumers = [
                         self._consume(
                             session,
-                            MESSAGE_ADDED_SUBSCRIPTION,
+                            added_document,
                             "messageAdded",
                             on_message,
                             conversation_id,
@@ -206,7 +227,7 @@ class ChatSubscriptionClient:
                         consumers.append(
                             self._consume(
                                 session,
-                                MESSAGE_UPDATED_SUBSCRIPTION,
+                                updated_document,
                                 "messageUpdated",
                                 on_message_updated,
                                 conversation_id,
@@ -219,6 +240,14 @@ class ChatSubscriptionClient:
             except asyncio.CancelledError:
                 break
             except Exception as e:  # noqa: BLE001
+                if not self._without_template_buttons and _is_unknown_template_buttons_error(e):
+                    # Older backend: resubscribe right away without the buttons.
+                    logger.warning(
+                        "Chat subscription: the backend has no templateButtons yet; "
+                        "subscribing with the plain fields"
+                    )
+                    self._without_template_buttons = True
+                    continue
                 uptime = time.monotonic() - connected_at
                 # A quiet but long-lived connection is healthy even without events.
                 if healthy or uptime >= _HEALTHY_UPTIME_S:

@@ -153,13 +153,27 @@ CONVERSATION_COMPAT_QUERY = """
     }
 """ % (_CONTACT_FIELDS_BASIC, _MESSAGE_FIELDS)
 
-MESSAGES_QUERY = """
+# Only the thread (and the realtime subscription) draws template buttons, so only they
+# ask for them; the list and the send mutations keep the plain message fields.
+_TEMPLATE_BUTTON_FIELDS = """
+    templateButtons {
+        type
+        text
+        url
+        phoneNumber
+    }
+"""
+
+_MESSAGES_QUERY_TEMPLATE = """
     query GetMessages($conversationId: Int!, $limit: Int! = 50, $offset: Int! = 0) {
         conversationMessages(conversationId: $conversationId, limit: $limit, offset: $offset) {
             %s
         }
     }
-""" % _MESSAGE_FIELDS
+"""
+MESSAGES_QUERY = _MESSAGES_QUERY_TEMPLATE % (_MESSAGE_FIELDS + _TEMPLATE_BUTTON_FIELDS)
+# A backend that predates ``templateButtons`` rejects the query above: same thread, no buttons.
+MESSAGES_COMPAT_QUERY = _MESSAGES_QUERY_TEMPLATE % _MESSAGE_FIELDS
 
 SEND_MUTATION = """
     mutation SendText($input: SendTextMessageInput!) {
@@ -208,6 +222,7 @@ class WhatsAppChatService:
     def __init__(self, graphql_client) -> None:
         self.client = graphql_client
         self._contact_schema_level = 0
+        self._template_buttons_supported = True
 
     async def _execute_with_contact_fallback(
         self,
@@ -282,12 +297,24 @@ class WhatsAppChatService:
     ) -> List[ChatMessage]:
         variables = {"conversationId": conversation_id, "limit": limit, "offset": offset}
         try:
-            result = await self.client.execute(MESSAGES_QUERY, variables)
+            result = await self._execute_messages_query(variables)
             items = (result or {}).get("conversationMessages") or []
             return [ChatMessage.from_dict(item) for item in items]
         except Exception as exc:  # noqa: BLE001
             logger.error("Error fetching messages for conversation %s: %s", conversation_id, exc)
             return []
+
+    async def _execute_messages_query(self, variables: dict) -> Optional[dict]:
+        """Thread query with template buttons, falling back for good to the plain one when
+        the backend does not know ``templateButtons`` yet (any other failure is returned)."""
+        if self._template_buttons_supported:
+            result = await self.client.execute(MESSAGES_QUERY, variables)
+            error = getattr(self.client, "last_error", None) or ""
+            if result is not None or "templateButtons" not in error:
+                return result
+            logger.warning("Messages query: the backend has no templateButtons yet; using the plain fields")
+            self._template_buttons_supported = False
+        return await self.client.execute(MESSAGES_COMPAT_QUERY, variables)
 
     async def send_text_message(
         self,

@@ -5,7 +5,7 @@ from typing import Optional
 
 import qtawesome as qta
 from PySide6.QtCore import QPoint, QRectF, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QGuiApplication, QKeySequence, QPainter
+from PySide6.QtGui import QCursor, QGuiApplication, QKeySequence, QPainter
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QMenu,
     QSizePolicy,
     QToolButton,
+    QToolTip,
     QVBoxLayout,
     QWidget,
 )
@@ -22,7 +23,21 @@ from . import theme
 from .media_widgets import MEDIA_BUBBLE_WIDTH, FailedMediaWidget, create_media_widget
 from .message_formatter import clock_text, display_text_for_message, extract_useful_text, message_html
 from .theme import WaPalette
-from .wa_mockup import BUBBLE_TAIL, BubbleMeta, QuoteBox, ideal_text_width, paint_bubble
+from .wa_mockup import (
+    BUBBLE_RADIUS,
+    BUBBLE_TAIL,
+    BubbleMeta,
+    ButtonRow,
+    QuoteBox,
+    button_hint,
+    button_icon_name,
+    button_label,
+    button_type,
+    collapse_buttons,
+    ideal_text_width,
+    paint_bubble,
+    wa_icon,
+)
 
 # Quick reactions offered by the picker (same default set as official WhatsApp).
 QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"]
@@ -39,6 +54,10 @@ _MAX_TEXT_WIDTH = 560
 # (see wa_mockup.time_spacer_html): left out when the text is copied. ``\s`` also
 # matches the non-breaking spaces it is made of.
 _TIME_SPACER_RE = re.compile(r"\s{2,}\d{1,2}:\d{2}\s[ap]\.\s?m\.\s*$")
+
+# Hairline above the template buttons of an outgoing (green) bubble; incoming ones use
+# the palette's divider, which is tuned for the gray bubble.
+_OUTGOING_BUTTON_DIVIDER = {"dark": "#2EFFFFFF", "light": "#17000000"}
 
 
 @dataclass(frozen=True)
@@ -176,8 +195,8 @@ class _BubbleText(QLabel):
 
 class _BubbleFrame(QFrame):
     """The bubble: painted by the preview's painter, with a column for the tail on its side
-    (kept even without the tail, so the bubbles of a run line up) and the timestamp
-    overlaid at the bottom-right."""
+    (kept even without the tail, so the bubbles of a run line up), the timestamp overlaid
+    at the bottom-right of its content and, for a template, its buttons underneath."""
 
     def __init__(self, pal: WaPalette, *, outgoing: bool, tail: bool, parent=None) -> None:
         super().__init__(parent)
@@ -186,6 +205,7 @@ class _BubbleFrame(QFrame):
         self._tail = tail
         self.meta: Optional[BubbleMeta] = None
         self.meta_bottom = _CONTENT_BOTTOM
+        self.buttons_height = 0  # template button rows below the content
 
     def body_rect(self) -> QRectF:
         left = 0 if self._outgoing else BUBBLE_TAIL
@@ -196,7 +216,7 @@ class _BubbleFrame(QFrame):
             return
         body = self.body_rect()
         x = body.right() - _INSET - _TEXT_INSET - self.meta.width()
-        y = self.height() - 1 - self.meta_bottom + 1 - self.meta.height()
+        y = self.height() - 1 - self.buttons_height - self.meta_bottom + 1 - self.meta.height()
         self.meta.move(int(x), int(y))
         self.meta.raise_()
 
@@ -242,6 +262,7 @@ class MessageBubble(QWidget):
         self._react_button = None
         self._reaction_picker = None
         self._own_emoji = ""
+        self._template_buttons = list(message.template_buttons)
         self.setStyleSheet(_reaction_qss(self._pal))
         self._build(message)
 
@@ -266,7 +287,13 @@ class MessageBubble(QWidget):
 
         tail_left = 0 if not message.is_inbound else BUBBLE_TAIL
         tail_right = BUBBLE_TAIL if not message.is_inbound else 0
-        v = QVBoxLayout(bubble)
+        # The content keeps its inset; template buttons below it run edge to edge.
+        frame = QVBoxLayout(bubble)
+        frame.setSpacing(0)
+        frame.setContentsMargins(tail_left, 0, tail_right, 1)
+        content = QWidget(bubble)
+        frame.addWidget(content)
+        v = QVBoxLayout(content)
         v.setSpacing(0)
 
         if self.quote is not None:
@@ -316,7 +343,9 @@ class MessageBubble(QWidget):
             v.addWidget(strip)
             bottom = 2
         bubble.meta_bottom = bottom
-        v.setContentsMargins(tail_left + _INSET, _INSET, tail_right + _INSET, bottom + 1)
+        v.setContentsMargins(_INSET, _INSET, _INSET, bottom)
+        if self._template_buttons:
+            bubble.buttons_height = self._add_template_buttons(frame, bubble, outgoing=not message.is_inbound)
 
         if message.is_inbound:
             outer.addWidget(bubble, 0, Qt.AlignmentFlag.AlignLeft)
@@ -324,6 +353,39 @@ class MessageBubble(QWidget):
         else:
             outer.addStretch()
             outer.addWidget(bubble, 0, Qt.AlignmentFlag.AlignRight)
+
+    def _add_template_buttons(self, frame: QVBoxLayout, bubble: QWidget, *, outgoing: bool) -> int:
+        """The template's buttons under the bubble, drawn as the member saw them (past three,
+        «Ver todas las opciones»). Returns the height they take."""
+        shown = collapse_buttons(self._template_buttons)
+        divider = _OUTGOING_BUTTON_DIVIDER[self._pal.mode] if outgoing else self._pal.divider
+        height = 0
+        for index, button in enumerate(shown):
+            row = ButtonRow(
+                button,
+                self._pal,
+                last=index == len(shown) - 1,
+                corner=BUBBLE_RADIUS,
+                divider=divider,
+                parent=bubble,
+            )
+            row.activated.connect(self._on_template_button)
+            frame.addWidget(row)
+            height += row.minimumHeight()
+        return height
+
+    def _on_template_button(self, button: dict) -> None:
+        """The buttons only show what was sent: a click tells what it does for the member
+        (and «Ver todas las opciones» lists them all)."""
+        if button_type(button) != "SEE_ALL":
+            QToolTip.showText(QCursor.pos(), button_hint(button), self)
+            return
+        menu = QMenu(self)
+        menu.setToolTipsVisible(True)
+        for item in self._template_buttons:
+            action = menu.addAction(wa_icon(button_icon_name(item), self._pal.link), button_label(item))
+            action.setToolTip(button_hint(item))
+        menu.exec(QCursor.pos())
 
     @staticmethod
     def _render_text(message: ChatMessage, *, has_media: bool) -> str:
