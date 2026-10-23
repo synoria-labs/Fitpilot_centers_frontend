@@ -79,9 +79,12 @@ ORDER_STATUS = {
     "needs_review": "En revisión",
 }
 FOLLOW_UP_STATUS = {"pending": "Pendiente", "notified": "Avisado", "resolved": "Resuelto"}
+# The default compensation and the only one the server applies itself: it extends the membership
+# to one more class after it ends and books that class. The rest are only recorded.
+BONUS_CLASS = "membership_extension"
 COMPENSATIONS = [
+    (BONUS_CLASS, "Clase extra al terminar su membresía"),
     ("make_up_class", "Reposición de clase"),
-    ("membership_extension", "Extensión de membresía"),
     ("event_access", "Acceso al evento"),
     ("credit", "Saldo a favor"),
     ("refund", "Devolución"),
@@ -516,9 +519,10 @@ class SpecialEventsTab(QWidget):
         body = QWidget()
         layout = QVBoxLayout(body)
         note = QLabel(
-            "Clientes cuya clase regular fue sustituida por el evento. El sistema no les envía "
-            "mensajes ni extiende membresías: registra aquí cuándo les avisaron y cómo se "
-            "resolvió su compensación."
+            "Clientes cuya clase regular fue sustituida por el evento. La compensación por defecto "
+            "es una clase extra al terminar su membresía: al darla se reserva esa clase (en su bici "
+            "si está libre) y su membresía queda activa hasta ese día. Las demás compensaciones "
+            "solo se registran. El sistema no les envía mensajes: registra aquí cuándo les avisaron."
         )
         note.setObjectName("eventsHint")
         note.setWordWrap(True)
@@ -545,6 +549,13 @@ class SpecialEventsTab(QWidget):
         for btn in (self.notice_btn, self.compensation_btn, self.reopen_btn):
             buttons.addWidget(btn)
         buttons.addStretch()
+        self.bonus_all_btn = QPushButton("Dar clase extra a los pendientes")
+        self.bonus_all_btn.setObjectName("eventsPrimaryButton")
+        self.bonus_all_btn.setToolTip(
+            "A cada cliente sin compensación: una clase extra al terminar su membresía."
+        )
+        self.bonus_all_btn.clicked.connect(self._apply_bonus_to_pending)
+        buttons.addWidget(self.bonus_all_btn)
         layout.addLayout(buttons)
         return body
 
@@ -721,6 +732,10 @@ class SpecialEventsTab(QWidget):
             compensation = COMPENSATION_LABELS.get(d.get("compensation_type"), d.get("compensation_type") or "—")
             if d.get("compensation_notes"):
                 compensation += f" · {d['compensation_notes']}"
+            elif d.get("bonus_preview"):
+                compensation = f"Propuesta: clase extra {d['bonus_preview'].split(' · ')[0]}"
+            elif d.get("bonus_blocker"):
+                compensation = "Sin clase extra (ver motivo)"
             restoration = RESTORATION.get(d.get("restoration_status"), "—")
             if d.get("restoration_note"):
                 restoration += f" · {d['restoration_note']}"
@@ -732,12 +747,20 @@ class SpecialEventsTab(QWidget):
             self.displaced_table.setItem(row, 4, _item(membership))
             self.displaced_table.setItem(row, 5, _item(FOLLOW_UP_STATUS.get(status, status), status=status))
             self.displaced_table.setItem(row, 6, _item(notice))
-            self.displaced_table.setItem(row, 7, _item(compensation))
+            compensation_item = _item(compensation)
+            if d.get("bonus_preview") and not d.get("compensation_type"):
+                compensation_item.setToolTip(f"Clase extra propuesta: {d['bonus_preview']}")
+            elif d.get("bonus_blocker"):
+                compensation_item.setToolTip(f"Sin clase extra: {d['bonus_blocker']}")
+            elif d.get("compensation_notes"):
+                compensation_item.setToolTip(d["compensation_notes"])
+            self.displaced_table.setItem(row, 7, compensation_item)
             self.displaced_table.setItem(row, 8, _item(restoration))
         self.displaced_summary.setText(
             f"Pendientes {counts.get('pending', 0)} · Avisados {counts.get('notified', 0)} · "
             f"Resueltos {counts.get('resolved', 0)}"
         )
+        self.bonus_all_btn.setEnabled(any(d.get("bonus_preview") for d in rows))
 
     def _render_takeovers(self, takeovers: List[Dict[str, Any]]) -> None:
         self.takeovers_table.setRowCount(len(takeovers))
@@ -1129,11 +1152,52 @@ class SpecialEventsTab(QWidget):
         if displacement_id is None:
             show_info(self, "Selecciona un cliente en la tabla.", title=_TITLE)
             return
-        dialog = FollowUpDialog(self, mode="compensation")
+        displacement = self._displacement(displacement_id)
+        if displacement.get("compensation_type") == BONUS_CLASS:
+            # Already applied on the server (membership extended, class booked): only closing it is left.
+            done = f"Ya se le dio la clase extra: {displacement.get('compensation_notes') or '—'}"
+            if displacement.get("follow_up_status") == "resolved":
+                show_info(self, done, title=_TITLE)
+            elif show_confirmation(self, f"{done}\n\n¿Marcar el seguimiento como resuelto?",
+                                   title=_TITLE, ok_text="Marcar resuelto"):
+                self.controller.update_follow_up({"displacement_id": displacement_id, "resolved": True})
+            return
+        dialog = FollowUpDialog(self, mode="compensation", displacement=displacement)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             payload = dialog.data()
+            if payload["compensation_type"] == BONUS_CLASS:
+                self.controller.apply_bonus_class(displacement_id, resolved=bool(payload["resolved"]))
+                return
             payload["displacement_id"] = displacement_id
             self.controller.update_follow_up(payload)
+
+    def _apply_bonus_to_pending(self) -> None:
+        event_id = self._current_event_id()
+        pending = [
+            d for d in (self._detail or {}).get("displacements") or []
+            if not d.get("compensation_type") and d.get("restoration_status") != "restored"
+        ]
+        if event_id is None or not pending:
+            show_info(self, "No hay clientes desplazados sin compensación.", title=_TITLE)
+            return
+        lines = [
+            f"• {d.get('person_name')}: {d['bonus_preview']}" if d.get("bonus_preview")
+            else f"• {d.get('person_name')}: sin clase extra ({d.get('bonus_blocker') or '—'})"
+            for d in pending
+        ]
+        message = (
+            "A cada cliente sin compensación se le reservará una clase extra al terminar su "
+            "membresía, que quedará activa hasta ese día:\n\n" + "\n".join(lines)
+            + "\n\nNo se les envía ningún mensaje. ¿Continuar?"
+        )
+        if show_confirmation(self, message, title=_TITLE, ok_text="Dar clase extra"):
+            self.controller.apply_bonus_classes(event_id)
+
+    def _displacement(self, displacement_id: int) -> Dict[str, Any]:
+        for d in (self._detail or {}).get("displacements") or []:
+            if d.get("id") == displacement_id:
+                return d
+        return {"id": displacement_id}
 
     def _reopen_follow_up(self) -> None:
         displacement_id = self._selected_row_id(self.displaced_table)
@@ -1255,41 +1319,73 @@ class ParticipantDialog(QDialog):
 
 
 class FollowUpDialog(QDialog):
-    """Registrar el aviso o la compensación de un cliente desplazado."""
+    """Registrar el aviso o la compensación de un cliente desplazado.
 
-    def __init__(self, parent: QWidget, *, mode: str) -> None:
+    La compensación propuesta es la clase extra al terminar su membresía, que el servidor aplica
+    al aceptar; el diálogo muestra cuál sería (o por qué no hay) antes de confirmarla.
+    """
+
+    _RECORD_ONLY_HINT = (
+        "Solo se registra la decisión: aplícala en la membresía o en Clases como lo harías "
+        "normalmente."
+    )
+
+    def __init__(self, parent: QWidget, *, mode: str, displacement: Optional[Dict[str, Any]] = None) -> None:
         super().__init__(parent)
         self._mode = mode
+        self._displacement = displacement or {}
         self.setWindowTitle("Registrar aviso" if mode == "notice" else "Registrar compensación")
         layout = QFormLayout(self)
+        self.buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         if mode == "notice":
             self.channel_combo = QComboBox()
             self.channel_combo.addItems(NOTICE_CHANNELS)
             layout.addRow("Canal", self.channel_combo)
             self.notes_edit = QLineEdit()
             layout.addRow("Notas", self.notes_edit)
-            hint = QLabel("Se registra con la fecha y hora actuales y tu usuario.")
+            self.hint = QLabel("Se registra con la fecha y hora actuales y tu usuario.")
         else:
             self.type_combo = QComboBox()
             for code, label in COMPENSATIONS:
                 self.type_combo.addItem(label, code)
             layout.addRow("Compensación", self.type_combo)
             self.notes_edit = QLineEdit()
-            self.notes_edit.setPlaceholderText("Ej. reposición el lunes 2/11 a las 19:00")
             layout.addRow("Detalle", self.notes_edit)
             self.resolve_check = QCheckBox("Marcar como resuelto")
             self.resolve_check.setChecked(True)
             layout.addRow(self.resolve_check)
-            hint = QLabel(
-                "Solo se registra la decisión: aplica la extensión o reposición en la membresía "
-                "o en Clases como lo harías normalmente."
+            self.hint = QLabel()
+            self.type_combo.currentIndexChanged.connect(lambda _=0: self._on_type_changed())
+        self.hint.setWordWrap(True)
+        layout.addRow(self.hint)
+        self.buttons.accepted.connect(self.accept)
+        self.buttons.rejected.connect(self.reject)
+        layout.addRow(self.buttons)
+        if mode != "notice":
+            self._on_type_changed()
+
+    def _on_type_changed(self) -> None:
+        bonus = self.type_combo.currentData() == BONUS_CLASS
+        preview = self._displacement.get("bonus_preview")
+        self.notes_edit.setEnabled(not bonus)
+        self.notes_edit.setPlaceholderText(
+            "Se llena solo con la clase y la nueva vigencia" if bonus
+            else "Ej. reposición el lunes 2/11 a las 19:00"
+        )
+        if bonus and preview:
+            self.hint.setText(
+                f"Clase extra propuesta:\n{preview}\n\nSe reserva esa clase y su membresía queda "
+                "activa hasta ese día. Se aplica al aceptar."
             )
-        hint.setWordWrap(True)
-        layout.addRow(hint)
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addRow(buttons)
+            self.hint.setStyleSheet("")
+        elif bonus:
+            blocker = self._displacement.get("bonus_blocker") or "no hay una clase disponible; elige otra compensación."
+            self.hint.setText(f"Sin clase extra: {blocker}")
+            self.hint.setStyleSheet("color: #c62828;")
+        else:
+            self.hint.setText(self._RECORD_ONLY_HINT)
+            self.hint.setStyleSheet("")
+        self.buttons.button(QDialogButtonBox.StandardButton.Ok).setEnabled(not bonus or bool(preview))
 
     def data(self) -> Dict[str, Any]:
         if self._mode == "notice":

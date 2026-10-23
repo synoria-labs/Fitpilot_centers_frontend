@@ -93,6 +93,14 @@ class SpecialEventsController(BaseController):
     def update_follow_up(self, data: Dict[str, Any]) -> None:
         self._run("update_follow_up", self._on_follow_up, data=data)
 
+    def apply_bonus_class(self, displacement_id: int, resolved: bool = True) -> None:
+        self._run(
+            "apply_bonus_class", self._on_follow_up, displacement_id=displacement_id, resolved=resolved
+        )
+
+    def apply_bonus_classes(self, event_id: int) -> None:
+        self._run("apply_bonus_classes", self._on_result, event_id=event_id)
+
     # ------------------------------------------------------------------ plumbing
     def _run(self, method: str, on_success, **kwargs) -> None:
         if not self._service:
