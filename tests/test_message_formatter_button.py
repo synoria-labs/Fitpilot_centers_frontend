@@ -43,3 +43,12 @@ def test_snippet_for_message_reuses_the_marked_button_text():
 def test_plain_text_message_is_unaffected():
     text = display_text_for_message(_message("text", "hola"))
     assert text == "hola"
+
+
+def test_the_bots_own_interactive_message_is_not_marked_as_a_tap():
+    """The chatbot's «Pagar ahora» message is interactive too, but it is the business talking:
+    its text reads as is and the button is drawn under the bubble."""
+    message = _message("interactive", "Pase diario $50\nPara completar tu compra:")
+    message.direction = "outbound"
+    assert display_text_for_message(message) == "Pase diario $50\nPara completar tu compra:"
+    assert snippet_for_message(message).startswith("Pase diario $50")
