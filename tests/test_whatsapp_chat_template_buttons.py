@@ -93,6 +93,22 @@ def test_more_than_three_buttons_collapse_like_whatsapp(qtbot):
     ]
 
 
+def test_the_chatbots_payment_link_shows_as_a_pagar_ahora_button(qtbot):
+    """An interactive message carries its own button (the backend sends it in templateButtons)."""
+    payload = dict(
+        TEMPLATE_PAYLOAD,
+        messageType="interactive",
+        textContent="Pase diario $50\nPara completar tu compra:",
+        templateButtons=[{"type": "URL", "text": "Pagar ahora", "url": "https://mpago.la/abc"}],
+    )
+    bubble = MessageBubble(ChatMessage.from_dict(payload), pal=theme.DARK)
+    qtbot.addWidget(bubble)
+
+    [row] = _rows(bubble)
+    assert button_label(row.button()) == "Pagar ahora"
+    assert row.toolTip() == "Abre https://mpago.la/abc"
+
+
 def test_plain_messages_have_no_button_rows(qtbot):
     bubble = MessageBubble(_template_message([], direction="inbound"), pal=theme.DARK)
     qtbot.addWidget(bubble)
