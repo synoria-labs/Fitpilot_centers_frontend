@@ -19,7 +19,7 @@ _NO_RESPONSE = "Sin respuesta del servidor"
 _EVENT_FIELDS = """
     id name description includes address venueId venueName venueAddress classTypeId
     instructorId instructorName timezone startAt endAt localDate localStartTime localEndTime
-    scheduleLabel price currency capacity holdMinutes status sold held available salesOpen
+    scheduleLabel price currency capacity holdMinutes paymentLinkExpires manualRefundsPending status sold held available salesOpen
     salesClosedReason publishBlockers paymentsReady paymentsWarning activeTakeovers
     pendingFollowUps cancelReason publishedAt canceledAt createdAt
     seats { seatId label status }
@@ -29,7 +29,7 @@ _EVENT_FIELDS = """
 _ORDER_FIELDS = """
     id participantName participantPhone personId seatId seatLabel status channel amount currency
     paymentMethod paidAt holdExpiresAt mpStatus mpPaymentId reviewReason cancelReason refundedAt
-    notes createdAt
+    notes createdAt paymentLinkExpires manualRefundRequired refundReviewedBy refundReviewedAt
 """
 
 _DISPLACEMENT_FIELDS = """
@@ -251,10 +251,11 @@ class SpecialEventsService:
             {"id": int(order_id), "reason": reason}, "$id: Int!, $reason: String",
         )
 
-    async def refund_order(self, order_id: int, reason: str) -> Dict[str, Any]:
+    async def refund_order(self, order_id: int, reason: str, review_confirmed: bool = False) -> Dict[str, Any]:
         return await self._simple(
-            "refundSpecialEventOrder", "orderId: $id, reason: $reason",
-            {"id": int(order_id), "reason": reason}, "$id: Int!, $reason: String",
+            "refundSpecialEventOrder", "orderId: $id, reason: $reason, reviewConfirmed: $reviewed",
+            {"id": int(order_id), "reason": reason, "reviewed": bool(review_confirmed)},
+            "$id: Int!, $reason: String, $reviewed: Boolean!",
         )
 
     async def link_campaign(self, campaign_id: int, event_id: Optional[int]) -> Dict[str, Any]:
@@ -334,6 +335,7 @@ class SpecialEventsService:
             "capacity": "capacity",
             "seat_ids": "seatIds",
             "hold_minutes": "holdMinutes",
+            "payment_link_expires": "paymentLinkExpires",
         }
         return {gql: data[key] for key, gql in mapping.items() if data.get(key) is not None}
 

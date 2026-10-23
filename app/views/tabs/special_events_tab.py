@@ -325,6 +325,8 @@ class SpecialEventsTab(QWidget):
         cap_row.addWidget(self.capacity_unknown)
         cap_row.addStretch()
         form.addRow("Cupo", cap_row)
+        self.no_expiry_check = QCheckBox("Enlace sin caducidad (no aparta lugar mientras paga)")
+        form.addRow("Vigencia del enlace", self.no_expiry_check)
         self.hold_spin = QSpinBox()
         self.hold_spin.setRange(5, 240)
         self.hold_spin.setSuffix(" min")
@@ -332,7 +334,14 @@ class SpecialEventsTab(QWidget):
             "Mientras el cliente paga, su bicicleta queda apartada este tiempo. El enlace de "
             "pago vence a la misma hora; después el lugar vuelve a estar disponible."
         )
-        form.addRow("Apartado mientras paga", self.hold_spin)
+        self.hold_label = QLabel("Apartado mientras paga")
+        form.addRow(self.hold_label, self.hold_spin)
+        self.link_policy_hint = QLabel()
+        self.link_policy_hint.setWordWrap(True)
+        self.link_policy_hint.setObjectName("eventsHint")
+        form.addRow(self.link_policy_hint)
+        self.no_expiry_check.toggled.connect(self._update_link_policy)
+        self._update_link_policy()
 
         seats_box = QVBoxLayout()
         self.seats_list = QListWidget()
@@ -508,6 +517,7 @@ class SpecialEventsTab(QWidget):
         self.refund_btn = QPushButton("Reembolsar")
         self.refund_btn.setObjectName("dangerButton")
         self.refund_btn.clicked.connect(self._refund_order)
+        self.orders_table.itemSelectionChanged.connect(self._update_action_buttons)
         for btn in (self.add_participant_btn, self.cancel_order_btn, self.refund_btn):
             buttons.addWidget(btn)
         buttons.addStretch()
@@ -674,6 +684,9 @@ class SpecialEventsTab(QWidget):
             lines.append(
                 f"{event['pending_follow_ups']} cliente(s) desplazado(s) con seguimiento pendiente."
             )
+        if event.get("manual_refunds_pending"):
+            lines.append(f"<span style='color:#c62828'>{event['manual_refunds_pending']} pago(s) requieren "
+                         "revisión y reembolso manual en Participantes.</span>")
         self.status_label.setText("<br>".join(lines))
 
     def _render_orders(self, orders: List[Dict[str, Any]], event: Dict[str, Any]) -> None:
@@ -682,8 +695,10 @@ class SpecialEventsTab(QWidget):
             status = order.get("status")
             when = (
                 format_local_datetime(order.get("paid_at"))
-                if status == "paid"
+                if order.get("paid_at") and status in ("paid", "needs_review", "refund_pending")
                 else f"hasta {format_local_datetime(order.get('hold_expires_at'), '%H:%M')}"
+                if status == "awaiting_payment" and order.get("payment_link_expires", True)
+                else "Sin caducidad · sin apartado"
                 if status == "awaiting_payment"
                 else format_local_datetime(order.get("refunded_at") or order.get("created_at"))
             )
@@ -691,10 +706,15 @@ class SpecialEventsTab(QWidget):
             self.orders_table.setItem(row, 0, _item(order.get("participant_name"), user_data=order.get("id")))
             self.orders_table.setItem(row, 1, _item(order.get("participant_phone") or "—"))
             self.orders_table.setItem(row, 2, _item(order.get("seat_label") or "—"))
-            self.orders_table.setItem(row, 3, _item(ORDER_STATUS.get(status, status), status=status))
+            label = ("Pago sin cupo · revisar reembolso" if order.get("manual_refund_required")
+                     and status in ("needs_review", "refund_pending") else ORDER_STATUS.get(status, status))
+            self.orders_table.setItem(row, 3, _item(label, status=status))
             self.orders_table.setItem(row, 4, _item(_money(order.get("amount"), order.get("currency") or "MXN")))
             method = order.get("payment_method")
-            self.orders_table.setItem(row, 5, _item(PAYMENT_LABELS.get(method, method or "—")))
+            payment_label = PAYMENT_LABELS.get(method, method or "—")
+            if order.get("mp_payment_id"):
+                payment_label += f" · MP {order['mp_payment_id']}"
+            self.orders_table.setItem(row, 5, _item(payment_label))
             self.orders_table.setItem(row, 6, _item(when))
             self.orders_table.setItem(row, 7, _item(notes))
         capacity = event.get("capacity")
@@ -703,6 +723,7 @@ class SpecialEventsTab(QWidget):
             f"Disponibles {event.get('available') if event.get('available') is not None else '—'}"
             f" de {capacity if capacity else '— (cupo pendiente)'} · "
             f"{_money(event.get('price'), event.get('currency') or 'MXN')} por participante"
+            f" · Reembolsos manuales por revisar: {event.get('manual_refunds_pending', 0)}"
         )
         seats = event.get("seats") or []
         free = [s["label"] for s in seats if s.get("status") == "free"]
@@ -932,6 +953,8 @@ class SpecialEventsTab(QWidget):
         if capacity:
             self.capacity_spin.setValue(int(capacity))
         self.hold_spin.setValue(int(event.get("hold_minutes") or 30))
+        self.no_expiry_check.setChecked(not event.get("payment_link_expires", True))
+        self._update_link_policy()
         self._fill_seats(
             self._venue_seats(event.get("venue_id")) or event.get("seats") or [],
             {s["seat_id"] for s in event.get("seats") or []},
@@ -964,6 +987,8 @@ class SpecialEventsTab(QWidget):
         self.price_spin.setValue(0)
         self.capacity_unknown.setChecked(True)
         self.hold_spin.setValue(30)
+        self.no_expiry_check.setChecked(False)
+        self._update_link_policy()
         self._on_venue_changed()
         self.status_label.setText(
             "<b>Nuevo evento</b> · se guardará como borrador; el asistente no lo verá hasta "
@@ -991,6 +1016,7 @@ class SpecialEventsTab(QWidget):
             "capacity": None if self.capacity_unknown.isChecked() else int(self.capacity_spin.value()),
             "seat_ids": self._checked_seat_ids(),
             "hold_minutes": int(self.hold_spin.value()),
+            "payment_link_expires": not self.no_expiry_check.isChecked(),
         }
         return data
 
@@ -1111,7 +1137,8 @@ class SpecialEventsTab(QWidget):
             show_info(self, "Selecciona una compra en la tabla.", title=_TITLE)
             return
         if show_confirmation(
-            self, "Se cancela la compra no pagada y su bicicleta queda libre. ¿Continuar?",
+            self, "Se cancela la compra no pagada y se desactiva el enlace. Si tenía una bicicleta apartada, "
+            "vuelve a estar disponible. ¿Continuar?",
             title=_TITLE, ok_text="Cancelar compra", cancel_text="Volver",
         ):
             self.controller.cancel_order(order_id, "Cancelado por el personal")
@@ -1120,6 +1147,13 @@ class SpecialEventsTab(QWidget):
         order_id = self._selected_row_id(self.orders_table)
         if order_id is None:
             show_info(self, "Selecciona una entrada pagada en la tabla.", title=_TITLE)
+            return
+        order = next((o for o in (self._detail or {}).get("orders", []) if o["id"] == order_id), {})
+        if order.get("manual_refund_required"):
+            dialog = ManualRefundDialog(self, order=order)
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                self.controller.refund_order(order_id, dialog.reason_edit.text().strip() or "Pago sin cupo",
+                                             review_confirmed=True)
             return
         reason, ok = QInputDialog.getText(
             self, _TITLE,
@@ -1256,11 +1290,67 @@ class SpecialEventsTab(QWidget):
         self.restore_btn.setEnabled(existing and restore_ready)
         self.add_participant_btn.setEnabled(existing and open_event)
         self.cancel_order_btn.setEnabled(existing)
-        self.refund_btn.setEnabled(existing)
+        selected_id = self._selected_row_id(self.orders_table)
+        order = next((o for o in (self._detail or {}).get("orders", []) if o["id"] == selected_id), {})
+        self.refund_btn.setEnabled(existing and order.get("status") in ("paid", "needs_review", "refund_pending"))
+        self.refund_btn.setText("Revisar reembolso" if order.get("manual_refund_required") else "Reembolsar")
         self.link_btn.setEnabled(existing)
         self.unlink_btn.setEnabled(existing)
         for btn in (self.notice_btn, self.compensation_btn, self.reopen_btn):
             btn.setEnabled(existing)
+
+
+    def _update_link_policy(self) -> None:
+        no_expiry = self.no_expiry_check.isChecked()
+        self.hold_spin.setVisible(not no_expiry)
+        self.hold_label.setVisible(not no_expiry)
+        self.link_policy_hint.setText(
+            "El enlace no caduca y no aparta cupo. Se revisa disponibilidad antes de generarlo y al acreditarse "
+            "el pago. Si ya no hay lugar, el administrador debe revisar y gestionar el reembolso manual en Mercado Pago. "
+            "El cambio se aplica a compras nuevas."
+            if no_expiry else
+            "La bicicleta se aparta durante este plazo y el enlace vence a la misma hora. El cambio se aplica a compras nuevas."
+        )
+
+
+class ManualRefundDialog(QDialog):
+    """A paid order without a seat needs an explicit, attributable human decision."""
+
+    def __init__(self, parent, *, order):
+        super().__init__(parent)
+        self.setWindowTitle("Revisar y autorizar reembolso")
+        self.setMinimumWidth(600)
+        layout = QFormLayout(self)
+        for label, text in (
+            ("Compra", f"#{order['id']} · {order.get('participant_name') or ''}"),
+            ("Pago de Mercado Pago", order.get("mp_payment_id") or "No registrado"),
+            ("Importe", _money(order.get("amount"), order.get("currency") or "MXN")),
+            ("Motivo", order.get("review_reason") or "Pago sin cupo disponible"),
+        ):
+            value = QLabel(str(text))
+            value.setTextFormat(Qt.TextFormat.PlainText)
+            value.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            value.setWordWrap(True)
+            layout.addRow(label, value)
+        instructions = QLabel(
+            "Verifica el pago y el importe en Mercado Pago antes de autorizar. Al confirmar se comprobará "
+            "su estado y se solicitará el reembolso. Si ya devolviste todo el importe en Mercado Pago, "
+            "se verificará y registrará esa devolución sin solicitar otra."
+        )
+        instructions.setWordWrap(True)
+        layout.addRow(instructions)
+        self.reason_edit = QLineEdit("Pago sin cupo disponible")
+        layout.addRow("Motivo del reembolso", self.reason_edit)
+        self.review_check = QCheckBox("Revisé el pago y autorizo el reembolso")
+        layout.addRow(self.review_check)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        self.confirm_btn = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        self.confirm_btn.setText("Verificar y reembolsar")
+        self.confirm_btn.setEnabled(False)
+        self.review_check.toggled.connect(self.confirm_btn.setEnabled)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addRow(buttons)
 
 
 class ParticipantDialog(QDialog):
