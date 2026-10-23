@@ -84,8 +84,9 @@ class SpecialEventsController(BaseController):
     def cancel_order(self, order_id: int, reason: str) -> None:
         self._run("cancel_order", self._on_result, order_id=order_id, reason=reason)
 
-    def refund_order(self, order_id: int, reason: str) -> None:
-        self._run("refund_order", self._on_result, order_id=order_id, reason=reason)
+    def refund_order(self, order_id: int, reason: str, review_confirmed: bool = False) -> None:
+        self._run("refund_order", self._on_result, order_id=order_id, reason=reason,
+                  review_confirmed=review_confirmed)
 
     def link_campaign(self, campaign_id: int, event_id: Optional[int]) -> None:
         self._run("link_campaign", self._on_result, campaign_id=campaign_id, event_id=event_id)
