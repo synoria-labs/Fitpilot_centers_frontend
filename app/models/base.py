@@ -147,6 +147,15 @@ class MembershipPlan(BaseModel):
         }
         return type_map.get(self.plan_type, self.plan_type)
 
+    def class_allowance_display(self) -> str:
+        if self.duration_unit == "day" and self.duration_value == 1:
+            return "1 clase seleccionada"
+        if self.fixed_time_slot or self.plan_type == "fixed_schedule":
+            return "Según horario y vigencia"
+        if self.plan_type == "credit_pack":
+            return f"{self.class_limit or 0} clases"
+        return "Sin límite (según cupo)"
+
 @dataclass
 class MembershipInfo(BaseModel):
     status: str
@@ -604,7 +613,12 @@ class TimeslotGroup(BaseModel):
         Retorna la etiqueta para mostrar en combos.
         Formato: "{class_type_name} — {start_time_local} ({venue_name})"
         """
-        return f"{self.class_type_name} — {self.start_time_local} ({self.venue_name})"
+        label = f"{self.class_type_name} — {self.start_time_local} ({self.venue_name})"
+        days = sorted(set(self.get_weekdays()))
+        if days:
+            names = {1: "Lun", 2: "Mar", 3: "Mié", 4: "Jue", 5: "Vie", 6: "Sáb", 7: "Dom"}
+            label += f" — {', '.join(names[d] for d in days)} ({len(days)} clases/semana)"
+        return label
 
     def display_tooltip(self) -> str:
         """
@@ -617,8 +631,8 @@ class TimeslotGroup(BaseModel):
         weekday_names = {1: "Lun", 2: "Mar", 3: "Mié", 4: "Jue", 5: "Vie", 6: "Sáb", 7: "Dom"}
         days = []
         for template in self.templates:
-            if hasattr(template, 'weekday') and template.weekday in weekday_names:
-                day_name = weekday_names[template.weekday]
+            if hasattr(template, 'weekday') and (template.weekday or 7) in weekday_names:
+                day_name = weekday_names[template.weekday or 7]
                 if day_name not in days:
                     days.append(day_name)
 
@@ -645,7 +659,7 @@ class TimeslotGroup(BaseModel):
         Retorna la lista de días de la semana (weekdays) incluidos en el grupo.
         """
         if self.templates:
-            return [template.weekday for template in self.templates if hasattr(template, 'weekday')]
+            return [template.weekday or 7 for template in self.templates if hasattr(template, 'weekday')]
         return []
 
     def get_first_template(self) -> Optional[ClassTemplate]:
@@ -659,7 +673,7 @@ class TimeslotGroup(BaseModel):
         if not self.templates:
             return None
         for template in self.templates:
-            if getattr(template, "weekday", None) == weekday:
+            if (getattr(template, "weekday", None) or 7) == weekday:
                 return template
         return None
 

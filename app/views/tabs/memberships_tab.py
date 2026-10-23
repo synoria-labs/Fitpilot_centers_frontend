@@ -154,7 +154,7 @@ class MembershipsTab(QWidget):
         self.table.setRowCount(len(self._plans))
 
         for row, plan in enumerate(self._plans):
-            credits = str(plan.class_limit) if plan.class_limit else "—"
+            credits = plan.class_allowance_display()
             self._set_cell(row, 0, str(plan.id))
             self._set_cell(row, 1, plan.name)
             self._set_cell(row, 2, plan.type_display())
@@ -302,7 +302,7 @@ class PlanDialog(QDialog):
         self.class_limit_input = QSpinBox()
         self.class_limit_input.setRange(0, 9999)
         self.class_limit_input.setSpecialValueText("Sin límite")  # 0 -> sin límite
-        form.addRow("Créditos / Clases:", self.class_limit_input)
+        form.addRow("Clases contratadas:", self.class_limit_input)
 
         # Avanzado: límites de sesiones
         self.max_day_input = QSpinBox()
@@ -350,14 +350,19 @@ class PlanDialog(QDialog):
 
     def _on_type_changed(self, *_):
         plan_type = self.type_input.currentData()
-        # class_limit applies to credit packs (required) and fixed schedule (optional);
-        # hidden for flexible (open access).
-        self._set_row_visible(self.class_limit_input, plan_type in ("credit_pack", "fixed_schedule"))
+        # Fixed schedules derive their allowance from the selected calendar. Only credit
+        # packs have a manually configured number of classes; flexible access has no cap.
+        self._set_row_visible(self.class_limit_input, plan_type == "credit_pack")
+        self._set_row_visible(self.max_day_input, plan_type == "credit_pack")
+        self._set_row_visible(self.max_week_input, plan_type == "credit_pack")
 
         notes = {
-            "fixed_schedule": "Horario fijo: el socio elige un horario semanal recurrente al inscribirse. "
-                              "Créditos/Clases es opcional (0 = sin límite).",
-            "flexible": "Acceso libre: vigencia por tiempo, sin horario fijo ni límite de clases.",
+            "fixed_schedule": "Incluye todos los días del grupo de horario elegido durante la vigencia. "
+                              "Las clases se calculan por el calendario: una semana de lunes a viernes "
+                              "incluye 5; de lunes a domingo, 7. El mensual depende de sus fechas. "
+                              "El pase diario corresponde a una sola clase seleccionada.",
+            "flexible": "Acceso libre: sin horario fijo ni límite de clases durante la vigencia. "
+                        "Cada reserva depende de la disponibilidad; no se apartan lugares automáticamente.",
             "credit_pack": "Créditos prepagados (pago por sesión): el socio compra N clases/créditos "
                            "y consume uno por reserva, dentro de la vigencia.",
         }
@@ -396,9 +401,9 @@ class PlanDialog(QDialog):
     def get_data(self) -> dict:
         plan_type = self.type_input.currentData()
         class_limit_val = self.class_limit_input.value()
-        # 0 means "sin límite" -> None. For flexible plans there is never a limit.
+        # Only prepaid credits use a numeric quota. Calendar coverage is calculated per member.
         class_limit = None
-        if plan_type in ("credit_pack", "fixed_schedule") and class_limit_val > 0:
+        if plan_type == "credit_pack" and class_limit_val > 0:
             class_limit = class_limit_val
 
         return {
@@ -408,8 +413,8 @@ class PlanDialog(QDialog):
             "duration_value": self.duration_input.value(),
             "duration_unit": self.duration_unit.currentData(),
             "class_limit": class_limit,
-            "max_sessions_per_day": self.max_day_input.value() or None,
-            "max_sessions_per_week": self.max_week_input.value() or None,
+            "max_sessions_per_day": (self.max_day_input.value() or None) if plan_type == "credit_pack" else None,
+            "max_sessions_per_week": (self.max_week_input.value() or None) if plan_type == "credit_pack" else None,
             "is_active": self.active_input.isChecked(),
             "description": self.description_input.toPlainText().strip() or None,
         }
