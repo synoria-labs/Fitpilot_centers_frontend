@@ -37,7 +37,7 @@ _DISPLACEMENT_FIELDS = """
     personName phone seatLabel reservationId reservationStatus reservationSource planName
     membershipEndsAt reason followUpStatus notifiedAt notifiedByName notificationChannel
     notificationNotes compensationType compensationNotes resolvedAt resolvedByName
-    restorationStatus restorationNote restoredAt
+    restorationStatus restorationNote restoredAt bonusPreview bonusBlocker
 """
 
 _DETAIL_FIELDS = f"""
@@ -283,7 +283,29 @@ class SpecialEventsService:
             }
         }
         result = await self.client.execute(mutation, variables)
-        payload = (result or {}).get("updateDisplacementFollowUp")
+        return self._displacement_result(result, "updateDisplacementFollowUp")
+
+    async def apply_bonus_class(self, displacement_id: int, resolved: bool = True) -> Dict[str, Any]:
+        """La compensación por defecto: una clase extra al terminar su membresía (el servidor
+        extiende la membresía y reserva esa clase)."""
+        mutation = f"""
+            mutation BonusClass($id: Int!, $resolved: Boolean!) {{
+                applyDisplacementBonusClass(displacementId: $id, resolved: $resolved) {{
+                    success error displacement {{ {_DISPLACEMENT_FIELDS} }}
+                }}
+            }}
+        """
+        result = await self.client.execute(mutation, {"id": int(displacement_id), "resolved": bool(resolved)})
+        return self._displacement_result(result, "applyDisplacementBonusClass")
+
+    async def apply_bonus_classes(self, event_id: int) -> Dict[str, Any]:
+        """La clase extra para todos los desplazados del evento que aún no tienen compensación."""
+        return await self._simple(
+            "applySpecialEventBonusClasses", "eventId: $id", {"id": int(event_id)}, "$id: Int!"
+        )
+
+    def _displacement_result(self, result: Optional[Dict[str, Any]], key: str) -> Dict[str, Any]:
+        payload = (result or {}).get(key)
         if not payload:
             return {"success": False, "error": self._error(), "displacement": None}
         return {

@@ -261,3 +261,118 @@ def test_new_event_form_sends_local_date_and_times(tab):
     assert data["capacity"] is None  # «Aún no sé el cupo» by default
     assert data["seat_ids"] == [11, 12, 13]
     assert len(data["local_date"]) == 10 and data["timezone"] == "America/Mexico_City"
+
+
+# ---------------------------------------------------------------- clase extra (compensación por defecto)
+_PREVIEW = "lun 02/11 19:00 · Bicicleta 1 · vence 02/11 (antes 01/11)"
+
+
+def _detail_with(**displacement):
+    node = dict(DETAIL_NODE)
+    node["displacements"] = [dict(DETAIL_NODE["displacements"][0], **displacement)]
+    return map_detail(node)
+
+
+@pytest.mark.asyncio
+async def test_extra_class_calls_name_the_client_and_the_event():
+    applied = dict(DETAIL_NODE["displacements"][0], compensationType="membership_extension",
+                   compensationNotes="Clase extra el lun 02/11 a las 19:00 en Bicicleta 1.",
+                   followUpStatus="pending", bonusPreview=None, bonusBlocker=None)
+    client = FakeClient([
+        {"applyDisplacementBonusClass": {"success": True, "error": None, "displacement": applied}},
+        {"applySpecialEventBonusClasses": {"success": True, "error": None,
+                                           "message": "Clase extra para 1 cliente(s).", "detail": DETAIL_NODE}},
+    ])
+    service = SpecialEventsService(client)
+
+    one = await service.apply_bonus_class(9, resolved=False)
+    assert "applyDisplacementBonusClass" in client.calls[0][0]
+    assert client.calls[0][1] == {"id": 9, "resolved": False}
+    assert one["success"] and one["displacement"]["compensation_type"] == "membership_extension"
+
+    bulk = await service.apply_bonus_classes(7)
+    assert "applySpecialEventBonusClasses" in client.calls[1][0] and client.calls[1][1] == {"id": 7}
+    assert bulk["message"] == "Clase extra para 1 cliente(s)." and bulk["detail"]["event"]["id"] == 7
+
+
+def test_compensation_dialog_proposes_the_extra_class_first(qtbot):
+    from PySide6.QtWidgets import QDialogButtonBox
+
+    from app.views.tabs.special_events_tab import BONUS_CLASS, FollowUpDialog
+
+    dialog = FollowUpDialog(None, mode="compensation", displacement={"bonus_preview": _PREVIEW})
+    qtbot.addWidget(dialog)
+    ok = dialog.buttons.button(QDialogButtonBox.StandardButton.Ok)
+    assert dialog.type_combo.currentData() == BONUS_CLASS
+    assert dialog.type_combo.currentText() == "Clase extra al terminar su membresía"
+    assert _PREVIEW in dialog.hint.text() and ok.isEnabled()
+    assert not dialog.notes_edit.isEnabled()  # the server writes what it did
+    assert dialog.data() == {"compensation_type": BONUS_CLASS, "compensation_notes": None, "resolved": True}
+
+    blocked = FollowUpDialog(None, mode="compensation",
+                             displacement={"bonus_blocker": "No tiene membresía con la cual darle la clase extra."})
+    qtbot.addWidget(blocked)
+    ok = blocked.buttons.button(QDialogButtonBox.StandardButton.Ok)
+    assert "No tiene membresía" in blocked.hint.text() and not ok.isEnabled()
+    blocked.type_combo.setCurrentIndex(blocked.type_combo.findData("make_up_class"))
+    assert ok.isEnabled() and blocked.notes_edit.isEnabled()
+
+
+def test_registering_the_extra_class_applies_it_and_other_options_only_record(tab, monkeypatch):
+    from PySide6.QtWidgets import QDialog
+
+    from app.views.tabs import special_events_tab as module
+
+    tab._render_detail(_detail_with(bonusPreview=_PREVIEW))
+    proposal = tab.displaced_table.item(0, 7)
+    assert proposal.text() == "Propuesta: clase extra lun 02/11 19:00"
+    assert proposal.toolTip() == f"Clase extra propuesta: {_PREVIEW}"
+    tab.displaced_table.selectRow(0)
+    calls = []
+    monkeypatch.setattr(tab.controller, "apply_bonus_class",
+                        lambda displacement_id, resolved=True: calls.append(("bonus", displacement_id, resolved)))
+    monkeypatch.setattr(tab.controller, "update_follow_up", lambda payload: calls.append(("record", payload)))
+    choice = {"code": None}
+
+    class AcceptingDialog(module.FollowUpDialog):
+        def exec(self):
+            if choice["code"]:
+                self.type_combo.setCurrentIndex(self.type_combo.findData(choice["code"]))
+            return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(module, "FollowUpDialog", AcceptingDialog)
+    tab._register_compensation()  # default option
+    choice["code"] = "make_up_class"
+    tab._register_compensation()
+    assert calls[0] == ("bonus", 9, True)
+    assert calls[1][0] == "record" and calls[1][1]["compensation_type"] == "make_up_class"
+
+
+def test_an_extra_class_already_given_can_only_be_closed(tab, monkeypatch):
+    from app.views.tabs import special_events_tab as module
+
+    tab._render_detail(_detail_with(compensationType="membership_extension",
+                                    compensationNotes="Clase extra el lun 02/11 a las 19:00."))
+    tab.displaced_table.selectRow(0)
+    asked, saved = [], []
+    monkeypatch.setattr(module, "show_confirmation", lambda _parent, message, **_k: asked.append(message) or True)
+    monkeypatch.setattr(tab.controller, "update_follow_up", saved.append)
+    tab._register_compensation()
+    assert "Ya se le dio la clase extra: Clase extra el lun 02/11" in asked[0]
+    assert saved == [{"displacement_id": 9, "resolved": True}]
+
+
+def test_bulk_extra_class_confirms_with_each_proposal(tab, monkeypatch):
+    from app.views.tabs import special_events_tab as module
+
+    tab._render_detail(_detail_with(bonusPreview=_PREVIEW))
+    assert tab.bonus_all_btn.isEnabled()
+    asked, applied = [], []
+    monkeypatch.setattr(module, "show_confirmation", lambda _parent, message, **_k: asked.append(message) or True)
+    monkeypatch.setattr(tab.controller, "apply_bonus_classes", applied.append)
+    tab._apply_bonus_to_pending()
+    assert applied == [7]
+    assert f"• Omar Cortinas: {_PREVIEW}" in asked[0]
+
+    tab._render_detail(_detail_with(bonusBlocker="No tiene membresía."))
+    assert not tab.bonus_all_btn.isEnabled()
