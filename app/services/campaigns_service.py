@@ -69,6 +69,7 @@ _MEDIA_ASSET_FIELDS = """
 """
 
 _METRICS_FIELDS = """
+    buttonClicks buttonClickers textReplies textReplyPeople convertedClickers
     accepted uniquePhones duplicates rejected needsReview retryPending errorCounts
     updatedAt periodStart periodEnd templateId
     targeted
@@ -175,6 +176,11 @@ def _map_campaign(node: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
 def _map_metrics(node: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     node = node or {}
     return {
+        "button_clicks": node.get("buttonClicks", 0),
+        "button_clickers": node.get("buttonClickers", 0),
+        "text_replies": node.get("textReplies", 0),
+        "text_reply_people": node.get("textReplyPeople", 0),
+        "converted_clickers": node.get("convertedClickers", 0),
         "accepted": node.get("accepted", 0),
         "unique_phones": node.get("uniquePhones", 0),
         "duplicates": node.get("duplicates", 0),
@@ -446,6 +452,32 @@ class CampaignsService:
         """
         result = await self.client.execute(query, {"id": campaign_id})
         return _map_metrics((result or {}).get("campaignMetrics"))
+
+    async def get_button_analytics(self, campaign_id: int, button_key=None, offset=0, limit=50):
+        query = """
+            query CampaignButtonAnalytics($id: Int!, $key: String, $offset: Int!, $limit: Int!) {
+                campaignButtonAnalytics(campaignId: $id, buttonKey: $key, offset: $offset, limit: $limit) {
+                    buttonClicks buttonClickers textReplies textReplyPeople convertedClickers
+                    total limit offset updatedAt error
+                    buttons { key label kind measurable clicks uniquePeople convertedPeople historical }
+                    items { messageId waMessageId recipientId personName phone buttonKey buttonLabel
+                            clickedAt converted convertedAt }
+                }
+            }
+        """
+        result = await self.client.execute(query, {"id": campaign_id, "key": button_key,
+                                                   "offset": offset, "limit": limit})
+        node = (result or {}).get("campaignButtonAnalytics")
+        if not node:
+            return {"error": "Sin respuesta del servidor"}
+        mapped = _map_metrics(node)
+        mapped.update({key: node.get(key) for key in ("total", "limit", "offset", "error")})
+        mapped["buttons"] = [dict(b, unique_people=b.get("uniquePeople"),
+                                  converted_people=b.get("convertedPeople")) for b in node.get("buttons") or []]
+        mapped["items"] = [dict(e, person_name=e.get("personName"), button_label=e.get("buttonLabel"),
+                                clicked_at=e.get("clickedAt"), converted_at=e.get("convertedAt"))
+                           for e in node.get("items") or []]
+        return mapped
 
     async def list_recipients(
         self, campaign_id: int, status: Optional[str] = None

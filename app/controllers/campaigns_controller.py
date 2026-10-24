@@ -30,6 +30,7 @@ class CampaignsController(BaseController):
     action_result = Signal(object)        # generic run/status dict
     recovery_previewed = Signal(int, object)
     metrics_loaded = Signal(object)       # dict
+    button_analytics_loaded = Signal(int, object, int, int, object)
     metrics_batch_loaded = Signal(object) # {campaign_id: metrics}
     recipients_loaded = Signal(object)    # List[dict]
     media_assets_loaded = Signal(str, object)  # kind, List[dict]
@@ -93,6 +94,14 @@ class CampaignsController(BaseController):
         self._execute_authenticated_operation(
             self._service, "get_metrics",
             self.metrics_loaded.emit, self._on_error, campaign_id=campaign_id,
+        )
+
+    def load_button_analytics(self, campaign_id: int, button_key=None, offset=0, request_id=0) -> None:
+        self._execute_authenticated_operation(
+            self._service, "get_button_analytics",
+            lambda data: self.button_analytics_loaded.emit(campaign_id, button_key, offset, request_id, data),
+            lambda error: self.button_analytics_loaded.emit(campaign_id, button_key, offset, request_id, {"error": str(error)}),
+            campaign_id=campaign_id, button_key=button_key, offset=offset,
         )
 
     def load_metrics_batch(self, campaign_ids: List[int]) -> None:
