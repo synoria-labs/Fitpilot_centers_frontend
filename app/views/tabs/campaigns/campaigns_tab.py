@@ -36,6 +36,7 @@ from ...table_widget_helpers import configure_table_widget
 from ...widgets.empty_state import EmptyStateWidget
 from ..whatsapp import theme
 from .panels import MetricsPanel, RecipientsTable
+from .button_metrics_panel import CampaignButtonsPanel
 from .recovery_dialog import RecoveryDialog
 from .steps import AudienceStep, MessageStep, ReviewStep
 
@@ -98,6 +99,7 @@ class CampaignsTab(QWidget):
         self._metrics_by_id: Dict[int, Dict[str, Any]] = {}
         self._class_names: Dict[int, str] = {}
         self._editing_id: Optional[int] = None
+        self._button_request_id = 0
         self._status: str = "draft"
         # Gate write actions on the capability rather than letting the server reject them
         # after the fact (same pattern as members_tab).
@@ -309,6 +311,9 @@ class CampaignsTab(QWidget):
 
         self.metrics_panel = MetricsPanel()
         layout.addWidget(self.metrics_panel)
+        self.button_metrics_panel = CampaignButtonsPanel()
+        self.button_metrics_panel.requested.connect(self._load_button_analytics)
+        layout.addWidget(self.button_metrics_panel)
         self.recipients_table = RecipientsTable()
         self.recipients_table.status_filter.currentIndexChanged.connect(
             self._reload_recipients
@@ -330,6 +335,7 @@ class CampaignsTab(QWidget):
         c.action_result.connect(self._on_action)
         c.audience_previewed.connect(self._on_audience_previewed)
         c.metrics_loaded.connect(self._on_metrics)
+        c.button_analytics_loaded.connect(self._on_button_analytics)
         c.recovery_previewed.connect(self._on_recovery_preview)
         c.metrics_batch_loaded.connect(self._on_metrics_batch)
         c.recipients_loaded.connect(self._on_recipients)
@@ -424,6 +430,7 @@ class CampaignsTab(QWidget):
             button.setEnabled(self._can_send and (saved or not needs_saved))
 
         self.metrics_panel.setVisible(saved)
+        self.button_metrics_panel.setVisible(saved and status != "draft")
         editable = self._can_send and status not in ("sending", "canceled")
         self.delivery_panel.setEnabled(editable)
         self.delivery_panel.recency.setEnabled(editable and status == "draft")
@@ -564,6 +571,9 @@ class CampaignsTab(QWidget):
         self._reload_recipients()
 
     def _populate_editor(self, campaign: Dict[str, Any]) -> None:
+        if self._editing_id != campaign.get("id"):
+            self._button_request_id += 1
+            self.button_metrics_panel.clear()
         self._editing_id = campaign.get("id")
         self._status = campaign.get("status") or "draft"
         self.delivery_panel.load(campaign)
@@ -642,6 +652,18 @@ class CampaignsTab(QWidget):
 
     def _on_metrics(self, metrics: Dict[str, Any]) -> None:
         self.metrics_panel.set_metrics(metrics, sending=self._status == "sending")
+        self._load_button_analytics(self.button_metrics_panel.selected_key(), self.button_metrics_panel.offset)
+
+    def _load_button_analytics(self, button_key=None, offset=0):
+        if self._editing_id and self._status != "draft":
+            self._button_request_id += 1
+            self.controller.load_button_analytics(self._editing_id, button_key, offset, self._button_request_id)
+
+    def _on_button_analytics(self, campaign_id, button_key, offset, request_id, data):
+        panel = self.button_metrics_panel
+        if (request_id == self._button_request_id and campaign_id == self._editing_id
+                and button_key == panel.selected_key() and offset == panel.offset):
+            panel.set_analytics(data or {"error": "Sin respuesta del servidor"})
 
     def _on_recipients(self, recipients: List[Dict[str, Any]]) -> None:
         self.recipients_table.set_recipients(recipients or [])
@@ -701,6 +723,7 @@ class CampaignsTab(QWidget):
         self.message_step.select_template(None, [])
         self.message_step.set_media_override(None, None)
         self.metrics_panel.clear()
+        self.button_metrics_panel.clear()
         self._go_to_step(0)
 
     def _on_save_clicked(self) -> None:
@@ -809,6 +832,7 @@ class CampaignsTab(QWidget):
         self._status = "draft"
         self.audience_step.name_edit.setText(f"{campaign.get('name') or 'Campaña'} (copia)")
         self.metrics_panel.clear()
+        self.button_metrics_panel.clear()
         self._go_to_step(0)
         self._apply_state()
 
