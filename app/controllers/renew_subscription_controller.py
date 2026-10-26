@@ -194,6 +194,7 @@ class RenewSubscriptionController(BaseSubscriptionController):
 
     def load_defaults(self, member_id: int, member_name: Optional[str] = None, member_data: Optional[Any] = None) -> None:
         """Load all data needed for renewal dialog (optimized approach)."""
+        self.subscription_service.person_id = member_id
         logger.info("Loading renewal data for member_id=%s, name=%s", member_id, member_name)
 
         # Load member data immediately

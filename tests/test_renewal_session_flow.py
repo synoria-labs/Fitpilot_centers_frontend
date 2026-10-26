@@ -130,3 +130,22 @@ async def test_pos_adapter_forwards_password_outside_line_items_and_retains_erro
     assert result["error_code"] == "MEMBERSHIP_OVERLAP"
     assert calls[0]["adminPassword"] == "test-password"
     assert "adminPassword" not in calls[0]["lineItems"][0]
+
+
+@pytest.mark.asyncio
+async def test_fixed_seat_adapter_identifies_the_renewing_member():
+    from app.services.standing_bookings_service import StandingBookingsService
+    calls = []
+    class Client:
+        async def execute(self, query, variables):
+            calls.append(variables["input"])
+            return {"templateAvailableSeats": {"seats": []}}
+    await StandingBookingsService(Client()).get_available_seats(1, person_id=18)
+    assert calls[0]["personId"] == 18
+
+
+def test_renewal_controller_supplies_member_for_own_seat_availability(qapp, monkeypatch):
+    controller = RenewSubscriptionController(SimpleNamespace(client=object()))
+    monkeypatch.setattr(controller, "_load_data_intelligently", lambda member: None)
+    controller.load_defaults(18)
+    assert controller.subscription_service.person_id == 18
