@@ -20,6 +20,7 @@ class RenewSubscriptionController(BaseSubscriptionController):
     member_data_error = Signal(str)
     renewal_success = Signal(dict)
     renewal_error = Signal(str)
+    admin_authorization_required = Signal(str)
 
     def __init__(
         self,
@@ -68,6 +69,8 @@ class RenewSubscriptionController(BaseSubscriptionController):
 
         # Log the actual field types and values (safely)
         for key, value in form_data.items():
+            if "password" in key:
+                continue
             if key in ['start_at', 'end_at'] and hasattr(value, 'isoformat'):
                 logger.info(f"  {key}: {value.isoformat()} (type: {type(value).__name__})")
             else:
@@ -120,6 +123,10 @@ class RenewSubscriptionController(BaseSubscriptionController):
         has_entities = bool(subscription and payment)
 
         if not success or not has_entities:
+            if result.get("error_code") in {"MEMBERSHIP_OVERLAP", "ADMIN_PASSWORD_INVALID"}:
+                self._renewal_operation = None
+                self.admin_authorization_required.emit(result.get("message") or result.get("error_cause"))
+                return
             error_message = self._build_renewal_failure_message(result)
             logger.warning(
                 "Renewal rejected as failure. success=%s has_entities=%s error=%s",
@@ -452,6 +459,7 @@ class RenewSubscriptionController(BaseSubscriptionController):
                 logger.info(f"Mapped 'amount' ({form_data['amount']}) to 'payment_amount'")
 
             service_params['session_id'] = form_data.get('session_id')
+            service_params['admin_password'] = form_data.get('admin_password')
 
             # Handle template_id: prioritize form_data, fallback to member data
             if 'template_id' in form_data and form_data['template_id']:
