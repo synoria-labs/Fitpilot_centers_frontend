@@ -8,10 +8,12 @@ from PySide6.QtCore import Qt
 class AdminPasswordDialog(QDialog):
     """Simple dialog that prompts for the administrator password."""
 
-    def __init__(self, parent=None) -> None:
+    def __init__(self, parent=None, *, title="Confirmar eliminacion", message=None, confirm_text="Eliminar") -> None:
         super().__init__(parent)
         self._password = ""
-        self.setWindowTitle("Confirmar eliminacion")
+        self.setWindowTitle(title)
+        self._message = message or "Ingresa la contrasena de administrador para eliminar al socio seleccionado."
+        self._confirm_text = confirm_text
         self.setModal(True)
         self._setup_ui()
 
@@ -20,9 +22,7 @@ class AdminPasswordDialog(QDialog):
         layout.setContentsMargins(20, 16, 20, 16)
         layout.setSpacing(12)
 
-        message = QLabel(
-            "Ingresa la contrasena de administrador para eliminar al socio seleccionado."
-        )
+        message = QLabel(self._message)
         message.setWordWrap(True)
         layout.addWidget(message)
 
@@ -40,7 +40,7 @@ class AdminPasswordDialog(QDialog):
             QDialogButtonBox.StandardButton.Cancel | QDialogButtonBox.StandardButton.Ok
         )
         confirm_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
-        confirm_button.setText("Eliminar")
+        confirm_button.setText(self._confirm_text)
         confirm_button.setObjectName("dangerButton")
         confirm_button.setDefault(True)
 
@@ -61,8 +61,8 @@ class AdminPasswordDialog(QDialog):
         return self._password
 
     def accept(self) -> None:  # type: ignore[override]
-        password = self.password_input.text().strip()
-        if not password:
+        password = self.password_input.text()
+        if not password.strip():
             self.error_label.setText("La contrasena es obligatoria.")
             self.error_label.setVisible(True)
             self.password_input.setFocus()

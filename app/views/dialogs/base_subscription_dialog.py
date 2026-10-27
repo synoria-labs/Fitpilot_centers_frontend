@@ -67,7 +67,10 @@ class BaseSubscriptionDialog(QDialog):
     def _update_daily_picker(self):
         daily = is_day_pass(self.plan_combo.currentData())
         if daily and not hasattr(self, "_daily_picker"):
-            self._daily_picker = DayPassSessionPicker(self.controller.members_service.client, self.start_date, self)
+            self._daily_picker = DayPassSessionPicker(
+                self.controller.members_service.client, self.start_date, self,
+                member_id=getattr(self, "member_id", None),
+            )
             self.layout().insertWidget(1, self._daily_picker)
         if hasattr(self, "_daily_picker"):
             self._daily_picker.setEnabled(daily)
@@ -75,6 +78,12 @@ class BaseSubscriptionDialog(QDialog):
             if daily:
                 self._daily_picker.reload()
         self.class_combo.setVisible(not daily)
+        # The form label is a separate widget; keep it in sync with its field.
+        form = self.class_combo.parentWidget().layout()
+        if hasattr(form, "labelForField"):
+            label = form.labelForField(self.class_combo)
+            if label:
+                label.setVisible(not daily)
         if daily:
             self._clear_seats()
         else:

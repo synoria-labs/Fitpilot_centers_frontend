@@ -17,6 +17,7 @@ class PosController(BaseController):
     sale_completed = Signal(object)      # sale dict
     loading_changed = Signal(bool)
     error_occurred = Signal(str)
+    admin_authorization_required = Signal(str)
 
     def __init__(
         self,
@@ -50,11 +51,13 @@ class PosController(BaseController):
         payments: List[Dict[str, Any]],
         person_id: Optional[int] = None,
         note: Optional[str] = None,
+        admin_password: Optional[str] = None,
     ) -> None:
         self.loading_changed.emit(True)
         self._execute_authenticated_operation(
             self._pos, "create_sale", self._on_sale_done, self._on_error,
             line_items=line_items, payments=payments, person_id=person_id, note=note,
+            admin_password=admin_password,
         )
 
     # ------------------------------------------------------------------ slots
@@ -74,6 +77,9 @@ class PosController(BaseController):
             self.sale_completed.emit(result.get("sale"))
         else:
             message = result.get("message") if isinstance(result, dict) else "Error al registrar la venta"
+            if isinstance(result, dict) and result.get("error_code") in {"MEMBERSHIP_OVERLAP", "ADMIN_PASSWORD_INVALID"}:
+                self.admin_authorization_required.emit(message)
+                return
             self.error_occurred.emit(message or "Error al registrar la venta")
 
     @Slot(str)

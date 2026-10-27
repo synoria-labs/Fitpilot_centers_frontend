@@ -202,6 +202,7 @@ class PosCheckoutPanel(QWidget):
         self.controller.plans_loaded.connect(self._on_plans_loaded)
         self.controller.sale_completed.connect(self._on_sale_completed)
         self.controller.error_occurred.connect(self._on_error)
+        self.controller.admin_authorization_required.connect(self._on_admin_authorization_required)
         self.controller.loading_changed.connect(self._on_loading)
 
     # ------------------------------------------------------------------ caja banner / products
@@ -258,6 +259,18 @@ class PosCheckoutPanel(QWidget):
     @Slot(str)
     def _on_error(self, error: str) -> None:
         show_error(self, error, title="POS")
+
+    @Slot(str)
+    def _on_admin_authorization_required(self, message: str) -> None:
+        from ..dialogs.admin_password_dialog import AdminPasswordDialog
+        dialog = AdminPasswordDialog(
+            self, title="Autorizar renovación solapada", message=message, confirm_text="Autorizar y cobrar",
+        )
+        if dialog.exec():
+            person_id = self._current_member.get("id") if self._current_member else None
+            self.controller.finalize_sale(
+                self._lines, self._tenders, person_id, None, admin_password=dialog.password,
+            )
 
     @Slot(bool)
     def _on_loading(self, loading: bool) -> None:

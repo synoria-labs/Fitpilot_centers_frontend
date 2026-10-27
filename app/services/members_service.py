@@ -679,6 +679,7 @@ class MembersService:
         provider_payment_id: Optional[str] = None,
         external_reference: Optional[str] = None,
         session_id: Optional[int] = None,
+        admin_password: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Renew a member's subscription using the new GraphQL mutation."""
         mutation = """
@@ -735,6 +736,9 @@ class MembersService:
 
         if session_id is not None:
             input_payload["sessionId"] = int(session_id)
+
+        if admin_password:
+            input_payload["adminPassword"] = admin_password
 
         variables = {"input": input_payload}
 

@@ -84,12 +84,14 @@ class PosService:
         payments: List[Dict[str, Any]],
         person_id: Optional[int] = None,
         note: Optional[str] = None,
+        admin_password: Optional[str] = None,
     ) -> Dict[str, Any]:
         mutation = """
             mutation CreateSale($input: CreateSaleInput!) {
                 createSale(input: $input) {
                     success
                     message
+                    errorCode
                     sale { %s }
                 }
             }
@@ -103,6 +105,8 @@ class PosService:
             input_payload["personId"] = int(person_id)
         if note:
             input_payload["note"] = note
+        if admin_password:
+            input_payload["adminPassword"] = admin_password
 
         try:
             result = await self.client.execute(mutation, {"input": input_payload})
@@ -110,6 +114,7 @@ class PosService:
             return {
                 "success": bool(payload.get("success")),
                 "message": payload.get("message", ""),
+                "error_code": payload.get("errorCode"),
                 "sale": payload.get("sale"),
             }
         except Exception as exc:  # noqa: BLE001

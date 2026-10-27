@@ -1,5 +1,5 @@
 """Select an actual class, never a recurring template, for a single-class pass."""
-from datetime import datetime, time, timedelta, timezone
+from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from PySide6.QtCore import QDate
@@ -16,18 +16,19 @@ def is_day_pass(plan):
 
 
 class DayPassSessionPicker(QWidget):
-    def __init__(self, client, date_edit=None, parent=None):
+    def __init__(self, client, date_edit=None, parent=None, *, member_id=None):
         super().__init__(parent)
         self._service = ClassesService(client)
         self._request = 0
         self._operations = []
+        self.member_id = member_id
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         self.date_edit = date_edit or QDateEdit()
         if date_edit is None:
             self.date_edit.setCalendarPopup(True)
             self.date_edit.setDate(QDate.currentDate())
-            self.date_edit.setMinimumDate(QDate.currentDate())
+            self.date_edit.setMinimumDate(QDate.currentDate().addDays(-30))
             layout.addWidget(self.date_edit)
         self.combo = QComboBox()
         self.hint = QLabel("El pase vence al terminar la clase seleccionada.")
@@ -56,7 +57,8 @@ class DayPassSessionPicker(QWidget):
             for row in rows or []:
                 stamp = datetime.fromisoformat(row["startAt"].replace("Z", "+00:00"))
                 end = datetime.fromisoformat(row["endAt"].replace("Z", "+00:00"))
-                if stamp <= datetime.now(timezone.utc) or stamp.astimezone(STUDIO_ZONE).date() != selected or row.get("availableSpots", 0) <= 0:
+                if (stamp.astimezone(STUDIO_ZONE).date() != selected
+                        or (row.get("availableSpots", 0) <= 0 and not row.get("hasReservation"))):
                     continue
                 self.combo.addItem(
                     f"{row.get('name') or 'Clase'} · {stamp.astimezone(STUDIO_ZONE):%d/%m/%Y %H:%M}"
@@ -74,7 +76,8 @@ class DayPassSessionPicker(QWidget):
         operation = start_authenticated_operation(
             self._service, "get_available_sessions", parent=self,
             on_success=loaded, on_error=failed,
-            start_date=max(start, datetime.now(timezone.utc)), end_date=start + timedelta(days=1),
+            start_date=start, end_date=start + timedelta(days=1),
+            include_completed=True, person_id=self.member_id,
         )
         self._operations.append(operation)
 
@@ -83,6 +86,6 @@ class DayPassSessionPicker(QWidget):
         if not row:
             return None
         stamp = datetime.fromisoformat(row["startAt"].replace("Z", "+00:00"))
-        if stamp <= datetime.now(timezone.utc) or stamp.astimezone(STUDIO_ZONE).date() != self.date_edit.date().toPython():
+        if stamp.astimezone(STUDIO_ZONE).date() != self.date_edit.date().toPython():
             return None
         return int(row["id"])

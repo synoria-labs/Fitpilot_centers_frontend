@@ -191,6 +191,7 @@ class SubscriptionService(QObject):
                 self,
                 template_id=template_id,
                 date_to_check=check_date,
+                person_id=getattr(self, "person_id", None),
             )
             self._active_seats_operation.success.connect(self._on_seats_loaded)
             self._active_seats_operation.error.connect(self._on_seats_error)
