@@ -12,7 +12,7 @@ def status_color(estado: str) -> QColor:
         return QColor(76, 175, 80)
     if "vencido" in estado_clean or "expired" in estado_clean:
         return QColor(244, 67, 54)
-    if "vence pronto" in estado_clean or "pendiente" in estado_clean or "pending" in estado_clean:
+    if "vence pronto" in estado_clean or "pendiente" in estado_clean or "pending" in estado_clean or estado_clean == "scheduled":
         return QColor(255, 193, 7)
     return QColor(158, 158, 158)
 
