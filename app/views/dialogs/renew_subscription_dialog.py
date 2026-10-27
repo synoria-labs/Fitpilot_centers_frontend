@@ -195,6 +195,7 @@ class RenewSubscriptionDialog(BaseSubscriptionDialog):
         self.controller.seats_error.connect(self._on_seats_error)
         self.controller.renewal_success.connect(self._on_renewal_success)
         self.controller.renewal_error.connect(self._on_renewal_error)
+        self.controller.admin_authorization_required.connect(self._on_admin_authorization_required)
 
     # ---------------------------
     # Carga inicial
@@ -307,9 +308,10 @@ class RenewSubscriptionDialog(BaseSubscriptionDialog):
 
         if end_iso:
             try:
-                end_dt = datetime.fromisoformat(end_iso.replace("Z", "+00:00"))
+                end_dt = end_iso if isinstance(end_iso, datetime) else datetime.fromisoformat(end_iso.replace("Z", "+00:00"))
+                end_dt = end_dt.astimezone() if end_dt.tzinfo else end_dt
                 self.end_date_label.setText(end_dt.date().isoformat())
-                self.start_date.setDate(QDate(end_dt.year, end_dt.month, end_dt.day).addDays(1))
+                self.start_date.setDate(max(QDate.currentDate(), QDate(end_dt.year, end_dt.month, end_dt.day).addDays(1)))
             except Exception:
                 self.end_date_label.setText("—")
                 self.start_date.setDate(QDate.currentDate())
@@ -319,6 +321,13 @@ class RenewSubscriptionDialog(BaseSubscriptionDialog):
 
         # Prefill clase actual si existe
         self._active_template_id = active_book.get("templateId") or active_book.get("template_id")
+
+        for i in range(self.plan_combo.count()):
+            plan = self.plan_combo.itemData(i)
+            if isinstance(plan, MembershipPlan) and plan.name == self._active_membership_plan_name:
+                self.plan_combo.setCurrentIndex(i)
+                break
+        self._update_daily_picker()
 
         self._maybe_ready()
 
@@ -347,6 +356,19 @@ class RenewSubscriptionDialog(BaseSubscriptionDialog):
     # ---------------------------
     # Confirm
     # ---------------------------
+    def _on_admin_authorization_required(self, message: str) -> None:
+        self._operation_in_progress = False
+        self._set_loading(False)
+        dialog = AdminPasswordDialog(
+            self, title="Autorizar renovación solapada", message=message, confirm_text="Autorizar renovación",
+        )
+        if dialog.exec():
+            form_data = self._collect_form()
+            form_data["admin_password"] = dialog.password
+            self._operation_in_progress = True
+            self._set_loading(True)
+            self.controller.renew_subscription(form_data)
+
     def _on_accept(self) -> None:
         if not self._validate_daily_selection():
             return

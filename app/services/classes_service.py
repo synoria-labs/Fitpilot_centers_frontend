@@ -18,7 +18,9 @@ class ClassesService:
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         class_type_id: Optional[int] = None,
-        venue_id: Optional[int] = None
+        venue_id: Optional[int] = None,
+        include_completed: bool = False,
+        person_id: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         """
         Obtiene sesiones disponibles con información de capacidad.
@@ -45,6 +47,7 @@ class ClassesService:
                             endAt
                             capacity
                             availableSpots
+                            hasReservation
                             reservedCount
                             classTypeName
                             venueName
@@ -63,6 +66,10 @@ class ClassesService:
                     'venueId': venue_id
                 }
             }
+            if include_completed:
+                variables['input']['includeCompleted'] = True
+            if person_id is not None:
+                variables['input']['personId'] = int(person_id)
 
             result = await self.client.execute(query, variables)
 

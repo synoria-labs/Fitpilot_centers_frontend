@@ -194,8 +194,10 @@ class PosRenewalLineDialog(BaseSubscriptionDialog):
 
         end_dt = self._coerce_datetime(active_mem.get("endDate") or active_mem.get("end_date"))
         if end_dt:
+            end_dt = end_dt.astimezone() if end_dt.tzinfo else end_dt
             self.end_date_label.setText(end_dt.date().isoformat())
-            self.start_date.setDate(QDate(end_dt.year, end_dt.month, end_dt.day).addDays(1))
+            suggested = QDate(end_dt.year, end_dt.month, end_dt.day).addDays(1)
+            self.start_date.setDate(max(QDate.currentDate(), suggested))
 
         # Real booking only arrives with the background load; don't clobber with empties.
         if active_book:
@@ -222,6 +224,7 @@ class PosRenewalLineDialog(BaseSubscriptionDialog):
                 self.plan_combo.setCurrentIndex(i)
                 self.plan_combo.blockSignals(False)
                 self.amount_input.setValue(float(mp.price))
+                self._update_daily_picker()
                 break
 
     def _preselect_class_and_seat(self) -> None:

@@ -213,7 +213,8 @@ class StandingBookingsService:
     async def get_available_seats(
         self,
         template_id: int,
-        date_to_check: Optional[date] = None
+        date_to_check: Optional[date] = None,
+        person_id: Optional[int] = None,
     ) -> List[Seat]:
         """Get available seats for a template on a specific date."""
         query = """
@@ -236,9 +237,11 @@ class StandingBookingsService:
         variables = {
             "input": {
                 "templateId": template_id,
-                "dateToCheck": date_to_check.isoformat() if date_to_check else None
+                "dateToCheck": date_to_check.isoformat() if date_to_check else None,
             }
         }
+        if person_id is not None:
+            variables["input"]["personId"] = int(person_id)
 
         try:
             logger.debug(f"Executing GetAvailableSeats query with variables: {variables}")
