@@ -47,6 +47,8 @@ class ChatbotConfigController(BaseController):
             enabled=bool(data.get("enabled", False)),
             require_confirmation=bool(data.get("require_confirmation", True)),
             require_mp_payment=bool(data.get("require_mp_payment", False)),
+            offer_in_person_registration=bool(data.get("offer_in_person_registration", False)),
+            sales_v2_enabled=bool(data.get("sales_v2_enabled", False)),
             model=data.get("model"),
             template_ai_model=data.get("template_ai_model"),
             prompt_optimizer_model=data.get("prompt_optimizer_model"),

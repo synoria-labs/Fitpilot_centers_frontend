@@ -33,6 +33,7 @@ from ...utils.dialog_helpers import show_error, show_info
 from ..screen_style import screen_qss
 from ..widgets.ai_model_combo import AiModelCombo, DEFAULT_AI_MODEL
 from .whatsapp import theme
+from .membership_purchase_orders import MembershipPurchaseOrdersPanel
 
 logger = get_logger(__name__)
 
@@ -212,7 +213,13 @@ class ChatbotConfigTab(QWidget):
             "Solicitar pago por MercadoPago antes de inscribir / renovar / reservar"
         )
         automation_form.addRow("MercadoPago", self.require_mp_payment_check)
+        self.offer_in_person_check = QCheckBox("Ofrecer registro y pago en recepción (gestionados por el personal)")
+        automation_form.addRow("Pago presencial", self.offer_in_person_check)
+        self.sales_v2_check = QCheckBox("Usar ventas con fecha de inicio confirmada y órdenes de pago")
+        automation_form.addRow("Nuevo flujo", self.sales_v2_check)
         content.addWidget(automation_group)
+        self.purchase_orders = MembershipPurchaseOrdersPanel(self.controller._service, self)
+        content.addWidget(self.purchase_orders)
 
         instructions_group = QGroupBox("Modelo e instrucciones")
         instructions_group.setObjectName("botGroup")
@@ -299,6 +306,8 @@ class ChatbotConfigTab(QWidget):
         self.enabled_check.setChecked(bool(config.get("enabled")))
         self.require_confirmation_check.setChecked(bool(config.get("require_confirmation", True)))
         self.require_mp_payment_check.setChecked(bool(config.get("require_mp_payment", False)))
+        self.offer_in_person_check.setChecked(bool(config.get("offer_in_person_registration", False)))
+        self.sales_v2_check.setChecked(bool(config.get("sales_v2_enabled", False)))
         for combo, key in ((self.model_combo, "model"), (self.template_model_combo, "template_ai_model"),
                            (self.optimizer_model_combo, "prompt_optimizer_model")):
             combo.set_options(config.get("model_options"))
@@ -357,6 +366,8 @@ class ChatbotConfigTab(QWidget):
             "enabled": self.enabled_check.isChecked(),
             "require_confirmation": self.require_confirmation_check.isChecked(),
             "require_mp_payment": self.require_mp_payment_check.isChecked(),
+            "offer_in_person_registration": self.offer_in_person_check.isChecked(),
+            "sales_v2_enabled": self.sales_v2_check.isChecked(),
             "model": self.model_combo.model_id(),
             "template_ai_model": self.template_model_combo.model_id(),
             "prompt_optimizer_model": self.optimizer_model_combo.model_id(),

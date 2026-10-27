@@ -16,6 +16,8 @@ _CONFIG_FIELDS = """
     enabled
     requireConfirmation
     requireMpPayment
+    offerInPersonRegistration
+    salesV2Enabled
     model
     templateAiModel
     promptOptimizerModel
@@ -57,6 +59,8 @@ def _map_config(node: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         "enabled": bool(node.get("enabled")),
         "require_confirmation": bool(node.get("requireConfirmation")),
         "require_mp_payment": bool(node.get("requireMpPayment")),
+        "offer_in_person_registration": bool(node.get("offerInPersonRegistration")),
+        "sales_v2_enabled": bool(node.get("salesV2Enabled")),
         "model": node.get("model") or "claude-sonnet-5-5",
         "template_ai_model": node.get("templateAiModel") or "claude-sonnet-5-5",
         "prompt_optimizer_model": node.get("promptOptimizerModel") or "claude-sonnet-5-5",
@@ -93,6 +97,25 @@ class ChatbotConfigService:
             return config
         return None
 
+    async def list_purchase_orders(self):
+        result = await self.client.execute("""query {
+            membershipPurchaseOrders { id conversationId participantName planName amount status startDate
+                                      approvedAt reviewReason paymentId subscriptionId actionType externalReference providerPaymentId }
+        }""")
+        return (result or {}).get("membershipPurchaseOrders") or []
+
+    async def purchase_start_options(self, order_id, start_date):
+        result = await self.client.execute("""query($id: Int!, $date: Date!) {
+            membershipPurchaseStartOptions(orderId:$id, startDate:$date) { sessionId label }
+        }""", {"id": order_id, "date": start_date})
+        return (result or {}).get("membershipPurchaseStartOptions") or []
+
+    async def confirm_purchase_start(self, order_id, start_date, session_id=None):
+        result = await self.client.execute("""mutation($id:Int!, $date:Date!, $session:Int) {
+            confirmMembershipPurchaseStart(orderId:$id, startDate:$date, sessionId:$session) { success message error }
+        }""", {"id": order_id, "date": start_date, "session": session_id})
+        return (result or {}).get("confirmMembershipPurchaseStart") or {"success": False, "error": "Sin respuesta del servidor"}
+
     async def save_config(
         self,
         enabled: bool,
@@ -109,6 +132,8 @@ class ChatbotConfigService:
         extra_info: Optional[str] = None,
         template_ai_model: Optional[str] = None,
         prompt_optimizer_model: Optional[str] = None,
+        offer_in_person_registration: bool = False,
+        sales_v2_enabled: bool = False,
     ) -> Dict[str, Any]:
         mutation = f"""
             mutation SaveChatbotConfig($input: SaveChatbotConfigInput!) {{
@@ -124,6 +149,8 @@ class ChatbotConfigService:
                 "enabled": enabled,
                 "requireConfirmation": require_confirmation,
                 "requireMpPayment": require_mp_payment,
+                "offerInPersonRegistration": offer_in_person_registration,
+                "salesV2Enabled": sales_v2_enabled,
                 "model": model,
                 "templateAiModel": template_ai_model,
                 "promptOptimizerModel": prompt_optimizer_model,
