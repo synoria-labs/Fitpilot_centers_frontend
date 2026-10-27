@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 )
 
 from .seat_icon_widget import SeatIconWidget
+from ...utils.datetime_helpers import to_local_datetime
 
 
 class ClassRowWidget(QWidget):
@@ -75,13 +76,8 @@ class ClassRowWidget(QWidget):
     # -----------------
     def _format_time_range(self, start_at: Any, end_at: Any) -> str:
         try:
-            import datetime as _dt
-            def parse(v):
-                if isinstance(v, str):
-                    return _dt.datetime.fromisoformat(v.replace("Z", "+00:00"))
-                return v
-            s = parse(start_at)
-            e = parse(end_at)
+            s = to_local_datetime(start_at)
+            e = to_local_datetime(end_at)
             if s and e:
                 return f"{s.strftime('%H:%M')} - {e.strftime('%H:%M')}"
         except Exception:

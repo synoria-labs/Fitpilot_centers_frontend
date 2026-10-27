@@ -236,8 +236,8 @@ def is_today(d: date) -> bool:
     return d == date.today()
 
 
-def format_local_datetime(value, fmt: str = "%d/%m/%Y %H:%M", tz_name: Optional[str] = None) -> str:
-    """Format a server timestamp in the gym's timezone (not the PC's, not UTC).
+def to_local_datetime(value, tz_name: Optional[str] = None) -> Optional[datetime]:
+    """Convert a server timestamp before using its calendar date or wall-clock time.
 
     The backend returns TIMESTAMPTZ values in UTC ("...+00:00"); formatting them directly
     shows evening classes on the next day. Naive values are assumed to be UTC.
@@ -248,10 +248,16 @@ def format_local_datetime(value, fmt: str = "%d/%m/%Y %H:%M", tz_name: Optional[
     from ..core.config import Config
 
     if value is None or value == "":
-        return "—"
+        return None
     parsed = parse_iso_datetime(value) if isinstance(value, str) else value
     if not isinstance(parsed, datetime):
-        return "—"
+        return None
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=_tz.utc)
-    return parsed.astimezone(ZoneInfo(tz_name or Config.TIMEZONE)).strftime(fmt)
+    return parsed.astimezone(ZoneInfo(tz_name or Config.TIMEZONE))
+
+
+def format_local_datetime(value, fmt: str = "%d/%m/%Y %H:%M", tz_name: Optional[str] = None) -> str:
+    """Format a server timestamp in the gym's timezone, independently of the PC."""
+    parsed = to_local_datetime(value, tz_name)
+    return parsed.strftime(fmt) if parsed is not None else "—"
