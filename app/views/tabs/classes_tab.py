@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
 
 from ...core import container, get_logger
 from ...threads.authenticated_operations import AuthenticatedOperation, start_authenticated_operation
-from ...utils.datetime_helpers import parse_iso_datetime
+from ...utils.datetime_helpers import to_local_datetime
 from ...models.base import ClassTemplate
 from ..widgets.week_selector import WeekSelector
 from ..widgets.class_type_filter import ClassTypeFilter
@@ -413,9 +413,10 @@ class ClassesTab(QWidget):
             if template_ids and template_id not in template_ids:
                 continue
 
-            # Parse start_at to get the date
-            start_at_raw = session.get('startAt')
-            start_at = parse_iso_datetime(start_at_raw) if isinstance(start_at_raw, str) else start_at_raw
+            # Evening sessions arrive on the next UTC day. Bucket by the studio's
+            # local day so Monday's reservation stays on the Monday row.
+            start_at_raw = session.get('startAt') or session.get('start_at')
+            start_at = to_local_datetime(start_at_raw)
             if isinstance(start_at, datetime):
                 session_date = start_at.date()
             else:
@@ -423,8 +424,8 @@ class ClassesTab(QWidget):
                 continue
 
             # Convert to expected format
-            end_at_raw = session.get('endAt')
-            end_at = parse_iso_datetime(end_at_raw) if isinstance(end_at_raw, str) else end_at_raw
+            end_at_raw = session.get('endAt') or session.get('end_at')
+            end_at = to_local_datetime(end_at_raw)
             session_data = {
                 'id': session.get('id'),
                 'name': session.get('name'),
