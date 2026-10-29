@@ -35,12 +35,17 @@ class WhatsAppChatController(BaseController):
     send_failed = Signal(str)
     new_message = Signal(object)            # ChatMessage (realtime)
     message_updated = Signal(object)        # ChatMessage (media download finished/failed)
+    bot_state_changed = Signal(int, bool)   # confirmed server state, even if another chat is open
+    bot_state_save_failed = Signal(int, str)
     error_occurred = Signal(str)
 
     def __init__(self, chat_service, parent: Optional[QObject] = None) -> None:
         super().__init__(parent)
         self._service = chat_service
         self._current_conversation_id: Optional[int] = None
+        self._bot_states: dict[int, bool] = {}
+        self._bot_state_revisions: dict[int, int] = {}
+        self._pending_bot_updates: set[int] = set()
 
         self._ws_bridge = _WsBridge()
         self._ws_bridge.message_received.connect(
@@ -62,8 +67,12 @@ class WhatsAppChatController(BaseController):
         offset: int = 0,
         reset: bool = True,
     ) -> None:
+        revisions = self._bot_state_revisions.copy()
+
         def _on_loaded(conversations: List[ChatConversation]) -> None:
             convs = conversations or []
+            for conversation in convs:
+                self._merge_bot_state(conversation, revisions.get(conversation.id, 0))
             has_more = len(convs) >= limit
             self.conversations_page_loaded.emit(convs, reset, has_more)
 
@@ -78,10 +87,17 @@ class WhatsAppChatController(BaseController):
         )
 
     def load_single_conversation(self, conversation_id: int) -> None:
+        revision = self._bot_state_revisions.get(conversation_id, 0)
+
+        def _on_loaded(conversation: Optional[ChatConversation]) -> None:
+            if conversation is not None:
+                self._merge_bot_state(conversation, revision)
+                self._on_single_conversation_loaded(conversation)
+
         self._execute_authenticated_operation(
             self._service,
             "get_conversation",
-            self._on_single_conversation_loaded,
+            _on_loaded,
             self._on_error,
             conversation_id=conversation_id,
         )
@@ -108,15 +124,49 @@ class WhatsAppChatController(BaseController):
         )
 
     def set_conversation_bot_enabled(self, conversation_id: int, enabled: bool) -> None:
-        """Enable/disable the bot for a conversation (robot button). Errors surface via error_occurred."""
+        """Publish the confirmed state instead of discarding the mutation result."""
+        if conversation_id in self._pending_bot_updates:
+            return
+        self._pending_bot_updates.add(conversation_id)
+        self._bump_bot_revision(conversation_id)
+
+        def _on_failed(error: str) -> None:
+            self._pending_bot_updates.discard(conversation_id)
+            self._bump_bot_revision(conversation_id)
+            self.bot_state_save_failed.emit(conversation_id, error)
+            logger.error("Bot state save failed for conversation %s: %s", conversation_id, error)
+            # A lost response may still have committed on the server.
+            self.load_single_conversation(conversation_id)
+
+        def _on_saved(result: dict) -> None:
+            if not result or not result.get("success") or not isinstance(result.get("bot_enabled"), bool):
+                _on_failed((result or {}).get("error") or "No se pudo guardar el estado del bot.")
+                return
+            self._pending_bot_updates.discard(conversation_id)
+            self._bump_bot_revision(conversation_id)
+            self._bot_states[conversation_id] = result["bot_enabled"]
+            self.bot_state_changed.emit(conversation_id, result["bot_enabled"])
+
         self._execute_authenticated_operation(
             self._service,
             "set_conversation_bot_enabled",
-            lambda _result: None,
-            self._on_error,
+            _on_saved,
+            _on_failed,
             conversation_id=conversation_id,
             enabled=enabled,
         )
+
+    def _bump_bot_revision(self, conversation_id: int) -> None:
+        self._bot_state_revisions[conversation_id] = self._bot_state_revisions.get(conversation_id, 0) + 1
+
+    def _merge_bot_state(self, conversation: ChatConversation, revision: int) -> None:
+        """Do not let a read started before/during a save undo its confirmed state."""
+        cid = conversation.id
+        stale = revision != self._bot_state_revisions.get(cid, 0) or cid in self._pending_bot_updates
+        if stale and cid in self._bot_states:
+            conversation.bot_enabled = self._bot_states[cid]
+        else:
+            self._bot_states[cid] = conversation.bot_enabled
 
     def mark_conversation_read(self, conversation_id: int) -> None:
         """Mark a conversation read on the backend (clears unread + sends read receipt).
