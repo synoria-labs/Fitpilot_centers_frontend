@@ -7,9 +7,16 @@ marcar el «entiendo», y que la pantalla muestre lo que el servidor decidió.
 from __future__ import annotations
 
 import pytest
+from copy import deepcopy
+from types import SimpleNamespace
 
 from app.services.special_events_service import SpecialEventsService, map_detail
 from app.utils.datetime_helpers import format_local_datetime
+
+
+def test_service_preserves_explicit_no_expiry_option():
+    assert SpecialEventsService._input({"payment_link_expires": False}) == {"paymentLinkExpires": False}
+    assert SpecialEventsService._input({"hold_minutes": 30}) == {"holdMinutes": 30}
 
 EVENT_NODE = {
     "id": "7",
@@ -376,3 +383,88 @@ def test_bulk_extra_class_confirms_with_each_proposal(tab, monkeypatch):
 
     tab._render_detail(_detail_with(bonusBlocker="No tiene membresía."))
     assert not tab.bonus_all_btn.isEnabled()
+
+
+def test_disabling_expiry_hides_the_timer_and_saves_the_policy(tab, monkeypatch):
+    detail = map_detail(deepcopy(DETAIL_NODE))
+    detail["event"].update(status="published", payment_link_expires=False)
+    tab._render_detail(detail)
+    assert tab.no_expiry_check.isChecked() and tab.hold_spin.isHidden()
+    assert "no aparta cupo" in tab.link_policy_hint.text()
+    assert "payment_link_expires" in tab._form_data() and tab._form_data()["payment_link_expires"] is False
+    saved = []
+    monkeypatch.setattr(tab.controller, "update_event", lambda identifier, data: saved.append((identifier, data)))
+    tab._save_event()
+    assert saved[0][0] == 7 and saved[0][1]["payment_link_expires"] is False
+    tab.no_expiry_check.setChecked(False)
+    assert not tab.hold_spin.isHidden() and tab._form_data()["payment_link_expires"] is True
+    assert tab.hold_spin.value() == 30
+
+
+def test_order_timers_use_the_order_policy_even_after_the_event_changes_mode(tab):
+    detail = map_detail(deepcopy(DETAIL_NODE))
+    detail["event"]["payment_link_expires"] = False
+    # The previously issued timed link retains its original deadline.
+    tab._render_detail(detail)
+    assert tab.orders_table.item(1, 6).text() == "hasta 20:30"
+    detail["orders"][1].update(payment_link_expires=False, hold_expires_at=None, seat_label=None)
+    tab._render_detail(detail)
+    assert tab.orders_table.item(1, 6).text() == "Sin caducidad · sin apartado"
+    assert tab.orders_table.item(1, 2).text() == "—"
+
+
+def manual_refund_detail():
+    detail = map_detail(deepcopy(DETAIL_NODE))
+    detail["event"].update(status="published", payment_link_expires=False, manual_refunds_pending=1)
+    detail["orders"][1].update(status="needs_review", payment_link_expires=False, manual_refund_required=True,
+        seat_id=None, seat_label=None, hold_expires_at=None, mp_payment_id="777",
+        review_reason="Pago recibido cuando ya no había cupo. Reembolso manual requerido.")
+    return detail
+
+
+def test_manual_refund_case_is_visible_with_payment_id_and_pending_count(tab):
+    tab._render_detail(manual_refund_detail())
+    assert "reembolso manual" in tab.status_label.text()
+    assert "por revisar: 1" in tab.participants_summary.text()
+    assert tab.orders_table.item(1, 3).text() == "Pago sin cupo · revisar reembolso"
+    assert "MP 777" in tab.orders_table.item(1, 5).text()
+    tab.orders_table.selectRow(1)
+    assert tab.refund_btn.isEnabled() and tab.refund_btn.text() == "Revisar reembolso"
+
+
+def test_manual_refund_dialog_requires_explicit_payment_review(qtbot):
+    from app.views.tabs.special_events_tab import ManualRefundDialog
+    dialog = ManualRefundDialog(None, order=manual_refund_detail()["orders"][1])
+    qtbot.addWidget(dialog)
+    assert not dialog.confirm_btn.isEnabled()
+    dialog.review_check.setChecked(True)
+    assert dialog.confirm_btn.isEnabled()
+    dialog.review_check.setChecked(False)
+    assert not dialog.confirm_btn.isEnabled()
+
+
+@pytest.mark.parametrize("accepted", [False, True])
+def test_refund_action_sends_review_confirmation_only_after_the_review_dialog(tab, monkeypatch, accepted):
+    from app.views.tabs import special_events_tab as module
+    tab._render_detail(manual_refund_detail())
+    tab.orders_table.selectRow(1)
+    sent = []
+    monkeypatch.setattr(tab.controller, "refund_order", lambda *a, **kw: sent.append((a, kw)))
+    dialog = SimpleNamespace(exec=lambda: module.QDialog.DialogCode.Accepted if accepted else module.QDialog.DialogCode.Rejected,
+                             reason_edit=SimpleNamespace(text=lambda: "Pago revisado en Mercado Pago"))
+    monkeypatch.setattr(module, "ManualRefundDialog", lambda *a, **kw: dialog)
+    tab._refund_order()
+    assert len(sent) == int(accepted)
+    if accepted:
+        assert sent[0][1] == {"review_confirmed": True}
+
+
+@pytest.mark.asyncio
+async def test_refund_service_transmits_human_review_flag_and_new_policy_fields():
+    client = FakeClient([{"refundSpecialEventOrder": {"success": True, "detail": DETAIL_NODE}}])
+    service = SpecialEventsService(client)
+    result = await service.refund_order(1, "Sin cupo", review_confirmed=True)
+    assert result["success"]
+    query, variables = client.calls[0]
+    assert variables["reviewed"] is True and "reviewConfirmed: $reviewed" in query
+    assert "paymentLinkExpires" in query and "manualRefundRequired" in query and "manualRefundsPending" in query
